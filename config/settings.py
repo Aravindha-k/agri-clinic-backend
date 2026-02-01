@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # BASE DIR & ENV
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+load_dotenv()
 
 # --------------------------------------------------
 # SECURITY
@@ -90,20 +90,39 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # --------------------------------------------------
-# DATABASE (POSTGRES ONLY)
+# DATABASE CONFIG
 # --------------------------------------------------
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not DATABASE_URL:
-    raise Exception("DATABASE_URL is not set. PostgreSQL is required.")
-
-DATABASES = {
-    "default": dj_database_url.parse(
-        DATABASE_URL,
-        conn_max_age=600,
-        ssl_require=True,
-    )
-}
+if DATABASE_URL:
+    # ✅ Detect Local vs Render
+    if "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL:
+        # ✅ Local Postgres (NO SSL)
+        DATABASES = {
+            "default": dj_database_url.parse(
+                DATABASE_URL,
+                conn_max_age=600,
+                ssl_require=False,
+            )
+        }
+    else:
+        # ✅ Render Cloud Postgres (SSL Required)
+        DATABASES = {
+            "default": dj_database_url.parse(
+                DATABASE_URL,
+                conn_max_age=600,
+                ssl_require=True,
+            )
+        }
+else:
+    # fallback
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # --------------------------------------------------
@@ -150,3 +169,9 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "https://agri-clinic-frontend.onrender.com",
+]
+
+CORS_ALLOW_ALL_ORIGINS = False
