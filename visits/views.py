@@ -54,12 +54,13 @@ class VisitListAPI(APIView):
                 except EmployeeProfile.DoesNotExist:
                     employee_id = None
 
-                # ✅ Attachments list
+                # ✅ Attachments list (Absolute URL Fix)
                 attachments = [
                     {
                         "id": a.id,
                         "file_type": a.file_type,
-                        "file": a.file.url,
+                        # ✅ FULL URL (Local or Render)
+                        "file": request.build_absolute_uri(a.file.url),
                         "uploaded_at": a.uploaded_at,
                     }
                     for a in v.attachments.all()
@@ -73,7 +74,7 @@ class VisitListAPI(APIView):
                         "farmer_name": v.farmer_name,
                         "village": v.village,
                         "visit_time": v.visit_time,
-                        "attachments": attachments,  # ✅ ADDED
+                        "attachments": attachments,
                     }
                 )
 
@@ -88,11 +89,13 @@ class VisitListAPI(APIView):
 
         data = []
         for v in visits:
+
             attachments = [
                 {
                     "id": a.id,
                     "file_type": a.file_type,
-                    "file": a.file.url,
+                    # ✅ FULL URL Fix
+                    "file": request.build_absolute_uri(a.file.url),
                     "uploaded_at": a.uploaded_at,
                 }
                 for a in v.attachments.all()
@@ -104,7 +107,7 @@ class VisitListAPI(APIView):
                     "farmer_name": v.farmer_name,
                     "village": v.village,
                     "visit_time": v.visit_time,
-                    "attachments": attachments,  # ✅ ADDED
+                    "attachments": attachments,
                 }
             )
 

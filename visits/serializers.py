@@ -77,18 +77,14 @@ class VisitAttachmentSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         request = self.context.get("request")
-
-        # ✅ Return full correct URL (Local or Cloud)
         if request:
             return request.build_absolute_uri(obj.file.url)
-
         return obj.file.url
 
 
 class VisitSerializer(serializers.ModelSerializer):
     employee = serializers.CharField(source="user.username", read_only=True)
-
-    attachments = serializers.SerializerMethodField()
+    attachments = VisitAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Visit
@@ -107,24 +103,9 @@ class VisitSerializer(serializers.ModelSerializer):
             "attachments",
         ]
 
-    def get_attachments(self, obj):
-        request = self.context.get("request")
-        qs = obj.attachments.all()
-        return VisitAttachmentSerializer(
-            qs, many=True, context={"request": request}
-        ).data
-
 
 class VisitListSerializer(serializers.ModelSerializer):
-    attachments = serializers.SerializerMethodField()
-
-    def get_attachments(self, obj):
-        request = self.context.get("request")
-        return VisitAttachmentSerializer(
-            obj.attachments.all(),
-            many=True,
-            context={"request": request},
-        ).data
+    attachments = VisitAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Visit
