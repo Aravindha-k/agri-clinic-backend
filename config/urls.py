@@ -34,5 +34,5 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),
 ]
 
-
+# ✅ Serve media files properly
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
