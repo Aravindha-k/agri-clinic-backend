@@ -90,15 +90,21 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # --------------------------------------------------
-# DATABASE (RENDER SAFE)
+# DATABASE (POSTGRES ONLY)
 # --------------------------------------------------
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL is not set. PostgreSQL is required.")
+
 DATABASES = {
-    "default": dj_database_url.config(
-        default="sqlite:///db.sqlite3",
+    "default": dj_database_url.parse(
+        DATABASE_URL,
         conn_max_age=600,
         ssl_require=True,
     )
 }
+
 
 # --------------------------------------------------
 # PASSWORD VALIDATION
