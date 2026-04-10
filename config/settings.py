@@ -30,32 +30,36 @@ def env_list(name, default=None):
 # --------------------------------------------------
 # SECURITY
 # --------------------------------------------------
+APP_ENV = os.getenv("APP_ENV", "local").strip().lower()
+IS_PRODUCTION = APP_ENV in {"prod", "production", "render", "staging"}
+
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret")
 DEBUG = env_bool("DEBUG", True)
 
-DEFAULT_ALLOWED_HOSTS = [
-    "*",
-    "agri-clinic-backend.onrender.com",
-    ".onrender.com",
-    "localhost",
-    "127.0.0.1",
-    "192.168.29.18",
-]
+DEFAULT_ALLOWED_HOSTS = (
+    ["agri-clinic-backend.onrender.com", ".onrender.com"]
+    if IS_PRODUCTION
+    else ["localhost", "127.0.0.1", "192.168.29.18"]
+)
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS)
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://agri-clinic-backend.onrender.com",
-    "http://192.168.29.18:8000",
-]
+DEFAULT_CSRF_TRUSTED_ORIGINS = (
+    ["https://agri-clinic-backend.onrender.com"]
+    if IS_PRODUCTION
+    else ["http://localhost:8000", "http://127.0.0.1:8000", "http://192.168.29.18:8000"]
+)
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", DEFAULT_CSRF_TRUSTED_ORIGINS)
 
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG)
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", IS_PRODUCTION)
 SECURE_HSTS_SECONDS = int(
-    os.getenv("SECURE_HSTS_SECONDS", "31536000" if not DEBUG else "0")
+    os.getenv("SECURE_HSTS_SECONDS", "31536000" if IS_PRODUCTION else "0")
 )
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
-SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS", IS_PRODUCTION
+)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", IS_PRODUCTION)
 
 # --------------------------------------------------
 # APPLICATIONS
@@ -133,11 +137,12 @@ TEMPLATES = [
 
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = [
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", not IS_PRODUCTION)
+DEFAULT_CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://agri-clinic-frontend.onrender.com",
 ]
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ALLOWED_ORIGINS)
 # --------------------------------------------------
 # DRF + JWT
 # --------------------------------------------------
@@ -188,7 +193,7 @@ ROOT_URLCONF = "config.urls"
 # --------------------------------------------------
 # DATABASE CONFIG
 # --------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 if DATABASE_URL:
     DATABASES = {
@@ -198,6 +203,8 @@ if DATABASE_URL:
             ssl_require="localhost" not in DATABASE_URL,
         )
     }
+elif IS_PRODUCTION:
+    raise RuntimeError("DATABASE_URL is required when APP_ENV is production-like")
 else:
     DATABASES = {
         "default": {
