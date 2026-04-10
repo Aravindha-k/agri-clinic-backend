@@ -40,9 +40,10 @@ def normalize_database_url(raw_url):
     if not (host.startswith("dpg-") and "." not in host):
         return raw_url
 
-    region = (os.getenv("RENDER_REGION") or "singapore").strip().lower()
-    default_suffix = f"{region}-postgres.render.com"
-    host_suffix = os.getenv("RENDER_POSTGRES_HOST_SUFFIX", default_suffix).strip()
+    host_suffix = os.getenv("RENDER_POSTGRES_HOST_SUFFIX", "").strip()
+    if not host_suffix:
+        return raw_url
+
     full_host = f"{host}.{host_suffix.lstrip('.')}"
 
     username = quote(parsed.username or "", safe="")
@@ -55,8 +56,6 @@ def normalize_database_url(raw_url):
 
     port = parsed.port or 5432
     query = parsed.query
-    if "sslmode=" not in query.lower():
-        query = f"{query}&sslmode=require" if query else "sslmode=require"
 
     fixed_netloc = f"{auth}{full_host}:{port}"
     return urlunsplit(
@@ -233,11 +232,18 @@ ROOT_URLCONF = "config.urls"
 DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
 
 if DATABASE_URL:
+    db_host = (urlsplit(DATABASE_URL).hostname or "").strip().lower()
+    default_ssl_require = bool(db_host) and not (
+        db_host == "localhost"
+        or db_host.startswith("127.")
+        or db_host.startswith("dpg-")
+    )
+
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
             conn_max_age=600,
-            ssl_require="localhost" not in DATABASE_URL,
+            ssl_require=env_bool("DB_SSL_REQUIRE", default_ssl_require),
         )
     }
 elif IS_PRODUCTION:
