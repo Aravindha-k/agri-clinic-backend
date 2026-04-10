@@ -1,37 +1,43 @@
 from django.contrib import admin
-
-# Register your models here.
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
-from django.utils.dateparse import parse_date
-
-from tracking.models import LocationPing
+from .models import WorkDay, LocationLog, AvailabilityEvent
 
 
-class AdminLocationAPIView(APIView):
-    permission_classes = [IsAdminUser]
+@admin.register(WorkDay)
+class WorkDayAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "date",
+        "start_time",
+        "end_time",
+        "is_active",
+        "last_heartbeat",
+    )
+    list_filter = ("is_active", "date")
+    search_fields = ("user__username",)
 
-    def get(self, request, user_id):
-        date = request.GET.get("date")
 
-        queryset = LocationPing.objects.filter(user_id=user_id)
+@admin.register(LocationLog)
+class LocationLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "workday",
+        "latitude",
+        "longitude",
+        "accuracy",
+        "recorded_at",
+    )
+    list_filter = ("recorded_at",)
+    search_fields = ("user__username",)
 
-        # ✅ Filter by Date if provided
-        if date:
-            d = parse_date(date)
-            queryset = queryset.filter(recorded_at__date=d)
 
-        points = queryset.order_by("recorded_at")
-
-        data = [
-            {
-                "latitude": p.latitude,
-                "longitude": p.longitude,
-                "recorded_at": p.recorded_at,
-                "is_visit": p.is_visit,
-            }
-            for p in points
-        ]
-
-        return Response(data)
+@admin.register(AvailabilityEvent)
+class AvailabilityEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "workday",
+        "event_type",
+        "start_time",
+        "end_time",
+    )
+    list_filter = ("event_type",)
+    search_fields = ("user__username",)

@@ -1,118 +1,86 @@
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers
-from django.utils import timezone
-
-from .models import Visit
-from tracking.models import WorkDay, AvailabilityEvent
-from .models import Visit, VisitAttachment
+from masters.models import Crop, Village
+from .models import Visit, VisitMedia, VisitAttachment
 
 
-class VisitCreateSerializer(serializers.Serializer):
-    farmer_name = serializers.CharField()
-    farmer_phone = serializers.CharField()
-    village = serializers.CharField()
-    crop_type = serializers.CharField()
-    problem_category = serializers.CharField()
-
-    latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
-    longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
-
-    def save(self, **kwargs):
-        user = self.context["request"].user
-
-        # Admin cannot create visits
-        if user.is_staff:
-            raise serializers.ValidationError("Admin cannot create visits")
-
-        # Active workday required
-        try:
-            workday = WorkDay.objects.get(user=user, is_active=True)
-        except WorkDay.DoesNotExist:
-            raise serializers.ValidationError("No active workday")
-
-        # GPS OFF check
-        if AvailabilityEvent.objects.filter(
-            user=user,
-            workday=workday,
-            event_type="GPS_OFF",
-            end_time__isnull=True,
-        ).exists():
-            raise serializers.ValidationError("GPS is OFF")
-
-        # OFFLINE check
-        if AvailabilityEvent.objects.filter(
-            user=user,
-            workday=workday,
-            event_type="OFFLINE",
-            end_time__isnull=True,
-        ).exists():
-            raise serializers.ValidationError("User is OFFLINE")
-
-        visit = Visit.objects.create(
-            user=user,
-            farmer_name=self.validated_data["farmer_name"],
-            farmer_phone=self.validated_data["farmer_phone"],
-            village=self.validated_data["village"],
-            crop_type=self.validated_data["crop_type"],
-            problem_category=self.validated_data["problem_category"],
-            latitude=self.validated_data["latitude"],
-            longitude=self.validated_data["longitude"],
-            is_verified=True,
-        )
-
-        return visit
+class StartVisitSerializer(serializers.Serializer):
+    crop = serializers.PrimaryKeyRelatedField(
+        queryset=Crop.objects.filter(is_active=True)
+    )
+    latitude = serializers.DecimalField(max_digits=10, decimal_places=6)
+    longitude = serializers.DecimalField(max_digits=11, decimal_places=6)
+    farmer_name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
+    village = serializers.PrimaryKeyRelatedField(
+        queryset=Village.objects.all(), required=False, allow_null=True, default=None
+    )
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
 
 
-# class VisitAttachmentSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = VisitAttachment
-#         fields = ["id", "file_type", "file", "uploaded_at"]
-
-
-class VisitAttachmentSerializer(serializers.ModelSerializer):
-    file_url = serializers.SerializerMethodField()
+class VisitMediaSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
-        model = VisitAttachment
-        fields = ["id", "file_type", "file", "file_url", "uploaded_at"]
+        model = VisitMedia
+        fields = ["id", "file", "media_type", "caption", "uploaded_at", "file_url"]
+        extra_kwargs = {"file": {"write_only": True}}
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_file_url(self, obj):
         request = self.context.get("request")
-        if request:
+        if request and obj.file:
             return request.build_absolute_uri(obj.file.url)
-        return obj.file.url
+        return None
+
+
+class VisitMediaUploadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VisitMedia
+        fields = ["file", "media_type", "caption"]
 
 
 class VisitSerializer(serializers.ModelSerializer):
-    employee = serializers.CharField(source="user.username", read_only=True)
-    attachments = VisitAttachmentSerializer(many=True, read_only=True)
+    employee_name = serializers.CharField(source="employee.username", read_only=True)
+    employee_phone = serializers.CharField(
+        source="employee.employee_profile.phone", read_only=True, default=""
+    )
+    village_name = serializers.CharField(source="village.name", read_only=True)
+    district_name = serializers.CharField(source="district.name", read_only=True)
+    crop_info = serializers.SerializerMethodField()
+    media_files = VisitMediaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Visit
-        fields = [
-            "id",
-            "farmer_name",
-            "farmer_phone",
-            "village",
-            "crop_type",
-            "problem_category",
-            "latitude",
-            "longitude",
-            "visit_time",
-            "is_verified",
-            "employee",
-            "attachments",
-        ]
+        exclude = ("employee",)
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_crop_info(self, obj):
+        if obj.crop:
+            return {
+                "id": obj.crop.id,
+                "name_en": obj.crop.name_en,
+                "name_ta": obj.crop.name_ta,
+                "name": "{} / {}".format(obj.crop.name_en, obj.crop.name_ta),
+            }
+        return None
 
-class VisitListSerializer(serializers.ModelSerializer):
-    attachments = VisitAttachmentSerializer(many=True, read_only=True)
+    def validate(self, data):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        is_admin = getattr(user, "is_staff", False)
+        errors = {}
+        if not is_admin:
+            if data.get("latitude") is None:
+                errors["latitude"] = "This field is required for employees."
+            if data.get("longitude") is None:
+                errors["longitude"] = "This field is required for employees."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
 
-    class Meta:
-        model = Visit
-        fields = [
-            "id",
-            "farmer_name",
-            "village",
-            "visit_time",
-            "attachments",
-        ]
+    def create(self, validated_data):
+        request = self.context.get("request")
+        return Visit.objects.create(**validated_data, employee=request.user)

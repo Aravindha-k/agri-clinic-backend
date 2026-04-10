@@ -1,0 +1,187 @@
+﻿{
+  "info": {
+    "_postman_id": "agri-mobile-v2",
+    "name": "Agri Clinic — Mobile API",
+    "description": "Mobile collection for field officers. Base URL: {{base_url}}",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Mobile Login",
+          "event": [{"listen": "test","script": {"exec": ["var res = pm.response.json();","pm.test('Login success — access token returned', function () { pm.expect(res.access).to.exist; });","if (res.access) { pm.environment.set('access_token', res.access); pm.environment.set('refresh_token', res.refresh); }"],"type": "text/javascript"}}],
+          "request": {
+            "method": "POST","header": [{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"employee_id\": \"EMP001\",\n  \"password\": \"pass1234\"\n}"},
+            "url": {"raw": "{{base_url}}/mobile/auth/login/","host": ["{{base_url}}"],"path": ["mobile","auth","login",""]}
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [{"listen": "test","script": {"exec": ["var res = pm.response.json();","if (res.access) { pm.environment.set('access_token', res.access); }"],"type": "text/javascript"}}],
+          "request": {
+            "method": "POST","header": [{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"},
+            "url": {"raw": "{{base_url}}/mobile/auth/refresh/","host": ["{{base_url}}"],"path": ["mobile","auth","refresh",""]}
+          }
+        },
+        {
+          "name": "My Profile (me)",
+          "event": [{"listen": "test","script": {"exec": ["pm.test('Profile returned', function () { pm.expect(pm.response.code).to.eql(200); });"],"type": "text/javascript"}}],
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/mobile/auth/me/","host": ["{{base_url}}"],"path": ["mobile","auth","me",""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Work Log",
+      "item": [
+        {
+          "name": "Start Work",
+          "event": [{"listen": "test","script": {"exec": ["pm.test('Work started', function () { pm.expect(pm.response.json().success).to.eql(true); });"],"type": "text/javascript"}}],
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460\n}"},
+            "url": {"raw": "{{base_url}}/mobile/work/start/","host": ["{{base_url}}"],"path": ["mobile","work","start",""]}
+          }
+        },
+        {
+          "name": "Stop Work",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460\n}"},
+            "url": {"raw": "{{base_url}}/mobile/work/stop/","host": ["{{base_url}}"],"path": ["mobile","work","stop",""]}
+          }
+        },
+        {
+          "name": "Work Status",
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/mobile/work/status/","host": ["{{base_url}}"],"path": ["mobile","work","status",""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tracking",
+      "item": [
+        {
+          "name": "Push Location",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460\n}"},
+            "url": {"raw": "{{base_url}}/tracking/location/push/","host": ["{{base_url}}"],"path": ["tracking","location","push",""]}
+          }
+        },
+        {
+          "name": "Bulk Location Upload",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "[\n  {\"latitude\": 11.6643, \"longitude\": 78.1460, \"timestamp\": \"2025-01-15T09:00:00Z\"},\n  {\"latitude\": 11.6650, \"longitude\": 78.1470, \"timestamp\": \"2025-01-15T09:05:00Z\"}\n]"},
+            "url": {"raw": "{{base_url}}/tracking/location/bulk/","host": ["{{base_url}}"],"path": ["tracking","location","bulk",""]}
+          }
+        },
+        {
+          "name": "Mobile Tracking Ping",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460\n}"},
+            "url": {"raw": "{{base_url}}/mobile/tracking/","host": ["{{base_url}}"],"path": ["mobile","tracking",""]}
+          }
+        },
+        {
+          "name": "Start WorkDay",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460\n}"},
+            "url": {"raw": "{{base_url}}/tracking/workday/start/","host": ["{{base_url}}"],"path": ["tracking","workday","start",""]}
+          }
+        },
+        {
+          "name": "End WorkDay",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460\n}"},
+            "url": {"raw": "{{base_url}}/tracking/workday/end/","host": ["{{base_url}}"],"path": ["tracking","workday","end",""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Visits",
+      "item": [
+        {
+          "name": "List My Visits",
+          "event": [{"listen": "test","script": {"exec": ["var res = pm.response.json();","pm.test('Response OK', function () { pm.expect(pm.response.code).to.eql(200); });","if (res.data && res.data.results && res.data.results.length > 0) { pm.environment.set('visit_id', res.data.results[0].id); }"],"type": "text/javascript"}}],
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/mobile/visits/","host": ["{{base_url}}"],"path": ["mobile","visits",""]}
+          }
+        },
+        {
+          "name": "Start Visit",
+          "event": [{"listen": "test","script": {"exec": ["var res = pm.response.json();","pm.test('Visit created', function () { pm.expect(pm.response.code).to.eql(201); });","if (res.visit_id) { pm.environment.set('visit_id', res.visit_id); }","else if (res.data && res.data.id) { pm.environment.set('visit_id', res.data.id); }"],"type": "text/javascript"}}],
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"crop\": {{crop_id}},\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460,\n  \"farmer_name\": \"Ravi Kumar\",\n  \"village\": {{village_id}}\n}"},
+            "url": {"raw": "{{base_url}}/visits/start/","host": ["{{base_url}}"],"path": ["visits","start",""]}
+          }
+        },
+        {
+          "name": "Complete Visit",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"},{"key": "Content-Type","value": "application/json"}],
+            "body": {"mode": "raw","raw": "{\n  \"notes\": \"Completed field inspection.\"\n}"},
+            "url": {"raw": "{{base_url}}/visits/{{visit_id}}/complete/","host": ["{{base_url}}"],"path": ["visits","{{visit_id}}","complete",""]}
+          }
+        },
+        {
+          "name": "Upload Visit Media",
+          "request": {
+            "method": "POST","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "body": {"mode": "formdata","formdata": [{"key": "file","type": "file","src": ""},{"key": "media_type","value": "image","type": "text"},{"key": "caption","value": "Crop photo","type": "text"}]},
+            "url": {"raw": "{{base_url}}/visits/{{visit_id}}/upload-media/","host": ["{{base_url}}"],"path": ["visits","{{visit_id}}","upload-media",""]}
+          }
+        },
+        {
+          "name": "Visit Stats",
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/mobile/visits/stats/","host": ["{{base_url}}"],"path": ["mobile","visits","stats",""]}
+          }
+        },
+        {
+          "name": "Active Visit",
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/visits/active/","host": ["{{base_url}}"],"path": ["visits","active",""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Mobile Dashboard",
+          "event": [{"listen": "test","script": {"exec": ["pm.test('Dashboard returned', function () { pm.expect(pm.response.code).to.eql(200); });"],"type": "text/javascript"}}],
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/mobile/dashboard/","host": ["{{base_url}}"],"path": ["mobile","dashboard",""]}
+          }
+        },
+        {
+          "name": "Mobile Reports",
+          "request": {
+            "method": "GET","header": [{"key": "Authorization","value": "Bearer {{access_token}}"}],
+            "url": {"raw": "{{base_url}}/mobile/reports/","host": ["{{base_url}}"],"path": ["mobile","reports",""]}
+          }
+        }
+      ]
+    }
+  ]
+}

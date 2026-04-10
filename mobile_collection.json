@@ -1,0 +1,279 @@
+{
+    "info": {
+        "name": "AgriClinic Mobile API",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Employee Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/mobile/auth/login/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "mobile",
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"employee_id\": \"KAC-0001\",\n  \"password\": \"password\"\n}"
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {},
+                            "status": "OK",
+                            "code": 200,
+                            "body": "{\n  \"access\": \"<jwt>\",\n  \"refresh\": \"<jwt>\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Workday",
+            "item": [
+                {
+                    "name": "Start Workday",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{employee_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/mobile/work/start/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "mobile",
+                                "work",
+                                "start"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"latitude\": 12.9716,\n  \"longitude\": 77.5946,\n  \"start_time\": \"2026-03-20T09:00:00Z\"\n}"
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {},
+                            "status": "Created",
+                            "code": 201,
+                            "body": "{\n  \"workday_id\": 1,\n  \"date\": \"2026-03-20\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Tracking",
+            "item": [
+                {
+                    "name": "Push Location",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{employee_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/mobile/tracking/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "mobile",
+                                "tracking"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"latitude\": 12.9716,\n  \"longitude\": 77.5946,\n  \"accuracy\": 5.0,\n  \"recorded_at\": \"2026-03-20T09:10:00Z\"\n}"
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {},
+                            "status": "Created",
+                            "code": 201,
+                            "body": "{\n  \"location_id\": 1\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Visits",
+            "item": [
+                {
+                    "name": "Create Visit",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{employee_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/mobile/visits/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "mobile",
+                                "visits"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"farmer\": 1,\n  \"land\": 2,\n  \"visit_date\": \"2026-03-20\",\n  \"notes\": \"Routine check\"\n}"
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {},
+                            "status": "Created",
+                            "code": 201,
+                            "body": "{\n  \"visit_id\": 1,\n  \"visit_date\": \"2026-03-20\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Attendance",
+            "item": [
+                {
+                    "name": "Mark Attendance",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{employee_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/mobile/attendance/check-in/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "mobile",
+                                "attendance",
+                                "check-in"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"latitude\": 12.9716,\n  \"longitude\": 77.5946\n}"
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {},
+                            "status": "Created",
+                            "code": 201,
+                            "body": "{\n  \"attendance_id\": 1,\n  \"date\": \"2026-03-20\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Profile",
+            "item": [
+                {
+                    "name": "Get Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{employee_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/employees/me/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "employees",
+                                "me"
+                            ]
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {},
+                            "status": "OK",
+                            "code": 200,
+                            "body": "{\n  \"id\": 1,\n  \"username\": \"emp1\",\n  \"employee_id\": \"KAC-0001\",\n  \"role\": \"FieldAgent\"\n}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,48 @@
+{
+    "id": "agri-clinic-env",
+    "name": "Agri Clinic - Local",
+    "values": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "text"
+        },
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "text"
+        },
+        {
+            "key": "refresh_token",
+            "value": "",
+            "type": "text"
+        },
+        {
+            "key": "district_id",
+            "value": "",
+            "type": "text"
+        },
+        {
+            "key": "taluk_id",
+            "value": "",
+            "type": "text"
+        },
+        {
+            "key": "village_id",
+            "value": "",
+            "type": "text"
+        },
+        {
+            "key": "crop_id",
+            "value": "",
+            "type": "text"
+        },
+        {
+            "key": "problem_id",
+            "value": "",
+            "type": "text"
+        }
+    ],
+    "timestamp": 0,
+    "synced": false
+}

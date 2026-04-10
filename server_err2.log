@@ -1,0 +1,48 @@
+Exception in thread django-main-thread:
+Traceback (most recent call last):
+  File "C:\Users\siddh\AppData\Local\Programs\Python\Python310\lib\threading.py", line 1009, in _bootstrap_inner
+    self.run()
+  File "C:\Users\siddh\AppData\Local\Programs\Python\Python310\lib\threading.py", line 946, in run
+    self._target(*self._args, **self._kwargs)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\utils\autoreload.py", line 64, in wrapper
+    fn(*args, **kwargs)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\core\management\commands\runserver.py", line 134, in inner_run
+    self.check(**check_kwargs)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\core\management\base.py", line 496, in check
+    all_issues = checks.run_checks(
+  File "D:\agri_clinic\.venv\lib\site-packages\django\core\checks\registry.py", line 89, in run_checks
+    new_errors = check(app_configs=app_configs, databases=databases)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\core\checks\urls.py", line 16, in check_url_config
+    return check_resolver(resolver)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\core\checks\urls.py", line 26, in check_resolver
+    return check_method()
+  File "D:\agri_clinic\.venv\lib\site-packages\django\urls\resolvers.py", line 531, in check
+    for pattern in self.url_patterns:
+  File "D:\agri_clinic\.venv\lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\urls\resolvers.py", line 718, in url_patterns
+    patterns = getattr(self.urlconf_module, "urlpatterns", self.urlconf_module)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "D:\agri_clinic\.venv\lib\site-packages\django\urls\resolvers.py", line 711, in urlconf_module
+    return import_module(self.urlconf_name)
+  File "C:\Users\siddh\AppData\Local\Programs\Python\Python310\lib\importlib\__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "D:\agri_clinic\config\urls.py", line 7, in <module>
+    from accounts.views import LogoutAPI, LoginAPI
+  File "D:\agri_clinic\accounts\views.py", line 376, in <module>
+    200: paginated_response_schema(
+  File "D:\agri_clinic\utils\schema.py", line 114, in paginated_response_schema
+    "results": result_item(many=True),
+TypeError: 'EmployeeListItem' object is not callable
+[2026-04-10T19:11:47] INFO [accounts.views:114] LOGIN API HIT — path=/api/v1/auth/login/ method=POST
+[2026-04-10T19:11:47] INFO [accounts.views:185] Login attempt with username=admin
+[2026-04-10T19:11:48] INFO [accounts.views:258] Login successful for user=admin (id=7)
+[2026-04-10T19:12:28] WARNING [django.server:213] "GET /api/v1/employees/ HTTP/1.1" 401 229
+[2026-04-10T19:12:50] WARNING [django.server:213] "GET /api/v1/employees/ HTTP/1.1" 401 229

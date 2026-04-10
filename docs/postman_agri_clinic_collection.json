@@ -1,0 +1,919 @@
+{
+    "info": {
+        "name": "Agri Clinic - API Collection",
+        "_postman_id": "agri-clinic-collection",
+        "description": "Collection for Admin Panel and Mobile employee API endpoints (JWT auth). Use the accompanying environment to set `base_url` and `access_token`.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000"
+        },
+        {
+            "key": "access_token",
+            "value": ""
+        },
+        {
+            "key": "refresh_token",
+            "value": ""
+        }
+    ],
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login (Obtain JWT)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"password\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/auth/login/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "login",
+                                ""
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Refresh Token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"refresh\": \"{{refresh_token}}\" }"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/auth/refresh/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "refresh",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Setup: Viluppuram Masters",
+                    "item": [
+                        {
+                            "name": "Create District - Viluppuram",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{access_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{ \"name\": \"Viluppuram\" }"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/masters/districts/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "masters",
+                                        "districts",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "const res = pm.response.json();",
+                                            "if (res && res.id) { pm.environment.set('district_id', res.id); }",
+                                            "pm.test('District created', () => pm.response.code === 201);",
+                                            "pm.test('district id set', () => pm.environment.get('district_id') !== undefined);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Create Taluk - Viluppuram Taluk",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{access_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{ \"name\": \"Viluppuram Taluk\", \"district\": {{district_id}} }"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/masters/taluks/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "masters",
+                                        "taluks",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "const res = pm.response.json(); if (res && res.id) { pm.environment.set('taluk_id', res.id); }",
+                                            "pm.test('Taluk created', () => pm.response.code === 201);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Create Village - Viluppuram Village 1",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{access_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{ \"name\": \"Viluppuram Village 1\", \"taluk\": {{taluk_id}} }"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/masters/villages/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "masters",
+                                        "villages",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "const res = pm.response.json(); if (res && res.id) { pm.environment.set('village_id', res.id); }",
+                                            "pm.test('Village created', () => pm.response.code === 201);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Create Crop - Paddy",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{access_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{ \"name\": \"Paddy\" }"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/masters/crops/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "masters",
+                                        "crops",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "const res = pm.response.json(); if (res && res.id) { pm.environment.set('crop_id', res.id); }",
+                                            "pm.test('Crop created', () => pm.response.code === 201);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Create ProblemCategory - Pest",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{access_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{ \"name\": \"Pest\" }"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/masters/problem-categories/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "masters",
+                                        "problem-categories",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "const res = pm.response.json(); if (res && res.id) { pm.environment.set('problem_id', res.id); }",
+                                            "pm.test('Problem category created', () => pm.response.code === 201);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Verify Village List (by taluk)",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{access_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/masters/villages/?taluk_id={{taluk_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "masters",
+                                        "villages",
+                                        ""
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "taluk_id",
+                                            "value": "{{taluk_id}}"
+                                        }
+                                    ]
+                                }
+                            },
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test('villages list ok', () => pm.response.code === 200);",
+                                            "const arr = pm.response.json(); pm.test('contains created village', () => arr.some(v => v.id == pm.environment.get('village_id')) );"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Accounts",
+            "item": [
+                {
+                    "name": "Me",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/accounts/me/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "accounts",
+                                "me",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Employees (Admin)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/accounts/employees/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "accounts",
+                                "employees",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"refresh\": \"{{refresh_token}}\" }"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/accounts/logout/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "accounts",
+                                "logout",
+                                ""
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Tracking",
+            "item": [
+                {
+                    "name": "Start Workday",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/workday/start/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "workday",
+                                "start",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "End Workday",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/workday/end/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "workday",
+                                "end",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Heartbeat",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"gps_enabled\": true }"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/heartbeat/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "heartbeat",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Push Location",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"latitude\": 12.9716, \"longitude\": 77.5946, \"accuracy\": 5 }"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/location/push/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "location",
+                                "push",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Admin - Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/admin/status/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "admin",
+                                "status",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Admin - Employees GeoJSON",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/admin/geo/employees/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "admin",
+                                "geo",
+                                "employees",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Admin - Employee Route GeoJSON",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/admin/geo/routes/1/?date=2026-02-21",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "admin",
+                                "geo",
+                                "routes",
+                                "1",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "date",
+                                    "value": "2026-02-21"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Current Workday",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/workday/current/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "workday",
+                                "current",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Workday History",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/workdays/history/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "workdays",
+                                "history",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Workday Locations (page)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/workday/1/locations/?page_size=10",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "workday",
+                                "1",
+                                "locations",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "page_size",
+                                    "value": "10"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Availability Events",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tracking/availability/events/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tracking",
+                                "availability",
+                                "events",
+                                ""
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Visits",
+            "item": [
+                {
+                    "name": "Create Visit",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"farmer_name\": \"Ramu\",\n  \"farmer_phone\": \"9876543210\",\n  \"village_id\": {{village_id}},\n  \"crop_id\": {{crop_id}},\n  \"problem_category_id\": {{problem_id}},\n  \"latitude\": 12.9716,\n  \"longitude\": 77.5946\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/visits/create/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "visits",
+                                "create",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Visits",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/visits/list/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "visits",
+                                "list",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Upload Visit Attachment (multipart)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file"
+                                },
+                                {
+                                    "key": "file_type",
+                                    "value": "CROP"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/visits/visits/1/attachments/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "visits",
+                                "visits",
+                                "1",
+                                "attachments",
+                                ""
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Masters",
+            "item": [
+                {
+                    "name": "List Districts",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/masters/districts/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "masters",
+                                "districts",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Villages",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/masters/villages/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "masters",
+                                "villages",
+                                ""
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Crops",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/masters/crops/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "masters",
+                                "crops",
+                                ""
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

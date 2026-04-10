@@ -1,16 +1,62 @@
 from django.db import models
-from django.contrib.auth.models import User
 from django.conf import settings
 
 
 class EmployeeProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    """
+    Enterprise employee profile.
+    One-to-one with auth user.
+    """
 
-    employee_id = models.CharField(max_length=20, unique=True)
+    ROLE_CHOICES = (
+        ("FieldAgent", "Field Agent"),
+        ("Supervisor", "Supervisor"),
+    )
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="employee_profile",
+    )
+
+    employee_id = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+    )
 
     phone = models.CharField(max_length=15)
 
-    is_active_employee = models.BooleanField(default=True)  # ✅ ADD THIS
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="FieldAgent",
+    )
+
+    district = models.ForeignKey(
+        "masters.District",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employees",
+    )
+
+    village = models.ForeignKey(
+        "masters.Village",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employees",
+    )
+
+    is_active_employee = models.BooleanField(default=True)
+
+    can_login = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["employee_id"]
 
     def __str__(self):
-        return f"{self.employee_id} - {self.user.username}"
+        return f"{self.employee_id} | {self.user.username}"

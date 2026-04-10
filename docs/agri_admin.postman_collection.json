@@ -1,0 +1,1593 @@
+﻿{
+  "info": {
+    "_postman_id": "agri-admin-v2",
+    "name": "Agri Clinic — Admin API",
+    "description": "Production-ready admin collection for Agri Clinic SaaS. Base URL: {{base_url}}",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('Login success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.access) { pm.environment.set('access_token', res.access); pm.environment.set('refresh_token', res.refresh); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res.access) { pm.environment.set('access_token', res.access); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/refresh/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/logout/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "List Employees",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API success', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/employees/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Employee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.employee_id) { pm.environment.set('employee_id', res.data.employee_id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"emp001\",\n  \"password\": \"pass1234\",\n  \"first_name\": \"Ravi\",\n  \"last_name\": \"Kumar\",\n  \"phone\": \"9876543210\",\n  \"role\": \"field_officer\",\n  \"district\": {{district_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/create/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "create",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "My Profile (me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/employees/me/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "me",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Employee (PUT — full)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Employee updated', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Ravi\",\n  \"last_name\": \"Kumar\",\n  \"phone\": \"9876543210\",\n  \"role\": \"FieldAgent\",\n  \"is_active_employee\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/{{profile_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "{{profile_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Employee (PATCH — partial)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Employee updated', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Ravi\",\n  \"last_name\": \"Kumar\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/{{profile_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "{{profile_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Active (PATCH is_active_employee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Toggle success', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active_employee\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/{{profile_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "{{profile_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Status (flip endpoint)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Toggle success', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/employees/{{employee_id}}/toggle/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "{{employee_id}}",
+                "toggle",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Change Password (self-service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Password changed', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('Password not exposed', function () { pm.expect(JSON.stringify(pm.response.json())).to.not.include('password'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"current_password\": \"currentpass\",\n  \"new_password\": \"newpass123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/change-password/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "change-password",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin Reset Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Password reset', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"new_password\": \"adminreset99\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/admin/reset-password/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees",
+                "admin",
+                "reset-password",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Masters",
+      "item": [
+        {
+          "name": "List Districts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.results && res.data.results.length > 0) { pm.environment.set('district_id', res.data.results[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/masters/districts/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masters",
+                "districts",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create District",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Viluppuram\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/masters/districts/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masters",
+                "districts",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Villages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.results && res.data.results.length > 0) { pm.environment.set('village_id', res.data.results[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/masters/villages/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masters",
+                "villages",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Village",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tindivanam\",\n  \"district\": {{district_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/masters/villages/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masters",
+                "villages",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Crops",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.length > 0) { pm.environment.set('crop_id', res.data[0].id); }",
+                  "else if (res.data && res.data.results && res.data.results.length > 0) { pm.environment.set('crop_id', res.data.results[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/masters/crops/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masters",
+                "crops",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Crop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name_en\": \"Paddy\",\n  \"name_ta\": \"நெல்\",\n  \"scientific_name\": \"Oryza sativa\",\n  \"crop_category\": \"cereal\",\n  \"typical_season\": \"kharif\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/masters/crops/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masters",
+                "crops",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Farmers",
+      "item": [
+        {
+          "name": "List Farmers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.results && res.data.results.length > 0) { pm.environment.set('farmer_id', res.data.results[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/farmers/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "farmers",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Farmer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.id) { pm.environment.set('farmer_id', res.data.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ravi Kumar\",\n  \"phone\": \"9876543210\",\n  \"district\": {{district_id}},\n  \"village\": {{village_id}},\n  \"total_land_area\": 3.5,\n  \"irrigation_type\": \"borewell\",\n  \"soil_type\": \"red\",\n  \"address\": \"123 Main Street, Viluppuram\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/farmers/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "farmers",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Farmer Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/farmers/{{farmer_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "farmers",
+                "{{farmer_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Farmer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ravi Kumar Updated\",\n  \"phone\": \"9876543210\",\n  \"total_land_area\": 4.0\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/farmers/{{farmer_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "farmers",
+                "{{farmer_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Farmer Fields",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/farmers/{{farmer_id}}/fields/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "farmers",
+                "{{farmer_id}}",
+                "fields",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Farmer Field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.id) { pm.environment.set('field_id', res.data.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"land_name\": \"North Plot\",\n  \"land_size\": 1.5,\n  \"soil_type\": \"red\",\n  \"irrigation_type\": \"borewell\",\n  \"gps_location\": \"11.6643,78.1460\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/farmers/{{farmer_id}}/fields/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "farmers",
+                "{{farmer_id}}",
+                "fields",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Visits",
+      "item": [
+        {
+          "name": "List Visits",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('API success', function () { pm.expect(res.success).to.eql(true); });",
+                  "if (res.data && res.data.results && res.data.results.length > 0) { pm.environment.set('visit_id', res.data.results[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/visits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Start Visit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "pm.test('Visit created', function () { pm.expect(pm.response.code).to.eql(201); });",
+                  "if (res.visit_id) { pm.environment.set('visit_id', res.visit_id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"crop\": {{crop_id}},\n  \"latitude\": 11.6643,\n  \"longitude\": 78.1460,\n  \"farmer_name\": \"Ravi Kumar\",\n  \"village\": {{village_id}},\n  \"notes\": \"Crop inspection visit\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/visits/start/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                "start",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Complete Visit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Inspection completed. Fertilizer recommended.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/visits/{{visit_id}}/complete/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                "{{visit_id}}",
+                "complete",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upload Visit Media",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "media_type",
+                  "value": "image",
+                  "type": "text"
+                },
+                {
+                  "key": "caption",
+                  "value": "Field photo — north plot",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/visits/{{visit_id}}/upload-media/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                "{{visit_id}}",
+                "upload-media",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Visit Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/visits/stats/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                "stats",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API success', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dashboard/stats/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "stats",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dashboard/summary/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "summary",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Visit Trends",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dashboard/visit-trends/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "visit-trends",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tracking",
+      "item": [
+        {
+          "name": "Admin — Tracking Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API success', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tracking/admin/status/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tracking",
+                "admin",
+                "status",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin — Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tracking/admin/dashboard-stats/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tracking",
+                "admin",
+                "dashboard-stats",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin — Employee Route",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tracking/admin/employee/{{user_id}}/route/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tracking",
+                "admin",
+                "employee",
+                "{{user_id}}",
+                "route",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Map Farmers (GeoJSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/map/farmers/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "map",
+                "farmers",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Employee Visit Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/employee-visits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "employee-visits",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Village Visit Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/village-visits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "village-visits",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Daily Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/daily/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "daily",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Monthly Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/monthly/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "monthly",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/unread-count/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "unread-count",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/read/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notification_id}}",
+                "read",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark All Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/mark-all-read/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "mark-all-read",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin ViewSets",
+      "item": [
+        {
+          "name": "Admin — List Farmers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/farmers/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "farmers",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin — List Visits",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/visits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "visits",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin — List Crop Issues",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/issues/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "issues",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin — List Crop Catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/crop-catalog/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "crop-catalog",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin — Create Crop Catalog Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name_en\": \"Sugarcane\",\n  \"name_ta\": \"கரும்பு\",\n  \"scientific_name\": \"Saccharum officinarum\",\n  \"crop_category\": \"commercial\",\n  \"typical_season\": \"annual\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/crop-catalog/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "crop-catalog",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

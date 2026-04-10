@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: agri-clinic-backend
+    runtime: python
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /healthz/
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python manage.py migrate && python manage.py collectstatic --noinput
+    startCommand: gunicorn config.wsgi:application
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*"

@@ -1,0 +1,72 @@
+﻿{
+  "id": "agri-clinic-local-env",
+  "name": "Agri Clinic Local",
+  "_postman_variable_scope": "environment",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000/api/v1",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "farmer_id",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "visit_id",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "field_id",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "employee_id",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "profile_id",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "district_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "village_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "crop_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "enabled": true
+    }
+  ]
+}
