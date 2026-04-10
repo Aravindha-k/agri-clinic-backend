@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -25,6 +26,42 @@ def env_list(name, default=None):
         return list(default or [])
     cleaned = [item.strip() for item in value.split(",") if item.strip()]
     return cleaned or list(default or [])
+
+
+def normalize_database_url(raw_url):
+    if not raw_url:
+        return raw_url
+
+    parsed = urlsplit(raw_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        return raw_url
+
+    host = parsed.hostname or ""
+    if not (host.startswith("dpg-") and "." not in host):
+        return raw_url
+
+    region = (os.getenv("RENDER_REGION") or "singapore").strip().lower()
+    default_suffix = f"{region}-postgres.render.com"
+    host_suffix = os.getenv("RENDER_POSTGRES_HOST_SUFFIX", default_suffix).strip()
+    full_host = f"{host}.{host_suffix.lstrip('.')}"
+
+    username = quote(parsed.username or "", safe="")
+    password = quote(parsed.password or "", safe="")
+    auth = username
+    if password:
+        auth = f"{auth}:{password}"
+    if auth:
+        auth = f"{auth}@"
+
+    port = parsed.port or 5432
+    query = parsed.query
+    if "sslmode=" not in query.lower():
+        query = f"{query}&sslmode=require" if query else "sslmode=require"
+
+    fixed_netloc = f"{auth}{full_host}:{port}"
+    return urlunsplit(
+        (parsed.scheme, fixed_netloc, parsed.path, query, parsed.fragment)
+    )
 
 
 # --------------------------------------------------
@@ -193,7 +230,7 @@ ROOT_URLCONF = "config.urls"
 # --------------------------------------------------
 # DATABASE CONFIG
 # --------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
 
 if DATABASE_URL:
     DATABASES = {
