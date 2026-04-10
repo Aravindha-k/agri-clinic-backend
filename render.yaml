@@ -1,3 +1,8 @@
+databases:
+  - name: agri-clinic-db
+    databaseName: employee_tracking_o7qr
+    user: employee_tracking_o7qr_user
+
 services:
   - type: web
     name: agri-clinic-backend
@@ -10,7 +15,9 @@ services:
     startCommand: gunicorn config.wsgi:application
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: agri-clinic-db
+          property: connectionString
       - key: SECRET_KEY
         sync: false
       - key: DEBUG
