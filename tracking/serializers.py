@@ -4,6 +4,7 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from .models import WorkDay, LocationLog, AvailabilityEvent
+from .workday_utils import expire_overlong_workdays_for_user
 from notifications.utils import create_notification
 
 
@@ -46,6 +47,8 @@ class StartDaySerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.context["request"].user
 
+        expire_overlong_workdays_for_user(user)
+
         # Prevent multiple active workdays
         if WorkDay.objects.filter(user=user, is_active=True).exists():
             raise serializers.ValidationError("Workday already started")
@@ -62,6 +65,8 @@ class StartDaySerializer(serializers.Serializer):
 class EndDaySerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.context["request"].user
+
+        expire_overlong_workdays_for_user(user)
 
         try:
             workday = WorkDay.objects.get(user=user, is_active=True)
@@ -92,6 +97,8 @@ class LocationLogCreateSerializer(serializers.Serializer):
         if user.is_staff:
             raise serializers.ValidationError("Admin cannot push location")
 
+        expire_overlong_workdays_for_user(user)
+
         workday = (
             WorkDay.objects.filter(user=user, is_active=True)
             .order_by("-start_time")
@@ -112,6 +119,17 @@ class LocationLogCreateSerializer(serializers.Serializer):
             network_type=self.validated_data.get("network_type"),
             device_model=self.validated_data.get("device_model"),
             app_version=self.validated_data.get("app_version"),
+            recorded_at=recorded_at,
+        )
+        from .services import refresh_workday_live_state
+
+        refresh_workday_live_state(
+            user=user,
+            workday=workday,
+            latitude=float(location.latitude),
+            longitude=float(location.longitude),
+            accuracy=location.accuracy,
+            battery_level=location.battery_level,
             recorded_at=recorded_at,
         )
         return location
@@ -143,12 +161,14 @@ class LocationLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = LocationLog
         fields = [
+            "id",
             "latitude",
             "longitude",
             "accuracy",
             "battery_level",
             "is_suspicious",
             "recorded_at",
+            "created_at",
         ]
 
 
@@ -160,6 +180,8 @@ class HeartbeatSerializer(serializers.Serializer):
 
         if user.is_staff:
             raise serializers.ValidationError("Admin heartbeat not allowed")
+
+        expire_overlong_workdays_for_user(user)
 
         try:
             workday = WorkDay.objects.get(user=user, is_active=True)

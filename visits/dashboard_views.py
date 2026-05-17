@@ -9,6 +9,7 @@ from utils.response import success_response
 from utils.schema import SIMPLE_SUCCESS
 
 from visits.models import Visit
+from visits.kpi_status import COMPLETED_STATUSES
 from masters.models import Farmer, CropIssue
 
 
@@ -32,7 +33,7 @@ class DashboardAPI(APIView):
 
         today_visits = Visit.objects.filter(employee=user, visit_date=today).count()
         completed_visits = Visit.objects.filter(
-            employee=user, visit_date=today, status="completed"
+            employee=user, visit_date=today, status__in=COMPLETED_STATUSES
         ).count()
 
         if user.is_staff:
@@ -76,9 +77,6 @@ class MapFarmersAPI(APIView):
             Q(gps_location="") | Q(gps_location__isnull=True)
         ).select_related("village")
 
-        if not user.is_staff:
-            qs = qs.filter(assigned_employee=user)
-
         markers = []
         for farmer in qs:
             parts = farmer.gps_location.split(",")
@@ -91,7 +89,7 @@ class MapFarmersAPI(APIView):
 
             # Latest crop from the most recent visit
             last_visit = (
-                Visit.objects.filter(farmer=farmer)
+                Visit.objects.filter(farmer_name__iexact=farmer.name)
                 .select_related("crop")
                 .order_by("-visit_date")
                 .first()

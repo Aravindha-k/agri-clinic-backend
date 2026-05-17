@@ -5,6 +5,7 @@ from .permissions import IsEmployeeUser
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 from tracking.models import WorkDay
+from tracking.workday_utils import expire_overlong_workdays_for_user
 from django.utils import timezone
 import logging
 
@@ -33,17 +34,20 @@ class MobileWorkStartAPI(APIView):
         logger.debug(f"MOBILE WORK START PAYLOAD: {request.data}")
         user = request.user
         today = timezone.localdate()
+        expire_overlong_workdays_for_user(user)
         # Accept empty or minimal payload
         if WorkDay.objects.filter(user=user, is_active=True).exists():
             return error_response(message="Workday already started", status_code=400)
         # Optionally accept latitude/longitude if provided, but not required
         latitude = request.data.get("latitude")
         longitude = request.data.get("longitude")
+        now = timezone.now()
         workday_kwargs = {
             "user": user,
             "date": today,
-            "start_time": timezone.now(),
+            "start_time": now,
             "is_active": True,
+            "last_heartbeat": now,
         }
         if latitude is not None:
             workday_kwargs["latitude"] = latitude

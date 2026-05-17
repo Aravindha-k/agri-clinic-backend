@@ -10,6 +10,8 @@ from .views import (
     FieldCropViewSet,
     RecommendationViewSet,
     DashboardStatsAPI,
+    DashboardOverviewAPI,
+    FarmerVisitAuditAPI,
 )
 
 router = DefaultRouter()
@@ -24,7 +26,17 @@ router.register(
 )
 
 urlpatterns = [
+    path(
+        "audit/farmer-visits/",
+        FarmerVisitAuditAPI.as_view(),
+        name="admin-farmer-visit-audit",
+    ),
     path("dashboard/stats/", DashboardStatsAPI.as_view(), name="dashboard-stats"),
+    path(
+        "dashboard/overview/",
+        DashboardOverviewAPI.as_view(),
+        name="dashboard-overview",
+    ),
     path(
         "crop-issues/",
         CropIssueViewSet.as_view({"get": "list"}),

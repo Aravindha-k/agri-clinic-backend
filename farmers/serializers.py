@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.openapi import OpenApiTypes
+from django.db.models import Q
 from rest_framework import serializers
 
 
@@ -98,7 +99,11 @@ class CropIssueSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.INT)
     def get_farmer_id(self, obj):
         v = obj.visit
-        if not v or not v.farmer_phone:
+        if not v:
+            return None
+        if v.farmer_id:
+            return v.farmer_id
+        if not v.farmer_phone:
             return None
         farmer = Farmer.objects.filter(phone=v.farmer_phone).only("id").first()
         return farmer.id if farmer else None
@@ -135,6 +140,14 @@ class CropIssueSerializer(serializers.ModelSerializer):
         v = obj.visit
         if not v:
             return None
+        if v.farmer_id:
+            return {
+                "id": v.farmer_id,
+                "name": v.farmer.name or "-",
+                "phone": v.farmer.phone or "-",
+                "village": v.farmer.village.name if v.farmer.village else "-",
+                "district": v.farmer.district.name if v.farmer.district else "-",
+            }
         return {
             "name": v.farmer_name or "-",
             "phone": v.farmer_phone or "-",
@@ -145,7 +158,15 @@ class CropIssueSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_field(self, obj):
         v = obj.visit
-        if not v or not v.land_name:
+        if not v:
+            return None
+        if v.field_id:
+            return {
+                "id": v.field_id,
+                "land_name": v.field.land_name or "-",
+                "land_area": str(v.field.land_size) if v.field.land_size else "-",
+            }
+        if not v.land_name:
             return None
         return {
             "land_name": v.land_name or "-",
@@ -317,6 +338,14 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(
         source="employee.username", read_only=True, default=""
     )
+    village_name = serializers.CharField(
+        source="village.name", read_only=True, default=""
+    )
+    district_name = serializers.CharField(
+        source="district.name", read_only=True, default=""
+    )
+    crop_info = serializers.SerializerMethodField()
+    field_info = serializers.SerializerMethodField()
     media_files = VisitMediaSerializer(many=True, read_only=True)
     issues = CropIssueSerializer(many=True, read_only=True)
 
@@ -324,11 +353,22 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
         model = Visit
         fields = [
             "id",
+            "farmer",
+            "field",
+            "farmer_name",
+            "farmer_phone",
+            "land_name",
+            "land_area",
             "employee",
             "employee_name",
             "visit_date",
             "latitude",
             "longitude",
+            "village_name",
+            "district_name",
+            "crop",
+            "crop_info",
+            "field_info",
             "crop_health",
             "notes",
             "status",
@@ -338,6 +378,29 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("id", "visit_time")
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_crop_info(self, obj):
+        if obj.crop:
+            return {
+                "id": obj.crop.id,
+                "name_en": obj.crop.name_en,
+                "name_ta": obj.crop.name_ta,
+                "name": f"{obj.crop.name_en} / {obj.crop.name_ta}",
+            }
+        return None
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_field_info(self, obj):
+        if obj.field_id:
+            return {
+                "id": obj.field_id,
+                "land_name": obj.field.land_name,
+                "land_size": str(obj.field.land_size) if obj.field.land_size else None,
+            }
+        if obj.land_name or obj.land_area is not None:
+            return {"id": None, "land_name": obj.land_name, "land_area": obj.land_area}
+        return None
+
 
 # ══════════════════════════════════════════════
 # FARMER
@@ -345,18 +408,93 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
 
 
 class FarmerListSerializer(serializers.ModelSerializer):
-    """Lightweight for list views — includes nested fields."""
+    """Admin list — core fields + visit stats (no nested fields payload)."""
 
+    mobile = serializers.CharField(source="phone", read_only=True)
+    village = serializers.CharField(source="village.name", read_only=True, default="")
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
+    crop_name = serializers.SerializerMethodField()
+    latitude = serializers.SerializerMethodField()
+    longitude = serializers.SerializerMethodField()
+    visit_count = serializers.IntegerField(read_only=True, default=0)
+    visits = serializers.IntegerField(source="visit_count", read_only=True, default=0)
+    total_visits = serializers.IntegerField(source="visit_count", read_only=True, default=0)
+    latest_visit_date = serializers.DateField(read_only=True, allow_null=True)
+    total_land_area = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True, allow_null=True
+    )
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_crop_name(self, obj):
+        annotated = getattr(obj, "list_crop_name", None)
+        if annotated:
+            return annotated
+        return ""
+
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_latitude(self, obj):
+        from .helpers import parse_gps_location
+
+        lat, _ = parse_gps_location(getattr(obj, "gps_location", None))
+        return lat
+
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_longitude(self, obj):
+        from .helpers import parse_gps_location
+
+        _, lng = parse_gps_location(getattr(obj, "gps_location", None))
+        return lng
+
+    class Meta:
+        model = Farmer
+        fields = [
+            "id",
+            "name",
+            "phone",
+            "mobile",
+            "village",
+            "village_name",
+            "district_name",
+            "crop_name",
+            "latitude",
+            "longitude",
+            "total_land_area",
+            "visit_count",
+            "visits",
+            "total_visits",
+            "latest_visit_date",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class FarmerDetailSerializer(serializers.ModelSerializer):
+    """
+    Full nested serializer:
+    Farmer
+    ├── Fields (with Crops)
+    └── Recent Visits (with Issues + Media)
+    """
+
+    district_name = serializers.CharField(
+        source="district.name", read_only=True, default=""
+    )
+    village_name = serializers.CharField(
+        source="village.name", read_only=True, default=""
+    )
     assigned_employee_name = serializers.CharField(
         source="assigned_employee.username", read_only=True, default=""
     )
-    fields = FarmerFieldSerializer(many=True, read_only=True)
+    # Named farmer_fields — "fields" shadows ModelSerializer.get_fields().
+    farmer_fields = serializers.SerializerMethodField()
+    recent_visits = serializers.SerializerMethodField()
+    activity = serializers.SerializerMethodField()
 
     class Meta:
         model = Farmer
@@ -376,43 +514,7 @@ class FarmerListSerializer(serializers.ModelSerializer):
             "soil_type",
             "assigned_employee",
             "assigned_employee_name",
-            "fields",
-            "is_active",
-            "created_at",
-        ]
-        read_only_fields = ("id", "farmer_code", "created_at")
-
-
-class FarmerDetailSerializer(serializers.ModelSerializer):
-    """
-    Full nested serializer:
-    Farmer
-    ├── Fields (with Crops)
-    └── Recent Visits (with Issues + Media)
-    """
-
-    assigned_employee_name = serializers.CharField(
-        source="assigned_employee.username", read_only=True, default=""
-    )
-    fields = FarmerFieldSerializer(many=True, read_only=True)
-    recent_visits = serializers.SerializerMethodField()
-    activity = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Farmer
-        fields = [
-            "id",
-            "farmer_code",
-            "name",
-            "phone",
-            "address",
-            "gps_location",
-            "total_land_area",
-            "irrigation_type",
-            "soil_type",
-            "assigned_employee",
-            "assigned_employee_name",
-            "fields",
+            "farmer_fields",
             "recent_visits",
             "activity",
             "is_active",
@@ -421,20 +523,36 @@ class FarmerDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("id", "farmer_code", "created_at", "updated_at")
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if "farmer_fields" in data:
+            data["fields"] = data.pop("farmer_fields")
+        return data
+
+    @extend_schema_field(serializers.ListSerializer(child=FarmerFieldSerializer()))
+    def get_farmer_fields(self, obj):
+        qs = obj.fields.filter(is_active=True).prefetch_related("crops__crop")
+        return FarmerFieldSerializer(qs, many=True, context=self.context).data
+
     @extend_schema_field(serializers.ListSerializer(child=serializers.DictField()))
     def get_recent_visits(self, obj):
         from visits.models import Visit as VisitModel
 
         visits = (
-            VisitModel.objects.filter(farmer_phone=obj.phone)
-            .select_related("employee")
+            VisitModel.objects.filter(Q(farmer=obj) | Q(farmer_phone=obj.phone))
+            .select_related("employee", "farmer", "field")
             .prefetch_related(
                 "media_files",
                 "issues__crop",
                 "issues__recommendations__given_by",
             )
-            .order_by("-visit_date")[:10]
+            .order_by("-created_at", "-id")
         )
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            visits = visits.filter(employee=user)
+        visits = visits[:10]
         return FarmerVisitSerializer(visits, many=True, context=self.context).data
 
     @extend_schema_field(serializers.ListSerializer(child=serializers.DictField()))
@@ -462,6 +580,19 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
             "soil_type",
             "assigned_employee",
         ]
+
+    def validate_phone(self, value):
+        phone = (value or "").strip()
+        if not phone:
+            raise serializers.ValidationError("Phone is required.")
+        qs = Farmer.objects.filter(phone=phone)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                "A farmer with this mobile number already exists."
+            )
+        return phone
 
 
 class FarmerUpdateSerializer(serializers.ModelSerializer):

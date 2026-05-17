@@ -12,7 +12,6 @@ from .views import (
     StartVisitAPI,
     ActiveVisitAPI,
 )
-from .api_visit_update import VisitDetailUpdateAPI
 
 urlpatterns = [
     # --- CRITICAL: Add explicit update route first to prevent shadowing ---

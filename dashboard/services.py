@@ -34,8 +34,29 @@ def get_stats() -> Dict:
 
 
 def invalidate_stats_cache() -> None:
-    """Call this whenever a visit is created/deleted to keep stats fresh."""
-    cache.delete("dashboard:stats")
+    """Backward-compatible alias — clears all dashboard KPI caches."""
+    invalidate_dashboard_caches()
+
+
+def invalidate_dashboard_caches() -> None:
+    """Invalidate cached dashboard aggregates after visits or tracking changes."""
+    keys = [
+        "dashboard:stats",
+        "dashboard:summary",
+        "dashboard:employee-performance",
+        "dashboard:employee_performance",
+        "dashboard:heatmap",
+        "dashboard:visit-trends",
+    ]
+    for key in keys:
+        cache.delete(key)
+    for days in (7, 14, 30, 60, 90, 365):
+        cache.delete(f"dashboard:visit_trends:{days}")
+        cache.delete(f"dashboard:emp_perf:{days}")
+        cache.delete(f"dashboard:employee-performance:{days}")
+    for top_n in (10, 20, 50, 100):
+        cache.delete(f"dashboard:village_heatmap:{top_n}")
+    logger.debug("Dashboard caches invalidated")
 
 
 def get_visit_trends(days: int = 30) -> List[Dict]:

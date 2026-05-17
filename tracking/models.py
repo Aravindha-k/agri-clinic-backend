@@ -19,6 +19,11 @@ class WorkDay(models.Model):
 
     is_active = models.BooleanField(default=True)
 
+    auto_ended = models.BooleanField(
+        default=False,
+        help_text="Whether this workday was automatically ended due to time limit",
+    )
+
     last_heartbeat = models.DateTimeField(null=True, blank=True)
 
     latitude = models.DecimalField(
@@ -77,6 +82,11 @@ class LocationLog(models.Model):
     is_suspicious = models.BooleanField(default=False)
 
     recorded_at = models.DateTimeField()
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Server time when this point was stored",
+    )
 
     class Meta:
         ordering = ["recorded_at"]

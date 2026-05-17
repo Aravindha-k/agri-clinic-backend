@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from visits.models import Visit
+from visits.submitted import submitted_visits_qs
 from tracking.worklog import WorkLog
 from django.utils import timezone
 from django.db.models import Sum
@@ -13,7 +14,11 @@ from utils.schema import SIMPLE_SUCCESS
 @extend_schema(
     tags=["Reports"],
     summary="Daily visit and work report",
-    description="Returns today's visit counts (total, pending, verified) and total work hours for the logged-in employee.",
+    description=(
+        "Returns today's submitted visit counts and work hours. "
+        "Non-staff users see only their own visits; staff see all visits for the date. "
+        "Includes total work hours for the logged-in user."
+    ),
     responses={200: SIMPLE_SUCCESS},
 )
 class DailyReportAPI(APIView):
@@ -21,9 +26,10 @@ class DailyReportAPI(APIView):
 
     def get(self, request):
         today = timezone.localdate()
-        total_visits = Visit.objects.filter(visit_date=today).count()
-        pending = Visit.objects.filter(visit_date=today, status="pending").count()
-        verified = Visit.objects.filter(visit_date=today, status="verified").count()
+        visit_qs = submitted_visits_qs().filter(visit_date=today)
+        if not request.user.is_staff:
+            visit_qs = visit_qs.filter(employee=request.user)
+        total_visits = visit_qs.count()
         total_work_hours = WorkLog.objects.filter(
             employee=request.user,
             start_time__date=today,
@@ -32,8 +38,6 @@ class DailyReportAPI(APIView):
         return Response(
             {
                 "total_visits": total_visits,
-                "pending": pending,
-                "verified": verified,
                 "total_work_hours": total_work_hours or 0,
             }
         )
@@ -42,7 +46,10 @@ class DailyReportAPI(APIView):
 @extend_schema(
     tags=["Reports"],
     summary="Monthly visit and work report",
-    description="Returns this month's visit counts and total work hours for the logged-in employee.",
+    description=(
+        "Returns this month's submitted visit counts. "
+        "Includes total work hours for the logged-in user."
+    ),
     responses={200: SIMPLE_SUCCESS},
 )
 class MonthlyReportAPI(APIView):
@@ -51,15 +58,12 @@ class MonthlyReportAPI(APIView):
     def get(self, request):
         today = timezone.localdate()
         month_start = today.replace(day=1)
-        total_visits = Visit.objects.filter(
+        visit_qs = submitted_visits_qs().filter(
             visit_date__gte=month_start, visit_date__lte=today
-        ).count()
-        pending = Visit.objects.filter(
-            visit_date__gte=month_start, visit_date__lte=today, status="pending"
-        ).count()
-        verified = Visit.objects.filter(
-            visit_date__gte=month_start, visit_date__lte=today, status="verified"
-        ).count()
+        )
+        if not request.user.is_staff:
+            visit_qs = visit_qs.filter(employee=request.user)
+        total_visits = visit_qs.count()
         total_work_hours = WorkLog.objects.filter(
             employee=request.user,
             start_time__date__gte=month_start,
@@ -69,8 +73,6 @@ class MonthlyReportAPI(APIView):
         return Response(
             {
                 "total_visits": total_visits,
-                "pending": pending,
-                "verified": verified,
                 "total_work_hours": total_work_hours or 0,
             }
         )

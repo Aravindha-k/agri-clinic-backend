@@ -18,14 +18,35 @@ def log_farmer_created(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Visit)
-def log_visit_completed(sender, instance, created, **kwargs):
-    if created and instance.farmer_name:
+def log_visit_activity(sender, instance, created, **kwargs):
+    farmer = instance.farmer
+    if not farmer and instance.farmer_phone:
+        farmer = Farmer.objects.filter(phone=instance.farmer_phone).order_by("id").first()
+    if not farmer:
+        return
+
+    label = instance.farmer_name or farmer.name
+    if created:
         FarmerActivity.objects.create(
-            activity_type="VISIT_COMPLETED",
+            farmer=farmer,
+            activity_type="FOLLOWUP_VISIT",
             reference_id=instance.pk,
             created_by=instance.employee,
-            notes=instance.notes or f"Visit for {instance.farmer_name}",
+            notes=instance.notes or f"Visit logged for {label}",
         )
+    else:
+        from visits.submitted import visit_has_submitted_details
+
+        if visit_has_submitted_details(instance):
+            FarmerActivity.objects.get_or_create(
+                farmer=farmer,
+                activity_type="VISIT_COMPLETED",
+                reference_id=instance.pk,
+                defaults={
+                    "created_by": instance.employee,
+                    "notes": instance.notes or f"Visit recorded for {label}",
+                },
+            )
 
 
 @receiver(post_save, sender=CropIssue)

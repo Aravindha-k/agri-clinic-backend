@@ -70,7 +70,17 @@ APP_ENV = os.getenv("APP_ENV", "local").strip().lower()
 IS_PRODUCTION = APP_ENV in {"prod", "production", "render", "staging"}
 
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret")
-DEBUG = env_bool("DEBUG", True)
+DEBUG = env_bool("DEBUG", not IS_PRODUCTION)
+
+_INSECURE_SECRET_KEYS = {
+    "",
+    "unsafe-secret",
+    "change-me-to-a-long-random-string",
+}
+if IS_PRODUCTION and SECRET_KEY in _INSECURE_SECRET_KEYS:
+    raise RuntimeError(
+        "SECRET_KEY must be set to a long random value when APP_ENV is production-like."
+    )
 
 DEFAULT_ALLOWED_HOSTS = (
     ["agri-clinic-backend.onrender.com", ".onrender.com"]
@@ -116,7 +126,7 @@ INSTALLED_APPS = [
     # local apps
     "accounts",
     "tracking",
-    "visits",
+    "visits.apps.VisitsConfig",
     "notifications",
     "masters",
     "farmers",
@@ -246,6 +256,9 @@ if DATABASE_URL:
             ssl_require=env_bool("DB_SSL_REQUIRE", default_ssl_require),
         )
     }
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"].setdefault("connect_timeout", 10)
 elif IS_PRODUCTION:
     raise RuntimeError("DATABASE_URL is required when APP_ENV is production-like")
 else:

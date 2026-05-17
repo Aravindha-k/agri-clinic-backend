@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
@@ -32,7 +32,7 @@ _DAYS_PARAM = OpenApiParameter(
 class DashboardView(APIView):
     """GET /api/v1/dashboard/  – backward-compatible alias."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         data = dashboard_services.get_stats()
@@ -51,7 +51,7 @@ class DashboardView(APIView):
 class DashboardSummaryAPI(APIView):
     """GET /api/v1/dashboard/summary/"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         data = dashboard_services.get_stats()
@@ -68,7 +68,7 @@ class DashboardSummaryAPI(APIView):
 class VisitTrendsAPI(APIView):
     """GET /api/v1/dashboard/visit-trends/?days=30"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         days = int(request.query_params.get("days", 30))
@@ -87,7 +87,7 @@ class VisitTrendsAPI(APIView):
 class EmployeePerformanceAPI(APIView):
     """GET /api/v1/dashboard/employee-performance/?days=30"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         days = int(request.query_params.get("days", 30))
@@ -112,7 +112,7 @@ class EmployeePerformanceAPI(APIView):
 class VillageHeatmapAPI(APIView):
     """GET /api/v1/dashboard/village-heatmap/?top=20"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         top_n = int(request.query_params.get("top", 20))

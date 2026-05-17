@@ -1,3 +1,12 @@
+# Render Blueprint — Agri Clinic backend + fresh PostgreSQL
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: agri-clinic-db
+    databaseName: agri_clinic
+    user: agri_clinic
+    plan: free
+
 services:
   - type: web
     name: agri-clinic-backend
@@ -5,25 +14,31 @@ services:
     branch: main
     autoDeployTrigger: commit
     healthCheckPath: /healthz/
-    buildCommand: pip install -r requirements.txt
-    preDeployCommand: python manage.py migrate && python manage.py collectstatic --noinput
-    startCommand: gunicorn config.wsgi:application
+    buildCommand: chmod +x build.sh && ./build.sh
+    preDeployCommand: python manage.py migrate --noinput
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120 --access-logfile -
     envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: DB_SSL_REQUIRE
-        value: "false"
-      - key: SECRET_KEY
-        sync: false
       - key: APP_ENV
-        value: "production"
+        value: production
       - key: DEBUG
         value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agri-clinic-db
+          property: connectionString
+      - key: DB_SSL_REQUIRE
+        value: "false"
       - key: ALLOWED_HOSTS
-        value: "agri-clinic-backend.onrender.com"
+        value: agri-clinic-backend.onrender.com,.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://agri-clinic-backend.onrender.com"
+        value: https://agri-clinic-backend.onrender.com
       - key: CORS_ALLOW_ALL_ORIGINS
         value: "false"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://agri-clinic-frontend.onrender.com"
+        value: https://agri-clinic-frontend.onrender.com
+      - key: USE_S3
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO

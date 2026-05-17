@@ -34,10 +34,26 @@ class Visit(models.Model):
     )
 
     # Farmer Details (manual)
+    farmer = models.ForeignKey(
+        "masters.Farmer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="visits",
+        db_index=True,
+    )
     farmer_name = models.CharField(max_length=255, null=True, blank=True)
     farmer_phone = models.CharField(max_length=20, blank=True, null=True, db_index=True)
 
     # Land Details (manual)
+    field = models.ForeignKey(
+        "masters.FarmerField",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="visits",
+        db_index=True,
+    )
     land_name = models.CharField(max_length=255, null=True, blank=True)
     land_area = models.FloatField(null=True, blank=True)
 
@@ -73,10 +89,27 @@ class Visit(models.Model):
 
     # System
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="pending", null=True, blank=True
+        max_length=20, choices=STATUS_CHOICES, default="completed", null=True, blank=True
+    )
+    local_sync_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Client-generated id for offline sync deduplication.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "local_sync_id"],
+                condition=models.Q(local_sync_id__isnull=False)
+                & ~models.Q(local_sync_id=""),
+                name="uniq_visit_employee_local_sync_id",
+            )
+        ]
 
     def __str__(self):
         return f"Visit {self.id} - {self.farmer_name} - {self.visit_date}"

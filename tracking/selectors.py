@@ -97,3 +97,23 @@ def get_active_employees_on_field() -> QuerySet:
         .filter(is_active=True)
         .order_by("-date")
     )
+
+
+def get_last_known_location(user_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Latest GPS for admin maps: Redis live cache first, then latest LocationLog.
+    """
+    live = get_live_location(user_id)
+    if live and live.get("latitude") is not None:
+        return {
+            "latitude": live.get("latitude"),
+            "longitude": live.get("longitude"),
+            "recorded_at": live.get("timestamp"),
+        }
+
+    return (
+        LocationLog.objects.filter(user_id=user_id)
+        .order_by("-recorded_at")
+        .values("latitude", "longitude", "recorded_at")
+        .first()
+    )

@@ -1,0 +1,26 @@
+[
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$B0qLdVyVyTiI5vjFuMb6ph$s20jpyb4RdVxCrF7LizjjjoTsulfJpTr6/yX9n486Os=",
+    "last_login": null,
+    "is_superuser": true,
+    "username": "renderadmin",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@agri-clinic.local",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-04-11T05:39:35.478Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "masters.crop",
+  "pk": 1,
+  "fields": {
+    "updated_at": "2026-04-10T19:53:10.743Z",
+    "name_en": "Paddy",
+    "name_ta": 

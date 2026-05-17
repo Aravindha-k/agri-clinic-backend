@@ -1,0 +1,3534 @@
+[
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$4ixyfRHQzVpf8F8LbWupnC$tAcp8uX0qwq7NWU2C4LgQJUxLFehkN89VeBKCCbvwHk=",
+    "last_login": "2026-04-10T15:45:20.390Z",
+    "is_superuser": true,
+    "username": "aravindh",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-20T06:34:09.561Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 7,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$OdEwp9xDjPDXXEIBSnV99C$XhLm1cIhIwYXRfEKFNeqn/d4yu0AuYPO8be4+5CD0jE=",
+    "last_login": null,
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@test.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-04-09T04:56:53.286Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 16,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$RocAVG5U3qBIFFnILNZtnw$YU7EQzd4BfcGqcZr+WXdk2TzuQPk2fngtRGtwN1N9yE=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "aravind.kumar",
+    "first_name": "Aravind",
+    "last_name": "Kumar",
+    "email": "aravind.kumar@kavyaagri.demo",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-04-10T15:44:13.163Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 17,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$Qm1K4z3DZiE5LM6ssQNxEC$i1f10f619ZQsJbGRUg+74119cOMGPfvBUNzNba+bhvE=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "prakash.raj",
+    "first_name": "Prakash",
+    "last_name": "Raj",
+    "email": "prakash.raj@kavyaagri.demo",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-04-10T15:44:13.627Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 18,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$bQbA07CIiuc1StJr44VR6s$QeY6k5S/Bu8p3hjyDtOZzaDFYgAgx7oxIbdPIl2jifw=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "suresh.babu",
+    "first_name": "Suresh",
+    "last_name": "Babu",
+    "email": "suresh.babu@kavyaagri.demo",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-04-10T15:44:14.075Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 14,
+  "fields": {
+    "user": 16,
+    "employee_id": "EMP-101",
+    "phone": "9876543210",
+    "role": "FieldAgent",
+    "district": 15,
+    "village": 16,
+    "is_active_employee": true,
+    "can_login": true,
+    "created_at": "2026-04-10T15:44:13.606Z"
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 15,
+  "fields": {
+    "user": 17,
+    "employee_id": "EMP-102",
+    "phone": "9123456780",
+    "role": "FieldAgent",
+    "district": 16,
+    "village": 18,
+    "is_active_employee": true,
+    "can_login": true,
+    "created_at": "2026-04-10T15:44:14.070Z"
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 16,
+  "fields": {
+    "user": 18,
+    "employee_id": "EMP-103",
+    "phone": "9012345678",
+    "role": "FieldAgent",
+    "district": 17,
+    "village": 20,
+    "is_active_employee": true,
+    "can_login": true,
+    "created_at": "2026-04-10T15:44:14.488Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 18,
+  "fields": {
+    "employee": 17,
+    "visit_date": "2026-04-10",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 15,
+    "village": 16,
+    "farmer_name": "Ramesh Gounder",
+    "farmer_phone": "9000001001",
+    "land_name": "Main Field",
+    "land_area": 3.2,
+    "crop": 52,
+    "crop_stage": "Flowering",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "healthy",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Ramesh Gounder",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.553Z",
+    "updated_at": "2026-04-10T15:44:14.553Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 19,
+  "fields": {
+    "employee": 16,
+    "visit_date": "2026-04-09",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 16,
+    "village": 18,
+    "farmer_name": "Selvi Ammal",
+    "farmer_phone": "9000001002",
+    "land_name": "Main Field",
+    "land_area": 2.8,
+    "crop": 53,
+    "crop_stage": "Flowering",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "moderate",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Selvi Ammal",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.561Z",
+    "updated_at": "2026-04-10T15:44:14.561Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 20,
+  "fields": {
+    "employee": 17,
+    "visit_date": "2026-04-08",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 17,
+    "village": 20,
+    "farmer_name": "Murugan",
+    "farmer_phone": "9000001003",
+    "land_name": "Main Field",
+    "land_area": 4.5,
+    "crop": 54,
+    "crop_stage": "Flowering",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "healthy",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Murugan",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.561Z",
+    "updated_at": "2026-04-10T15:44:14.561Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 21,
+  "fields": {
+    "employee": 17,
+    "visit_date": "2026-04-07",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 15,
+    "village": 17,
+    "farmer_name": "Lakshmi Narayanan",
+    "farmer_phone": "9000001004",
+    "land_name": "Main Field",
+    "land_area": 3.75,
+    "crop": 55,
+    "crop_stage": "Flowering",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "moderate",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Lakshmi Narayanan",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.571Z",
+    "updated_at": "2026-04-10T15:44:14.571Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 22,
+  "fields": {
+    "employee": 16,
+    "visit_date": "2026-04-06",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 16,
+    "village": 19,
+    "farmer_name": "Kannan",
+    "farmer_phone": "9000001005",
+    "land_name": "Main Field",
+    "land_area": 2.4,
+    "crop": 56,
+    "crop_stage": "Maturity",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "stressed",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Kannan",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.577Z",
+    "updated_at": "2026-04-10T15:44:14.577Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 23,
+  "fields": {
+    "employee": 18,
+    "visit_date": "2026-04-05",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 15,
+    "village": 16,
+    "farmer_name": "Perumal",
+    "farmer_phone": "9000001006",
+    "land_name": "Main Field",
+    "land_area": 4.1,
+    "crop": 53,
+    "crop_stage": "Vegetative",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "moderate",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Perumal",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.586Z",
+    "updated_at": "2026-04-10T15:44:14.586Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 24,
+  "fields": {
+    "employee": 18,
+    "visit_date": "2026-04-04",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 16,
+    "village": 19,
+    "farmer_name": "Meenakshi",
+    "farmer_phone": "9000001007",
+    "land_name": "Main Field",
+    "land_area": 2.6,
+    "crop": 52,
+    "crop_stage": "Flowering",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "stressed",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Meenakshi",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.588Z",
+    "updated_at": "2026-04-10T15:44:14.588Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 25,
+  "fields": {
+    "employee": 17,
+    "visit_date": "2026-04-10",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 17,
+    "village": 20,
+    "farmer_name": "Rajendran",
+    "farmer_phone": "9000001008",
+    "land_name": "Main Field",
+    "land_area": 3.9,
+    "crop": 54,
+    "crop_stage": "Flowering",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "stressed",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Rajendran",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.599Z",
+    "updated_at": "2026-04-10T15:44:14.599Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 26,
+  "fields": {
+    "employee": 16,
+    "visit_date": "2026-04-09",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 15,
+    "village": 17,
+    "farmer_name": "Chitra",
+    "farmer_phone": "9000001009",
+    "land_name": "Main Field",
+    "land_area": 2.2,
+    "crop": 56,
+    "crop_stage": "Vegetative",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "moderate",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Chitra",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.605Z",
+    "updated_at": "2026-04-10T15:44:14.605Z"
+  }
+},
+{
+  "model": "visits.visit",
+  "pk": 27,
+  "fields": {
+    "employee": 18,
+    "visit_date": "2026-04-08",
+    "visit_time": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "district": 16,
+    "village": 18,
+    "farmer_name": "Mani",
+    "farmer_phone": "9000001010",
+    "land_name": "Main Field",
+    "land_area": 4.3,
+    "crop": 55,
+    "crop_stage": "Vegetative",
+    "variety": null,
+    "season": null,
+    "sowing_date": null,
+    "crop_health": "healthy",
+    "pest_issue": false,
+    "disease_issue": false,
+    "weed_condition": null,
+    "notes": "Routine field inspection for Mani",
+    "fertilizer_advice": null,
+    "pesticide_advice": null,
+    "irrigation_advice": null,
+    "general_advice": null,
+    "follow_up_required": false,
+    "next_visit_date": null,
+    "status": "completed",
+    "created_at": "2026-04-10T15:44:14.613Z",
+    "updated_at": "2026-04-10T15:44:14.613Z"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 1,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-03-23T08:00:11.222Z",
+    "updated_at": "2026-03-23T08:05:08.107Z",
+    "name": "Trichy-updated"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 2,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-08T19:05:11.815Z",
+    "updated_at": "2026-04-08T19:05:11.815Z",
+    "name": "Test District 4ee84a"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 3,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-08T19:07:21.584Z",
+    "updated_at": "2026-04-08T19:07:21.584Z",
+    "name": "Test District fae50c"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 4,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-08T19:08:58.581Z",
+    "updated_at": "2026-04-08T19:08:58.581Z",
+    "name": "Test District ffda2e"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 5,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T04:57:10.004Z",
+    "updated_at": "2026-04-09T04:57:10.004Z",
+    "name": "Test District cfaa6b"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 6,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T04:58:57.374Z",
+    "updated_at": "2026-04-09T04:58:57.374Z",
+    "name": "Test District 0bc250"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 7,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:00:19.542Z",
+    "updated_at": "2026-04-09T05:00:19.542Z",
+    "name": "Test District 7f1aa2"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 8,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:11:39.780Z",
+    "updated_at": "2026-04-09T05:11:39.780Z",
+    "name": "Test District 41b41f"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 9,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:17:23.742Z",
+    "updated_at": "2026-04-09T05:17:23.742Z",
+    "name": "Test District 1c219d"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 10,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:43:18.141Z",
+    "updated_at": "2026-04-09T05:43:18.141Z",
+    "name": "Test District 036a0f"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 11,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:44:10.392Z",
+    "updated_at": "2026-04-09T05:44:10.392Z",
+    "name": "Test District 482a9e"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 12,
+  "fields": {
+    "is_active": false,
+    "created_at": "2026-04-09T12:17:14.668Z",
+    "updated_at": "2026-04-09T12:17:27.217Z",
+    "name": "vilupuram"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 13,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T14:08:01.776Z",
+    "updated_at": "2026-04-10T14:08:01.776Z",
+    "name": "Sample District"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 14,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T14:58:09.935Z",
+    "updated_at": "2026-04-10T14:58:09.935Z",
+    "name": "Hierarchy Test District"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 15,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.119Z",
+    "updated_at": "2026-04-10T15:44:13.119Z",
+    "name": "Coimbatore"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 16,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.130Z",
+    "updated_at": "2026-04-10T15:44:13.132Z",
+    "name": "Erode"
+  }
+},
+{
+  "model": "masters.district",
+  "pk": 17,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.134Z",
+    "updated_at": "2026-04-10T15:44:13.134Z",
+    "name": "Salem"
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 2,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-03-23T08:18:05.720Z",
+    "updated_at": "2026-03-23T08:24:13.327Z",
+    "name": "lalgudi-Updated",
+    "district": 6
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 3,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-08T19:05:11.891Z",
+    "updated_at": "2026-04-08T19:05:11.891Z",
+    "name": "Test Village 4ee84a",
+    "district": null
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 4,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-08T19:07:21.617Z",
+    "updated_at": "2026-04-08T19:07:21.617Z",
+    "name": "Test Village fae50c",
+    "district": null
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 5,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-08T19:08:58.616Z",
+    "updated_at": "2026-04-08T19:08:58.616Z",
+    "name": "Test Village ffda2e",
+    "district": 4
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 6,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T04:57:10.034Z",
+    "updated_at": "2026-04-09T04:57:10.034Z",
+    "name": "Test Village cfaa6b",
+    "district": 5
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 7,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T04:58:57.405Z",
+    "updated_at": "2026-04-09T04:58:57.405Z",
+    "name": "Test Village 0bc250",
+    "district": 6
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 8,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:00:19.571Z",
+    "updated_at": "2026-04-09T05:00:19.571Z",
+    "name": "Test Village 7f1aa2",
+    "district": 7
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 9,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:11:39.809Z",
+    "updated_at": "2026-04-09T05:11:39.809Z",
+    "name": "Test Village 41b41f",
+    "district": 8
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 10,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:17:23.775Z",
+    "updated_at": "2026-04-09T05:17:23.775Z",
+    "name": "Test Village 1c219d",
+    "district": 9
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 11,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:43:18.183Z",
+    "updated_at": "2026-04-09T05:43:18.183Z",
+    "name": "Test Village 036a0f",
+    "district": 10
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 12,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-09T05:44:10.445Z",
+    "updated_at": "2026-04-09T05:44:10.445Z",
+    "name": "Test Village 482a9e",
+    "district": 11
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 13,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T14:08:01.798Z",
+    "updated_at": "2026-04-10T14:08:01.798Z",
+    "name": "Sample Village",
+    "district": 13
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 14,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T14:58:09.943Z",
+    "updated_at": "2026-04-10T14:58:09.943Z",
+    "name": "Hierarchy Test Village",
+    "district": 14
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 15,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T14:58:09.970Z",
+    "updated_at": "2026-04-10T14:58:09.970Z",
+    "name": "Hierarchy API Village",
+    "district": 14
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 16,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.139Z",
+    "updated_at": "2026-04-10T15:44:13.139Z",
+    "name": "Pollachi",
+    "district": 15
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 17,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.141Z",
+    "updated_at": "2026-04-10T15:44:13.141Z",
+    "name": "Annur",
+    "district": 15
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 18,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.145Z",
+    "updated_at": "2026-04-10T15:44:13.145Z",
+    "name": "Gobichettipalayam",
+    "district": 16
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 19,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.146Z",
+    "updated_at": "2026-04-10T15:44:13.146Z",
+    "name": "Bhavani",
+    "district": 16
+  }
+},
+{
+  "model": "masters.village",
+  "pk": 20,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.148Z",
+    "updated_at": "2026-04-10T15:44:13.148Z",
+    "name": "Mettur",
+    "district": 17
+  }
+},
+{
+  "model": "masters.crop",
+  "pk": 52,
+  "fields": {
+    "updated_at": "2026-04-10T15:44:13.155Z",
+    "name_en": "Paddy",
+    "name_ta": "Nel",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.155Z",
+    "scientific_name": "Oryza sativa",
+    "crop_category": "cereal",
+    "typical_season": "kharif"
+  }
+},
+{
+  "model": "masters.crop",
+  "pk": 53,
+  "fields": {
+    "updated_at": "2026-04-10T15:44:13.157Z",
+    "name_en": "Coconut",
+    "name_ta": "Thengai",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.157Z",
+    "scientific_name": "Cocos nucifera",
+    "crop_category": "commercial",
+    "typical_season": "annual"
+  }
+},
+{
+  "model": "masters.crop",
+  "pk": 54,
+  "fields": {
+    "updated_at": "2026-04-10T15:44:13.157Z",
+    "name_en": "Sugarcane",
+    "name_ta": "Karumbu",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.157Z",
+    "scientific_name": "Saccharum officinarum",
+    "crop_category": "commercial",
+    "typical_season": "annual"
+  }
+},
+{
+  "model": "masters.crop",
+  "pk": 55,
+  "fields": {
+    "updated_at": "2026-04-10T15:44:13.159Z",
+    "name_en": "Banana",
+    "name_ta": "Vazhai",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.159Z",
+    "scientific_name": "Musa acuminata",
+    "crop_category": "fruit",
+    "typical_season": "annual"
+  }
+},
+{
+  "model": "masters.crop",
+  "pk": 56,
+  "fields": {
+    "updated_at": "2026-04-10T15:44:13.159Z",
+    "name_en": "Tomato",
+    "name_ta": "Thakkali",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.159Z",
+    "scientific_name": "Solanum lycopersicum",
+    "crop_category": "vegetable",
+    "typical_season": "rabi"
+  }
+},
+{
+  "model": "masters.problemcategory",
+  "pk": 7,
+  "fields": {
+    "name": "Pest Attack",
+    "description": "Pest Attack related issue",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.150Z"
+  }
+},
+{
+  "model": "masters.problemcategory",
+  "pk": 8,
+  "fields": {
+    "name": "Leaf Yellowing",
+    "description": "Leaf Yellowing related issue",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.152Z"
+  }
+},
+{
+  "model": "masters.problemcategory",
+  "pk": 9,
+  "fields": {
+    "name": "Nutrient Deficiency",
+    "description": "Nutrient Deficiency related issue",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.152Z"
+  }
+},
+{
+  "model": "masters.problemcategory",
+  "pk": 10,
+  "fields": {
+    "name": "Fungal Disease",
+    "description": "Fungal Disease related issue",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.153Z"
+  }
+},
+{
+  "model": "masters.problemcategory",
+  "pk": 11,
+  "fields": {
+    "name": "Water Stress",
+    "description": "Water Stress related issue",
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:13.154Z"
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 12,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.497Z",
+    "updated_at": "2026-04-10T15:44:14.497Z",
+    "farmer_code": "FRM-65715D47",
+    "name": "Ramesh Gounder",
+    "phone": "9000001001",
+    "district": 15,
+    "village": 16,
+    "address": "Pollachi, Coimbatore",
+    "gps_location": "11.200000,77.300000",
+    "total_land_area": "3.20",
+    "irrigation_type": "rainfed",
+    "soil_type": "loamy",
+    "assigned_employee": 16,
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 13,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.519Z",
+    "updated_at": "2026-04-10T15:44:14.519Z",
+    "farmer_code": "FRM-863A57B7",
+    "name": "Selvi Ammal",
+    "phone": "9000001002",
+    "district": 16,
+    "village": 18,
+    "address": "Gobichettipalayam, Erode",
+    "gps_location": "11.200001,77.300001",
+    "total_land_area": "2.80",
+    "irrigation_type": "borewell",
+    "soil_type": "red",
+    "assigned_employee": 17,
+    "created_by_employee": 17
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 14,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.524Z",
+    "updated_at": "2026-04-10T15:44:14.524Z",
+    "farmer_code": "FRM-DFD91F8B",
+    "name": "Murugan",
+    "phone": "9000001003",
+    "district": 17,
+    "village": 20,
+    "address": "Mettur, Salem",
+    "gps_location": "11.200002,77.300002",
+    "total_land_area": "4.50",
+    "irrigation_type": "rainfed",
+    "soil_type": "red",
+    "assigned_employee": 18,
+    "created_by_employee": 18
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 15,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.528Z",
+    "updated_at": "2026-04-10T15:44:14.528Z",
+    "farmer_code": "FRM-1D220450",
+    "name": "Lakshmi Narayanan",
+    "phone": "9000001004",
+    "district": 15,
+    "village": 17,
+    "address": "Annur, Coimbatore",
+    "gps_location": "11.200003,77.300003",
+    "total_land_area": "3.75",
+    "irrigation_type": "canal",
+    "soil_type": "black",
+    "assigned_employee": 16,
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 16,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.531Z",
+    "updated_at": "2026-04-10T15:44:14.531Z",
+    "farmer_code": "FRM-F110CB9E",
+    "name": "Kannan",
+    "phone": "9000001005",
+    "district": 16,
+    "village": 19,
+    "address": "Bhavani, Erode",
+    "gps_location": "11.200004,77.300004",
+    "total_land_area": "2.40",
+    "irrigation_type": "borewell",
+    "soil_type": "alluvial",
+    "assigned_employee": 17,
+    "created_by_employee": 17
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 17,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.535Z",
+    "updated_at": "2026-04-10T15:44:14.535Z",
+    "farmer_code": "FRM-380DC805",
+    "name": "Perumal",
+    "phone": "9000001006",
+    "district": 15,
+    "village": 16,
+    "address": "Pollachi, Coimbatore",
+    "gps_location": "11.200005,77.300005",
+    "total_land_area": "4.10",
+    "irrigation_type": "borewell",
+    "soil_type": "loamy",
+    "assigned_employee": 18,
+    "created_by_employee": 18
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 18,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.540Z",
+    "updated_at": "2026-04-10T15:44:14.540Z",
+    "farmer_code": "FRM-A13EED9B",
+    "name": "Meenakshi",
+    "phone": "9000001007",
+    "district": 16,
+    "village": 19,
+    "address": "Bhavani, Erode",
+    "gps_location": "11.200006,77.300006",
+    "total_land_area": "2.60",
+    "irrigation_type": "canal",
+    "soil_type": "loamy",
+    "assigned_employee": 16,
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 19,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.540Z",
+    "updated_at": "2026-04-10T15:44:14.540Z",
+    "farmer_code": "FRM-7E6CCE83",
+    "name": "Rajendran",
+    "phone": "9000001008",
+    "district": 17,
+    "village": 20,
+    "address": "Mettur, Salem",
+    "gps_location": "11.200007,77.300007",
+    "total_land_area": "3.90",
+    "irrigation_type": "rainfed",
+    "soil_type": "alluvial",
+    "assigned_employee": 17,
+    "created_by_employee": 17
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 20,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "farmer_code": "FRM-F549352D",
+    "name": "Chitra",
+    "phone": "9000001009",
+    "district": 15,
+    "village": 17,
+    "address": "Annur, Coimbatore",
+    "gps_location": "11.200008,77.300008",
+    "total_land_area": "2.20",
+    "irrigation_type": "borewell",
+    "soil_type": "loamy",
+    "assigned_employee": 18,
+    "created_by_employee": 18
+  }
+},
+{
+  "model": "masters.farmer",
+  "pk": 21,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "farmer_code": "FRM-B9E6119E",
+    "name": "Mani",
+    "phone": "9000001010",
+    "district": 16,
+    "village": 18,
+    "address": "Gobichettipalayam, Erode",
+    "gps_location": "11.200009,77.300009",
+    "total_land_area": "4.30",
+    "irrigation_type": "drip",
+    "soil_type": "red",
+    "assigned_employee": 16,
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 1,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.507Z",
+    "updated_at": "2026-04-10T15:44:14.507Z",
+    "farmer": 12,
+    "land_name": "Main Field",
+    "land_size": "3.20",
+    "soil_type": "loamy",
+    "irrigation_type": "rainfed",
+    "gps_location": "11.200000,77.300000",
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 2,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.522Z",
+    "updated_at": "2026-04-10T15:44:14.522Z",
+    "farmer": 13,
+    "land_name": "Main Field",
+    "land_size": "2.80",
+    "soil_type": "red",
+    "irrigation_type": "borewell",
+    "gps_location": "11.200001,77.300001",
+    "created_by_employee": 17
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 3,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.526Z",
+    "updated_at": "2026-04-10T15:44:14.526Z",
+    "farmer": 14,
+    "land_name": "Main Field",
+    "land_size": "4.50",
+    "soil_type": "red",
+    "irrigation_type": "rainfed",
+    "gps_location": "11.200002,77.300002",
+    "created_by_employee": 18
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 4,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.529Z",
+    "updated_at": "2026-04-10T15:44:14.529Z",
+    "farmer": 15,
+    "land_name": "Main Field",
+    "land_size": "3.75",
+    "soil_type": "black",
+    "irrigation_type": "canal",
+    "gps_location": "11.200003,77.300003",
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 5,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.533Z",
+    "updated_at": "2026-04-10T15:44:14.533Z",
+    "farmer": 16,
+    "land_name": "Main Field",
+    "land_size": "2.40",
+    "soil_type": "alluvial",
+    "irrigation_type": "borewell",
+    "gps_location": "11.200004,77.300004",
+    "created_by_employee": 17
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 6,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.538Z",
+    "updated_at": "2026-04-10T15:44:14.538Z",
+    "farmer": 17,
+    "land_name": "Main Field",
+    "land_size": "4.10",
+    "soil_type": "loamy",
+    "irrigation_type": "borewell",
+    "gps_location": "11.200005,77.300005",
+    "created_by_employee": 18
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 7,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.540Z",
+    "updated_at": "2026-04-10T15:44:14.540Z",
+    "farmer": 18,
+    "land_name": "Main Field",
+    "land_size": "2.60",
+    "soil_type": "loamy",
+    "irrigation_type": "canal",
+    "gps_location": "11.200006,77.300006",
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 8,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "farmer": 19,
+    "land_name": "Main Field",
+    "land_size": "3.90",
+    "soil_type": "alluvial",
+    "irrigation_type": "rainfed",
+    "gps_location": "11.200007,77.300007",
+    "created_by_employee": 17
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 9,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "farmer": 20,
+    "land_name": "Main Field",
+    "land_size": "2.20",
+    "soil_type": "loamy",
+    "irrigation_type": "borewell",
+    "gps_location": "11.200008,77.300008",
+    "created_by_employee": 18
+  }
+},
+{
+  "model": "masters.farmerfield",
+  "pk": 10,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "farmer": 21,
+    "land_name": "Main Field",
+    "land_size": "4.30",
+    "soil_type": "red",
+    "irrigation_type": "drip",
+    "gps_location": "11.200009,77.300009",
+    "created_by_employee": 16
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 1,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.516Z",
+    "updated_at": "2026-04-10T15:44:14.516Z",
+    "land": 1,
+    "crop_name": "Paddy",
+    "sowing_date": "2026-02-24",
+    "crop_stage": "Flowering",
+    "crop": 52
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 2,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.522Z",
+    "updated_at": "2026-04-10T15:44:14.522Z",
+    "land": 2,
+    "crop_name": "Coconut",
+    "sowing_date": "2026-02-23",
+    "crop_stage": "Maturity",
+    "crop": 53
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 3,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.526Z",
+    "updated_at": "2026-04-10T15:44:14.526Z",
+    "land": 3,
+    "crop_name": "Sugarcane",
+    "sowing_date": "2026-02-22",
+    "crop_stage": "Flowering",
+    "crop": 54
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 4,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.529Z",
+    "updated_at": "2026-04-10T15:44:14.529Z",
+    "land": 4,
+    "crop_name": "Banana",
+    "sowing_date": "2026-02-21",
+    "crop_stage": "Maturity",
+    "crop": 55
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 5,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.533Z",
+    "updated_at": "2026-04-10T15:44:14.533Z",
+    "land": 5,
+    "crop_name": "Tomato",
+    "sowing_date": "2026-02-20",
+    "crop_stage": "Flowering",
+    "crop": 56
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 6,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.538Z",
+    "updated_at": "2026-04-10T15:44:14.538Z",
+    "land": 6,
+    "crop_name": "Coconut",
+    "sowing_date": "2026-02-19",
+    "crop_stage": "Maturity",
+    "crop": 53
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 7,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.540Z",
+    "updated_at": "2026-04-10T15:44:14.540Z",
+    "land": 7,
+    "crop_name": "Paddy",
+    "sowing_date": "2026-02-18",
+    "crop_stage": "Flowering",
+    "crop": 52
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 8,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "land": 8,
+    "crop_name": "Sugarcane",
+    "sowing_date": "2026-02-17",
+    "crop_stage": "Maturity",
+    "crop": 54
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 9,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.545Z",
+    "updated_at": "2026-04-10T15:44:14.545Z",
+    "land": 9,
+    "crop_name": "Tomato",
+    "sowing_date": "2026-02-16",
+    "crop_stage": "Flowering",
+    "crop": 56
+  }
+},
+{
+  "model": "masters.fieldcrop",
+  "pk": 10,
+  "fields": {
+    "is_active": true,
+    "created_at": "2026-04-10T15:44:14.551Z",
+    "updated_at": "2026-04-10T15:44:14.551Z",
+    "land": 10,
+    "crop_name": "Banana",
+    "sowing_date": "2026-02-15",
+    "crop_stage": "Maturity",
+    "crop": 55
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 6,
+  "fields": {
+    "visit": 18,
+    "crop": 52,
+    "severity": "low",
+    "status": "resolved",
+    "description": "Leaf Yellowing in Paddy",
+    "created_at": "2026-04-10T15:44:14.613Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 7,
+  "fields": {
+    "visit": 19,
+    "crop": 53,
+    "severity": "medium",
+    "status": "resolved",
+    "description": "Pest Attack in Coconut",
+    "created_at": "2026-04-10T15:44:14.620Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 8,
+  "fields": {
+    "visit": 20,
+    "crop": 54,
+    "severity": "high",
+    "status": "resolved",
+    "description": "Fungal spots in Tomato",
+    "created_at": "2026-04-10T15:44:14.620Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 9,
+  "fields": {
+    "visit": 21,
+    "crop": 55,
+    "severity": "low",
+    "status": "resolved",
+    "description": "Nutrient deficiency signs in Banana",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 10,
+  "fields": {
+    "visit": 22,
+    "crop": 56,
+    "severity": "medium",
+    "status": "resolved",
+    "description": "Water stress symptoms in Sugarcane",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 11,
+  "fields": {
+    "visit": 23,
+    "crop": 53,
+    "severity": "high",
+    "status": "resolved",
+    "description": "Stem borer impact in Paddy",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 12,
+  "fields": {
+    "visit": 24,
+    "crop": 52,
+    "severity": "low",
+    "status": "open",
+    "description": "Leaf curl observed in Tomato",
+    "created_at": "2026-04-10T15:44:14.627Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 13,
+  "fields": {
+    "visit": 25,
+    "crop": 54,
+    "severity": "medium",
+    "status": "under_review",
+    "description": "Root rot symptoms in Coconut",
+    "created_at": "2026-04-10T15:44:14.629Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 14,
+  "fields": {
+    "visit": 26,
+    "crop": 56,
+    "severity": "high",
+    "status": "resolved",
+    "description": "Early blight signs in Tomato",
+    "created_at": "2026-04-10T15:44:14.630Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 15,
+  "fields": {
+    "visit": 27,
+    "crop": 55,
+    "severity": "low",
+    "status": "open",
+    "description": "Shoot drying in Sugarcane",
+    "created_at": "2026-04-10T15:44:14.632Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 16,
+  "fields": {
+    "visit": 18,
+    "crop": 52,
+    "severity": "medium",
+    "status": "under_review",
+    "description": "Patchy yellowing in Banana",
+    "created_at": "2026-04-10T15:44:14.634Z"
+  }
+},
+{
+  "model": "masters.cropissue",
+  "pk": 17,
+  "fields": {
+    "visit": 19,
+    "crop": 53,
+    "severity": "high",
+    "status": "resolved",
+    "description": "Aphid infestation in Paddy",
+    "created_at": "2026-04-10T15:44:14.636Z"
+  }
+},
+{
+  "model": "masters.recommendation",
+  "pk": 3,
+  "fields": {
+    "issue": 6,
+    "given_by": 16,
+    "fertilizer": "Urea",
+    "pesticide": "Neem Oil",
+    "dosage": "5ml per liter",
+    "notes": "Spray during evening and monitor leaf color in 5 days.",
+    "created_at": "2026-04-10T15:44:14.636Z"
+  }
+},
+{
+  "model": "masters.recommendation",
+  "pk": 4,
+  "fields": {
+    "issue": 7,
+    "given_by": 17,
+    "fertilizer": "NPK",
+    "pesticide": "Chlorpyrifos",
+    "dosage": "2g per liter",
+    "notes": "Apply in two rounds at 7-day interval.",
+    "created_at": "2026-04-10T15:44:14.636Z"
+  }
+},
+{
+  "model": "masters.recommendation",
+  "pk": 5,
+  "fields": {
+    "issue": 8,
+    "given_by": 18,
+    "fertilizer": "Urea",
+    "pesticide": "Neem Oil",
+    "dosage": "3ml per liter",
+    "notes": "Combine with light irrigation next morning.",
+    "created_at": "2026-04-10T15:44:14.645Z"
+  }
+},
+{
+  "model": "masters.recommendation",
+  "pk": 6,
+  "fields": {
+    "issue": 9,
+    "given_by": 16,
+    "fertilizer": "NPK",
+    "pesticide": "Chlorpyrifos",
+    "dosage": "4ml per liter",
+    "notes": "Use protective gear during spray.",
+    "created_at": "2026-04-10T15:44:14.647Z"
+  }
+},
+{
+  "model": "masters.recommendation",
+  "pk": 7,
+  "fields": {
+    "issue": 10,
+    "given_by": 17,
+    "fertilizer": "Urea",
+    "pesticide": "Neem Oil",
+    "dosage": "5ml per liter",
+    "notes": "Avoid spraying during peak sunlight.",
+    "created_at": "2026-04-10T15:44:14.650Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 2,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 3,
+    "created_by": null,
+    "notes": "Mild pest attack observed",
+    "created_at": "2026-03-24T07:28:42.295Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 3,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 4,
+    "created_by": null,
+    "notes": "Mild pest attack observed",
+    "created_at": "2026-03-25T04:37:23.205Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 4,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 5,
+    "created_by": 1,
+    "notes": "Visit for aravindha siddharthan.k",
+    "created_at": "2026-04-05T08:46:01.857Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 5,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 6,
+    "created_by": 1,
+    "notes": "Visit for Kavya Aravindha",
+    "created_at": "2026-04-05T09:39:21.327Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 6,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 7,
+    "created_by": 1,
+    "notes": "Automated test visit 4ee84a",
+    "created_at": "2026-04-08T19:05:12.676Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 7,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 8,
+    "created_by": 1,
+    "notes": "Automated test visit fae50c",
+    "created_at": "2026-04-08T19:07:22.278Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 8,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 9,
+    "created_by": 1,
+    "notes": "Automated test visit ffda2e",
+    "created_at": "2026-04-08T19:09:00.345Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 9,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 10,
+    "created_by": 7,
+    "notes": "Automated test visit cfaa6b",
+    "created_at": "2026-04-09T04:57:10.667Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 10,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 11,
+    "created_by": 7,
+    "notes": "Automated test visit 0bc250",
+    "created_at": "2026-04-09T04:58:58.082Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 12,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 12,
+    "created_by": 7,
+    "notes": "Automated test visit 7f1aa2",
+    "created_at": "2026-04-09T05:00:20.178Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 14,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 13,
+    "created_by": 7,
+    "notes": "Automated test visit 41b41f",
+    "created_at": "2026-04-09T05:11:40.439Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 16,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 14,
+    "created_by": 7,
+    "notes": "Automated test visit 1c219d",
+    "created_at": "2026-04-09T05:17:24.481Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 18,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 15,
+    "created_by": 7,
+    "notes": "Automated test visit 036a0f",
+    "created_at": "2026-04-09T05:43:19.027Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 20,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 16,
+    "created_by": 7,
+    "notes": "Automated test visit 482a9e",
+    "created_at": "2026-04-09T05:44:11.202Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 22,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 17,
+    "created_by": null,
+    "notes": "Sample visit for admin crop issue UI",
+    "created_at": "2026-04-10T14:08:01.851Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 23,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 1,
+    "created_by": null,
+    "notes": "Leaf Yellowing: Leaves turning yellow in lower section",
+    "created_at": "2026-04-10T14:08:01.865Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 24,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 2,
+    "created_by": null,
+    "notes": "Pest Attack: Leaf-eating insects observed on multiple plants",
+    "created_at": "2026-04-10T14:08:01.875Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 25,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 3,
+    "created_by": null,
+    "notes": "Slow Growth: Plant growth is below expected stage for the season",
+    "created_at": "2026-04-10T14:08:01.879Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 26,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 4,
+    "created_by": null,
+    "notes": "Stem Rot: Early signs of stem rot in wet patches",
+    "created_at": "2026-04-10T14:08:01.883Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 27,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 5,
+    "created_by": null,
+    "notes": "Nutrient Deficiency: Pale foliage and uneven growth indicate nutrient imbalance",
+    "created_at": "2026-04-10T14:08:01.889Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 28,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 1,
+    "created_by": 1,
+    "notes": "Applied and monitored",
+    "created_at": "2026-04-10T14:34:42.511Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 29,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 2,
+    "created_by": 7,
+    "notes": "Recommendation for Sample Farmer",
+    "created_at": "2026-04-10T14:35:30.205Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 30,
+  "fields": {
+    "farmer": 12,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 12,
+    "created_by": 16,
+    "notes": "Farmer Ramesh Gounder registered.",
+    "created_at": "2026-04-10T15:44:14.507Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 31,
+  "fields": {
+    "farmer": 13,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 13,
+    "created_by": 17,
+    "notes": "Farmer Selvi Ammal registered.",
+    "created_at": "2026-04-10T15:44:14.521Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 32,
+  "fields": {
+    "farmer": 14,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 14,
+    "created_by": 18,
+    "notes": "Farmer Murugan registered.",
+    "created_at": "2026-04-10T15:44:14.524Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 33,
+  "fields": {
+    "farmer": 15,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 15,
+    "created_by": 16,
+    "notes": "Farmer Lakshmi Narayanan registered.",
+    "created_at": "2026-04-10T15:44:14.528Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 34,
+  "fields": {
+    "farmer": 16,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 16,
+    "created_by": 17,
+    "notes": "Farmer Kannan registered.",
+    "created_at": "2026-04-10T15:44:14.531Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 35,
+  "fields": {
+    "farmer": 17,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 17,
+    "created_by": 18,
+    "notes": "Farmer Perumal registered.",
+    "created_at": "2026-04-10T15:44:14.536Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 36,
+  "fields": {
+    "farmer": 18,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 18,
+    "created_by": 16,
+    "notes": "Farmer Meenakshi registered.",
+    "created_at": "2026-04-10T15:44:14.540Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 37,
+  "fields": {
+    "farmer": 19,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 19,
+    "created_by": 17,
+    "notes": "Farmer Rajendran registered.",
+    "created_at": "2026-04-10T15:44:14.540Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 38,
+  "fields": {
+    "farmer": 20,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 20,
+    "created_by": 18,
+    "notes": "Farmer Chitra registered.",
+    "created_at": "2026-04-10T15:44:14.545Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 39,
+  "fields": {
+    "farmer": 21,
+    "activity_type": "FARMER_CREATED",
+    "reference_id": 21,
+    "created_by": 16,
+    "notes": "Farmer Mani registered.",
+    "created_at": "2026-04-10T15:44:14.545Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 40,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 18,
+    "created_by": 17,
+    "notes": "Routine field inspection for Ramesh Gounder",
+    "created_at": "2026-04-10T15:44:14.553Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 41,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 19,
+    "created_by": 16,
+    "notes": "Routine field inspection for Selvi Ammal",
+    "created_at": "2026-04-10T15:44:14.561Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 42,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 20,
+    "created_by": 17,
+    "notes": "Routine field inspection for Murugan",
+    "created_at": "2026-04-10T15:44:14.561Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 43,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 21,
+    "created_by": 17,
+    "notes": "Routine field inspection for Lakshmi Narayanan",
+    "created_at": "2026-04-10T15:44:14.571Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 44,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 22,
+    "created_by": 16,
+    "notes": "Routine field inspection for Kannan",
+    "created_at": "2026-04-10T15:44:14.577Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 45,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 23,
+    "created_by": 18,
+    "notes": "Routine field inspection for Perumal",
+    "created_at": "2026-04-10T15:44:14.586Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 46,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 24,
+    "created_by": 18,
+    "notes": "Routine field inspection for Meenakshi",
+    "created_at": "2026-04-10T15:44:14.594Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 47,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 25,
+    "created_by": 17,
+    "notes": "Routine field inspection for Rajendran",
+    "created_at": "2026-04-10T15:44:14.601Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 48,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 26,
+    "created_by": 16,
+    "notes": "Routine field inspection for Chitra",
+    "created_at": "2026-04-10T15:44:14.605Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 49,
+  "fields": {
+    "farmer": null,
+    "activity_type": "VISIT_COMPLETED",
+    "reference_id": 27,
+    "created_by": 18,
+    "notes": "Routine field inspection for Mani",
+    "created_at": "2026-04-10T15:44:14.613Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 50,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 6,
+    "created_by": null,
+    "notes": "Leaf Yellowing in Paddy",
+    "created_at": "2026-04-10T15:44:14.619Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 51,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 7,
+    "created_by": null,
+    "notes": "Pest Attack in Coconut",
+    "created_at": "2026-04-10T15:44:14.620Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 52,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 8,
+    "created_by": null,
+    "notes": "Fungal spots in Tomato",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 53,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 9,
+    "created_by": null,
+    "notes": "Nutrient deficiency signs in Banana",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 54,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 10,
+    "created_by": null,
+    "notes": "Water stress symptoms in Sugarcane",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 55,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 11,
+    "created_by": null,
+    "notes": "Stem borer impact in Paddy",
+    "created_at": "2026-04-10T15:44:14.622Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 56,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 12,
+    "created_by": null,
+    "notes": "Leaf curl observed in Tomato",
+    "created_at": "2026-04-10T15:44:14.627Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 57,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 13,
+    "created_by": null,
+    "notes": "Root rot symptoms in Coconut",
+    "created_at": "2026-04-10T15:44:14.630Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 58,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 14,
+    "created_by": null,
+    "notes": "Early blight signs in Tomato",
+    "created_at": "2026-04-10T15:44:14.632Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 59,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 15,
+    "created_by": null,
+    "notes": "Shoot drying in Sugarcane",
+    "created_at": "2026-04-10T15:44:14.634Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 60,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 16,
+    "created_by": null,
+    "notes": "Patchy yellowing in Banana",
+    "created_at": "2026-04-10T15:44:14.636Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 61,
+  "fields": {
+    "farmer": null,
+    "activity_type": "ISSUE_REPORTED",
+    "reference_id": 17,
+    "created_by": null,
+    "notes": "Aphid infestation in Paddy",
+    "created_at": "2026-04-10T15:44:14.636Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 62,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 3,
+    "created_by": 16,
+    "notes": "Spray during evening and monitor leaf color in 5 days.",
+    "created_at": "2026-04-10T15:44:14.636Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 63,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 4,
+    "created_by": 17,
+    "notes": "Apply in two rounds at 7-day interval.",
+    "created_at": "2026-04-10T15:44:14.643Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 64,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 5,
+    "created_by": 18,
+    "notes": "Combine with light irrigation next morning.",
+    "created_at": "2026-04-10T15:44:14.645Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 65,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 6,
+    "created_by": 16,
+    "notes": "Use protective gear during spray.",
+    "created_at": "2026-04-10T15:44:14.648Z"
+  }
+},
+{
+  "model": "masters.farmeractivity",
+  "pk": 66,
+  "fields": {
+    "farmer": null,
+    "activity_type": "RECOMMENDATION_GIVEN",
+    "reference_id": 7,
+    "created_by": 17,
+    "notes": "Avoid spraying during peak sunlight.",
+    "created_at": "2026-04-10T15:44:14.651Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 1,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp1",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-20T09:54:24.869Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 2,
+  "fields": {
+    "actor": 1,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "2",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp1"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-03-20T09:54:24.879Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 3,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp1_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-20T11:10:53.762Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 4,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp1_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-20T11:11:32.365Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 5,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp1_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-20T11:13:10.526Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 6,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp2",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-23T07:07:14.505Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 7,
+  "fields": {
+    "actor": 1,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "3",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp2"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-03-23T07:07:14.511Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 8,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp2_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-23T07:16:17.413Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 9,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp2_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-23T07:20:01.563Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 10,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp1_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-23T07:24:00.104Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 11,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp1_updated",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-23T07:24:17.858Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 12,
+  "fields": {
+    "actor": null,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Ravi Kumar",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-24T07:28:42.311Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 13,
+  "fields": {
+    "actor": null,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer kavya",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-03-25T04:37:23.217Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 14,
+  "fields": {
+    "actor": 1,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer aravindha siddharthan.k",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-05T08:46:01.877Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 15,
+  "fields": {
+    "actor": 1,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Kavya Aravindha",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-05T09:39:21.343Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 16,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_4ee84a",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:05:12.508Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 17,
+  "fields": {
+    "actor": 1,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "4",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_4ee84a"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-08T19:05:12.516Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 18,
+  "fields": {
+    "actor": 1,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 4ee84a",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:05:12.689Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 19,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_4ee84a",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:05:13.352Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 20,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_fae50c",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:07:22.122Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 21,
+  "fields": {
+    "actor": 1,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "5",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_fae50c"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-08T19:07:22.124Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 22,
+  "fields": {
+    "actor": 1,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer fae50c",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:07:22.280Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 23,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_fae50c",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:07:22.853Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 24,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_ffda2e",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:08:59.145Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 25,
+  "fields": {
+    "actor": 1,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "6",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_ffda2e"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-08T19:08:59.155Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 26,
+  "fields": {
+    "actor": 1,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer ffda2e",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:09:00.351Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 27,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_ffda2e",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-08T19:09:01.004Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 28,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_cfaa6b",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T04:57:10.532Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 29,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "8",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_cfaa6b"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T04:57:10.533Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 30,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer cfaa6b",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T04:57:10.669Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 31,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_cfaa6b",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T04:57:11.231Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 32,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_0bc250",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T04:58:57.977Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 33,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "9",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_0bc250"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T04:58:57.977Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 34,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 0bc250",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T04:58:58.093Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 35,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_0bc250",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T04:58:58.753Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 36,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_7f1aa2",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:00:20.056Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 37,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "10",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_7f1aa2"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T05:00:20.062Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 38,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 7f1aa2",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:00:20.180Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 39,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_7f1aa2",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:00:20.785Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 40,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_41b41f",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:11:40.324Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 41,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "11",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_41b41f"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T05:11:40.324Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 42,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 41b41f",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:11:40.447Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 43,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_41b41f",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:11:41.087Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 44,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_1c219d",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:17:24.347Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 45,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "12",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_1c219d"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T05:17:24.351Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 46,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 1c219d",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:17:24.481Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 47,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_1c219d",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:17:25.017Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 48,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_036a0f",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:43:18.842Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 49,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "13",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_036a0f"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T05:43:18.848Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 50,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 036a0f",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:43:19.029Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 51,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_036a0f",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:43:19.689Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 52,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: emp_482a9e",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:44:11.086Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 53,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "14",
+    "description": "Employee created",
+    "metadata": {
+      "username": "emp_482a9e"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T05:44:11.088Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 54,
+  "fields": {
+    "actor": 7,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Test Farmer 482a9e",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:44:11.204Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 55,
+  "fields": {
+    "actor": null,
+    "module": "WORKDAY",
+    "action": "START",
+    "object_id": null,
+    "description": "Workday started for emp_482a9e",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T05:44:11.852Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 56,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: aravindha123",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T13:03:35.840Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 57,
+  "fields": {
+    "actor": 7,
+    "module": "ACCOUNTS",
+    "action": "CREATE",
+    "object_id": "15",
+    "description": "Employee created",
+    "metadata": {
+      "username": "aravindha123"
+    },
+    "ip_address": "127.0.0.1",
+    "created_at": "2026-04-09T13:03:35.855Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 58,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp_4ee84a",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T13:25:53.404Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 59,
+  "fields": {
+    "actor": null,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: emp_4ee84a",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-09T13:25:54.775Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 60,
+  "fields": {
+    "actor": null,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Sample Farmer",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T14:08:01.852Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 61,
+  "fields": {
+    "actor": 16,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: aravind.kumar",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:13.621Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 62,
+  "fields": {
+    "actor": 16,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: aravind.kumar",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:13.625Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 63,
+  "fields": {
+    "actor": 17,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: prakash.raj",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.070Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 64,
+  "fields": {
+    "actor": 17,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: prakash.raj",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.070Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 65,
+  "fields": {
+    "actor": 18,
+    "module": "EMPLOYEES",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Employee created: suresh.babu",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.488Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 66,
+  "fields": {
+    "actor": 18,
+    "module": "EMPLOYEES",
+    "action": "UPDATE",
+    "object_id": null,
+    "description": "Employee updated: suresh.babu",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.488Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 67,
+  "fields": {
+    "actor": 17,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Ramesh Gounder",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.553Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 68,
+  "fields": {
+    "actor": 16,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Selvi Ammal",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.561Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 69,
+  "fields": {
+    "actor": 17,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Murugan",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.561Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 70,
+  "fields": {
+    "actor": 17,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Lakshmi Narayanan",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.571Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 71,
+  "fields": {
+    "actor": 16,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Kannan",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.577Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 72,
+  "fields": {
+    "actor": 18,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Perumal",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.586Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 73,
+  "fields": {
+    "actor": 18,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Meenakshi",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.594Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 74,
+  "fields": {
+    "actor": 17,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Rajendran",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.604Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 75,
+  "fields": {
+    "actor": 16,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Chitra",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.605Z"
+  }
+},
+{
+  "model": "audit_logs.auditlog",
+  "pk": 76,
+  "fields": {
+    "actor": 18,
+    "module": "VISITS",
+    "action": "CREATE",
+    "object_id": null,
+    "description": "Visit created for farmer Mani",
+    "metadata": {},
+    "ip_address": null,
+    "created_at": "2026-04-10T15:44:14.613Z"
+  }
+},
+{
+  "model": "system_settings.systemconfig",
+  "pk": 1,
+  "fields": {
+    "heartbeat_timeout_minutes": 5,
+    "gps_accuracy_limit": 50,
+    "gps_jump_limit_km": 5.0,
+    "tracking_stale_minutes": 10,
+    "updated_at": "2026-04-08T19:05:13.683Z"
+  }
+}
+]

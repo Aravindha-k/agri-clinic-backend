@@ -11,6 +11,8 @@ from masters.models import (
     Recommendation,
 )
 from visits.models import Visit, VisitMedia
+from visits.api_fields import strip_visit_status_from_representation
+from visits.visit_response import build_visit_farmer_block, crop_display_name
 
 
 # ──────────────────────────────────────────────
@@ -102,8 +104,18 @@ class AdminCropIssueSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_farmer_id(self, obj):
+        annotated_id = getattr(obj, "admin_farmer_id", None)
+        if annotated_id:
+            return annotated_id
+        annotated_id = getattr(obj, "admin_farmer_id_by_phone", None)
+        if annotated_id:
+            return annotated_id
         v = obj.visit
-        if not v or not v.farmer_phone:
+        if not v:
+            return None
+        if v.farmer_id:
+            return v.farmer_id
+        if not v.farmer_phone:
             return None
         farmer = Farmer.objects.filter(phone=v.farmer_phone).only("id").first()
         return farmer.id if farmer else None
@@ -139,6 +151,14 @@ class AdminCropIssueSerializer(serializers.ModelSerializer):
         v = obj.visit
         if not v:
             return None
+        if v.farmer_id:
+            return {
+                "id": v.farmer_id,
+                "name": v.farmer.name or "-",
+                "phone": v.farmer.phone or "-",
+                "village": v.farmer.village.name if v.farmer.village else "-",
+                "district": v.farmer.district.name if v.farmer.district else "-",
+            }
         return {
             "name": v.farmer_name or "-",
             "phone": v.farmer_phone or "-",
@@ -149,7 +169,15 @@ class AdminCropIssueSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_field(self, obj):
         v = obj.visit
-        if not v or not v.land_name:
+        if not v:
+            return None
+        if v.field_id:
+            return {
+                "id": v.field_id,
+                "land_name": v.field.land_name or "-",
+                "land_area": str(v.field.land_size) if v.field.land_size else "-",
+            }
+        if not v.land_name:
             return None
         return {
             "land_name": v.land_name or "-",
@@ -271,18 +299,91 @@ class AdminVisitSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(
         source="employee.username", read_only=True, default=""
     )
-    # farmer_name_display removed: no farmer FK on Visit
+    land_size = serializers.SerializerMethodField()
+    location_label = serializers.SerializerMethodField()
+    farmer = serializers.SerializerMethodField()
+    farmer_display = serializers.SerializerMethodField()
+    farmer_name = serializers.SerializerMethodField()
+    farmer_mobile = serializers.SerializerMethodField()
+    farmer_village = serializers.SerializerMethodField()
+    field_display = serializers.SerializerMethodField()
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
-    crop_name = serializers.CharField(read_only=True, default="")
+    crop_name = serializers.SerializerMethodField()
     issues = AdminCropIssueSerializer(many=True, read_only=True)
     media_files = AdminVisitMediaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Visit
-        fields = "__all__"
+        exclude = ("status",)
         read_only_fields = ("id", "visit_time")
+
+    def to_representation(self, instance):
+        return strip_visit_status_from_representation(super().to_representation(instance))
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_crop_name(self, obj):
+        return crop_display_name(obj)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_land_size(self, obj):
+        if obj.field_id and obj.field.land_size is not None:
+            return str(obj.field.land_size)
+        if obj.land_area is not None:
+            return str(obj.land_area)
+        return None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_location_label(self, obj):
+        if obj.village_id:
+            return obj.village.name
+        if obj.farmer_id and obj.farmer.village_id:
+            return obj.farmer.village.name
+        return ""
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_farmer(self, obj):
+        return build_visit_farmer_block(obj)
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_farmer_display(self, obj):
+        block = build_visit_farmer_block(obj)
+        if not block:
+            return None
+        out = {
+            "id": block.get("id"),
+            "name": block.get("name"),
+            "phone": block.get("mobile") or block.get("phone"),
+        }
+        if obj.farmer_id and obj.farmer.farmer_code:
+            out["farmer_code"] = obj.farmer.farmer_code
+        return out
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_farmer_name(self, obj):
+        block = build_visit_farmer_block(obj)
+        return block.get("name") if block else None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_farmer_mobile(self, obj):
+        block = build_visit_farmer_block(obj)
+        return block.get("mobile") if block else None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_farmer_village(self, obj):
+        block = build_visit_farmer_block(obj)
+        return block.get("village") if block else None
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_field_display(self, obj):
+        if obj.field_id:
+            return {
+                "id": obj.field_id,
+                "land_name": obj.field.land_name,
+                "land_size": str(obj.field.land_size) if obj.field.land_size else None,
+            }
+        return {"id": None, "land_name": obj.land_name, "land_area": obj.land_area}
 
 
 # ──────────────────────────────────────────────

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def get_farmers(
     *,
-    is_active: Optional[bool] = True,
+    is_active: Optional[bool] = None,
     district_id: Optional[int] = None,
     village_id: Optional[int] = None,
     assigned_employee_id: Optional[int] = None,
@@ -118,5 +118,5 @@ def get_crops_for_field(field: FarmerField, is_active: bool = True) -> QuerySet:
 # ──────────────────────────────────────────────────────────────
 
 
-def get_farmer_count(*, is_active: bool = True) -> int:
-    return Farmer.objects.filter(is_active=is_active).count()
+def get_farmer_count() -> int:
+    return Farmer.objects.count()

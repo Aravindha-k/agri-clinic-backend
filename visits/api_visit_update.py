@@ -1,11 +1,20 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 from django.shortcuts import get_object_or_404
+from django.http import Http404
 from visits.models import Visit
+from visits.access import is_privileged_user, visits_for_user
+from visits.api_fields import strip_visit_status_from_representation
+from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, visit_has_submitted_details
 from django.db.models import Q
 from utils.schema import SIMPLE_SUCCESS
+from masters.models import Farmer, FarmerField, Crop, Village
+
+
+VISIT_STATUS_VALUES = {c[0] for c in Visit.STATUS_CHOICES}
 
 
 @extend_schema(
@@ -16,11 +25,63 @@ from utils.schema import SIMPLE_SUCCESS
     responses={200: SIMPLE_SUCCESS},
 )
 class VisitDetailUpdateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_scoped_visit(self, request, id):
+        qs = visits_for_user(request.user).select_related(
+            "employee",
+            "employee__employee_profile",
+            "district",
+            "village",
+            "crop",
+            "farmer",
+            "field",
+        )
+        return get_object_or_404(qs, id=id)
+
     def get(self, request, id):
         try:
-            visit = get_object_or_404(Visit, id=id)
+            visit = self._get_scoped_visit(request, id)
             data = {
                 "id": visit.id,
+                "employee": {
+                    "id": visit.employee_id,
+                    "username": visit.employee.username,
+                    "first_name": visit.employee.first_name or "",
+                    "last_name": visit.employee.last_name or "",
+                    "employee_id": getattr(
+                        getattr(visit.employee, "employee_profile", None),
+                        "employee_id",
+                        None,
+                    ),
+                },
+                "employee_name": visit.employee.get_full_name() or visit.employee.username,
+                "employee_phone": getattr(
+                    getattr(visit.employee, "employee_profile", None),
+                    "phone",
+                    "",
+                )
+                or "",
+                "farmer": (
+                    {
+                        "id": visit.farmer_id,
+                        "name": visit.farmer.name,
+                        "phone": visit.farmer.phone,
+                        "farmer_code": visit.farmer.farmer_code,
+                    }
+                    if visit.farmer_id
+                    else None
+                ),
+                "field": (
+                    {
+                        "id": visit.field_id,
+                        "land_name": visit.field.land_name,
+                        "land_size": visit.field.land_size,
+                        "gps_location": visit.field.gps_location,
+                    }
+                    if visit.field_id
+                    else None
+                ),
                 "farmer_name": visit.farmer_name,
                 "farmer_phone": visit.farmer_phone,
                 "village_name": (
@@ -31,6 +92,10 @@ class VisitDetailUpdateAPI(APIView):
                 "district_name": visit.district.name if visit.district else None,
                 "crop_name": visit.crop.name_en if visit.crop else None,
                 "crop_stage": visit.crop_stage,
+                "crop_health": visit.crop_health,
+                "pest_issue": visit.pest_issue,
+                "disease_issue": visit.disease_issue,
+                "weed_condition": visit.weed_condition,
                 "land_name": visit.land_name,
                 "land_area": visit.land_area,
                 "notes": visit.notes,
@@ -40,11 +105,16 @@ class VisitDetailUpdateAPI(APIView):
                 "general_advice": visit.general_advice,
                 "visit_date": visit.visit_date,
                 "visit_time": visit.visit_time,
+                "latitude": visit.latitude,
+                "longitude": visit.longitude,
                 "follow_up_required": visit.follow_up_required,
                 "next_visit_date": visit.next_visit_date,
-                "status": visit.status,
+                "created_at": visit.created_at,
+                "updated_at": visit.updated_at,
             }
-            return Response(data)
+            return Response(strip_visit_status_from_representation(data))
+        except Http404:
+            raise
         except Exception as e:
             print("ERROR:", e)
             return Response(
@@ -62,10 +132,7 @@ class VisitDetailUpdateAPI(APIView):
         return self._update(request, id, partial=True)
 
     def _update(self, request, id, partial):
-        visit = get_object_or_404(Visit, id=id)
-        user = request.user
-        if not (user.is_staff or visit.employee_id == user.id):
-            return Response({"error": "Forbidden"}, status=403)
+        visit = self._get_scoped_visit(request, id)
         # Normalize phone
         phone = request.data.get("farmer_phone", visit.farmer_phone)
         if phone is not None:
@@ -74,9 +141,11 @@ class VisitDetailUpdateAPI(APIView):
         fields = [
             "farmer_name",
             "farmer_phone",
-            "village_name",
-            "crop_name",
             "crop_stage",
+            "crop_health",
+            "pest_issue",
+            "disease_issue",
+            "weed_condition",
             "land_name",
             "land_area",
             "notes",
@@ -85,13 +154,100 @@ class VisitDetailUpdateAPI(APIView):
             "irrigation_advice",
             "general_advice",
             "follow_up_required",
+            "latitude",
+            "longitude",
             "next_visit_date",
-            "status",
         ]
         for field in fields:
             if field in request.data or not partial:
                 value = request.data.get(field, getattr(visit, field, None))
+                if field == "land_area" and value == "":
+                    value = None
+                if field in {"latitude", "longitude"} and value == "":
+                    value = None
+                if field in {"latitude", "longitude"} and value not in (None, ""):
+                    try:
+                        value = float(value)
+                    except (TypeError, ValueError):
+                        return Response(
+                            {
+                                "success": False,
+                                "error": {
+                                    "code": "VALIDATION_ERROR",
+                                    "message": f"Invalid {field}",
+                                },
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                if field == "next_visit_date" and value == "":
+                    value = None
                 setattr(visit, field, value)
+
+        if "crop_name" in request.data:
+            crop_label = (request.data.get("crop_name") or "").strip()
+            if crop_label:
+                crop = Crop.objects.filter(
+                    Q(name_en__iexact=crop_label) | Q(name_ta__iexact=crop_label)
+                ).order_by("id").first()
+                if crop:
+                    visit.crop = crop
+
+        if "village_name" in request.data:
+            village_label = (request.data.get("village_name") or "").strip()
+            if village_label:
+                village = (
+                    Village.objects.filter(name__iexact=village_label)
+                    .order_by("id")
+                    .first()
+                )
+                if village:
+                    visit.village = village
+
         visit.farmer_phone = phone
+        farmer = None
+        if visit.farmer_id:
+            farmer = visit.farmer
+        if phone:
+            farmer = Farmer.objects.filter(phone=phone).order_by("id").first()
+        if farmer is None and visit.farmer_name:
+            farmer = (
+                Farmer.objects.filter(name__iexact=visit.farmer_name)
+                .order_by("id")
+                .first()
+            )
+        if farmer:
+            visit.farmer = farmer
+            if not visit.farmer_name:
+                visit.farmer_name = farmer.name
+            if not visit.farmer_phone:
+                visit.farmer_phone = farmer.phone
+            if not visit.district_id:
+                visit.district = farmer.district
+            if not visit.village_id:
+                visit.village = farmer.village
+            if visit.land_name:
+                visit.field = (
+                    FarmerField.objects.filter(
+                        farmer=farmer, land_name__iexact=visit.land_name
+                    )
+                    .order_by("id")
+                    .first()
+                )
+        if not visit_has_submitted_details(visit):
+            return Response(
+                {
+                    "success": False,
+                    "message": SUBMIT_VISIT_REQUIRED_MESSAGE,
+                    "errors": {},
+                    "code": "VALIDATION_ERROR",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         visit.save()
+        try:
+            from visits.views import _invalidate_visit_caches
+
+            _invalidate_visit_caches()
+        except Exception:
+            pass
         return Response({"success": True, "id": visit.id})

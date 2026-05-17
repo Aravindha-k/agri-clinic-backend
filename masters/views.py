@@ -145,13 +145,16 @@ class FarmerViewSet(BaseMasterViewSet):
     ).all()
     serializer_class = FarmerSerializer
     search_fields = ["name", "phone", "farmer_code", "village__name"]
-    ordering_fields = ["name", "created_at", "is_active", "phone", "farmer_code"]
+    ordering_fields = ["name", "created_at", "phone", "farmer_code"]
     ordering = ["name"]
     filterset_fields = (
-        ["village", "district", "is_active", "created_by_employee", "assigned_employee"]
+        ["village", "district", "created_by_employee", "assigned_employee"]
         if HAS_DJANGO_FILTER
         else []
     )
+
+    def get_queryset(self):
+        return self.queryset.order_by("name")
 
     def perform_create(self, serializer):
         serializer.save(created_by_employee=self.request.user)
@@ -161,6 +164,8 @@ class FarmerFieldViewSet(BaseMasterViewSet):
     queryset = FarmerField.objects.select_related("farmer", "created_by_employee").all()
     serializer_class = FarmerFieldSerializer
     search_fields = ["land_name", "farmer__name"]
+    ordering_fields = ["land_name", "land_size", "created_at", "is_active"]
+    ordering = ["land_name"]
     filterset_fields = (
         ["farmer", "is_active", "created_by_employee"] if HAS_DJANGO_FILTER else []
     )
@@ -173,6 +178,8 @@ class FieldCropViewSet(BaseMasterViewSet):
     queryset = FieldCrop.objects.select_related("land", "crop").all()
     serializer_class = FieldCropSerializer
     search_fields = ["crop_name", "land__land_name"]
+    ordering_fields = ["crop_name", "sowing_date", "created_at", "is_active"]
+    ordering = ["-sowing_date"]
     filterset_fields = ["land", "crop", "is_active"] if HAS_DJANGO_FILTER else []
 
 

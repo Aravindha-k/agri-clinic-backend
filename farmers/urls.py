@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     FarmerListCreateAPI,
+    FarmerStatsAPI,
     FarmerDetailAPI,
     FarmerFieldListCreateAPI,
     FieldCropCreateAPI,
@@ -21,6 +22,7 @@ app_name = "farmers"
 urlpatterns = [
     # ── Farmers ────────────────────────────────
     path("farmers/", FarmerListCreateAPI.as_view(), name="farmer-list-create"),
+    path("farmers/stats/", FarmerStatsAPI.as_view(), name="farmer-stats"),
     path("farmers/<int:pk>/", FarmerDetailAPI.as_view(), name="farmer-detail"),
     # ── Farmer Fields ──────────────────────────
     path(

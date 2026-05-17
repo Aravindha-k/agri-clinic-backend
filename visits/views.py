@@ -2,6 +2,7 @@ import logging
 
 from datetime import timedelta
 
+from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -19,17 +20,39 @@ from drf_spectacular.types import OpenApiTypes
 from utils.response import api_response, success_response, error_response
 from utils.schema import PAGINATION_PARAMS, SIMPLE_SUCCESS, error_schema
 
+from .access import get_visit_for_user, is_privileged_user
+from .querysets import submitted_visits_with_relations
 from .models import Visit, VisitAttachment, VisitMedia
-from .serializers import VisitSerializer, VisitMediaSerializer, StartVisitSerializer
+from .serializers import VisitSerializer, VisitMediaSerializer
+from .submitted import SUBMIT_VISIT_REQUIRED_MESSAGE
 
 logger = logging.getLogger(__name__)
+
+
+def _invalidate_dashboard_cache():
+    try:
+        from dashboard.services import invalidate_stats_cache
+
+        invalidate_stats_cache()
+    except Exception:
+        logger.debug("Dashboard cache invalidation skipped", exc_info=True)
+
+
+def _invalidate_visit_caches():
+    _invalidate_dashboard_cache()
+    try:
+        from farmers.services import invalidate_farmers_list_cache
+
+        invalidate_farmers_list_cache()
+    except Exception:
+        logger.debug("Farmers list cache invalidation skipped", exc_info=True)
 
 
 @extend_schema(
     tags=["Visits"],
     methods=["GET"],
     summary="List visits",
-    description="Paginated list of all visits ordered by visit date, newest first. Employees see all visits.",
+    description="Paginated list of visits ordered by visit date, newest first. Admins see all visits; employees see their own visits.",
     parameters=[*PAGINATION_PARAMS],
     responses={200: VisitSerializer(many=True)},
 )
@@ -45,10 +68,25 @@ class VisitListCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Visit.objects.select_related("employee", "district", "village").order_by(
-            "-visit_date"
-        )
-        paginator = PageNumberPagination()
+        qs = submitted_visits_with_relations().order_by("-created_at", "-id")
+        if not is_privileged_user(request.user):
+            qs = qs.filter(employee=request.user)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(
+                Q(farmer_name__icontains=search)
+                | Q(farmer_phone__icontains=search)
+                | Q(farmer__name__icontains=search)
+                | Q(farmer__phone__icontains=search)
+                | Q(employee__username__icontains=search)
+                | Q(employee__first_name__icontains=search)
+                | Q(employee__last_name__icontains=search)
+                | Q(village__name__icontains=search)
+                | Q(crop__name_en__icontains=search)
+            )
+
+        paginator = VisitListPagination()
         page = paginator.paginate_queryset(qs, request)
         serializer = VisitSerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
@@ -57,6 +95,7 @@ class VisitListCreateAPI(APIView):
         serializer = VisitSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         visit = serializer.save(employee=request.user)
+        _invalidate_visit_caches()
         files = (
             request.FILES.getlist("media_files") if hasattr(request, "FILES") else []
         )
@@ -155,9 +194,9 @@ class VisitAttachmentUploadAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, visit_id):
-        visit = get_object_or_404(Visit, id=visit_id)
+        visit = get_visit_for_user(request.user, visit_id)
 
-        if not request.user.is_staff and visit.employee != request.user:
+        if not is_privileged_user(request.user) and visit.employee != request.user:
             return error_response(
                 message="Not authorized",
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -202,13 +241,10 @@ class VisitAttachmentDownloadAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, file_id):
-        attachment = get_object_or_404(VisitAttachment, id=file_id)
-
-        if not request.user.is_staff and attachment.visit.employee != request.user:
-            return error_response(
-                message="Not authorized",
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
+        attachment = get_object_or_404(
+            VisitAttachment.objects.filter(visit__in=visits_for_user(request.user)),
+            id=file_id,
+        )
 
         return FileResponse(
             attachment.file.open("rb"),
@@ -223,24 +259,20 @@ class VisitAttachmentDownloadAPI(APIView):
 @extend_schema(
     tags=["Visits"],
     summary="Visit stats",
-    description="Returns total, pending, and verified visit counts. Useful for the admin dashboard card.",
+    description="Returns submitted visit count (farmer, crop, GPS on file).",
     responses={200: SIMPLE_SUCCESS},
 )
 class VisitStatsAPI(APIView):
-    """
-    GET /api/visits/stats/
-    Returns aggregate visit counts for the admin dashboard.
-    """
+    """GET /api/visits/stats/ — submitted visits only."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        total = Visit.objects.count()
-        pending = Visit.objects.filter(status="pending").count()
-        verified = Visit.objects.filter(status="verified").count()
-        return success_response(
-            data={"total": total, "pending": pending, "verified": verified}
-        )
+        qs = submitted_visits_with_relations()
+        if not is_privileged_user(request.user):
+            qs = qs.filter(employee=request.user)
+        total = qs.count()
+        return success_response(data={"total": total, "submitted": total})
 
 
 # ======================================================
@@ -272,9 +304,9 @@ class VisitMediaUploadAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, visit_id):
-        visit = get_object_or_404(Visit, id=visit_id)
+        visit = get_visit_for_user(request.user, visit_id)
 
-        if not request.user.is_staff and visit.employee != request.user:
+        if not is_privileged_user(request.user) and visit.employee != request.user:
             return error_response(
                 message="Not authorized",
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -313,189 +345,56 @@ class VisitMediaUploadAPIView(APIView):
 
 
 # ======================================================
-#  START VISIT  –  POST /api/v1/visits/start/
+#  Deprecated draft visit flow (start / active / complete)
 # ======================================================
+_VISIT_DRAFT_REMOVED_MESSAGE = (
+    "Draft visits are no longer supported. Submit a complete visit in one request "
+    f"to POST /api/v1/visits/ or POST /api/v1/mobile/visits/. {SUBMIT_VISIT_REQUIRED_MESSAGE}"
+)
+
+
+class _DeprecatedVisitFlowAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _gone(self):
+        return error_response(
+            message=_VISIT_DRAFT_REMOVED_MESSAGE,
+            code="VISIT_FLOW_DEPRECATED",
+            status_code=status.HTTP_410_GONE,
+        )
+
+
 @extend_schema(
     tags=["Visits"],
-    summary="Start a field visit",
-    description=(
-        "Creates a new visit and immediately sets its status to `active`.  \n"
-        "**Required:** `crop` (int), `latitude`, `longitude`  \n"
-        "**Optional:** `farmer_name`, `village` (int), `notes`  \n"
-        "Returns `visit_id`, `status`, and `start_time`."
-    ),
-    request=StartVisitSerializer,
-    responses={
-        201: {
-            "description": "Visit started",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "visit_id": 42,
-                        "status": "active",
-                        "start_time": "2026-04-10T09:00:00Z",
-                    }
-                }
-            },
-        },
-        400: error_schema("StartVisitValidationError"),
-    },
+    summary="(Deprecated) Start visit",
+    deprecated=True,
+    responses={410: error_schema("VisitFlowDeprecated")},
 )
-class StartVisitAPI(APIView):
-    """
-    Create a new visit and immediately mark it active.
-
-    Required JSON fields: crop (int), latitude (decimal ≤ 6 dp), longitude (decimal ≤ 6 dp)
-    Optional: farmer_name, village (int), notes
-    Returns: { visit_id, status, start_time }
-    """
-
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
-
+class StartVisitAPI(_DeprecatedVisitFlowAPI):
     def post(self, request):
-        logger.info("StartVisit | user=%s", request.user.username)
-        serializer = StartVisitSerializer(
-            data=request.data, context={"request": request}
-        )
-        if not serializer.is_valid():
-            return error_response(
-                message="Validation failed",
-                errors=serializer.errors,
-                code="VALIDATION_ERROR",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        data = serializer.validated_data
-        now = timezone.now()
-        try:
-            visit = Visit.objects.create(
-                employee=request.user,
-                crop=data["crop"],
-                latitude=float(data["latitude"]),
-                longitude=float(data["longitude"]),
-                farmer_name=data.get("farmer_name") or "",
-                village=data.get("village"),
-                notes=data.get("notes") or "",
-                status="active",
-                visit_date=now.date(),
-                visit_time=now.time(),
-            )
-        except Exception as exc:
-            logger.exception(
-                "StartVisit | DB create failed for user=%s: %s",
-                request.user.username,
-                exc,
-            )
-            return error_response(
-                message="Could not create visit",
-                code="SERVER_ERROR",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        logger.info(
-            "StartVisit | visit_id=%s created for user=%s",
-            visit.id,
-            request.user.username,
-        )
-        return Response(
-            {
-                "visit_id": visit.id,
-                "status": visit.status,
-                "start_time": visit.created_at.isoformat(),
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        return self._gone()
 
 
-# ======================================================
-#  ACTIVE VISIT  –  GET /api/v1/visits/active/
-# ======================================================
 @extend_schema(
     tags=["Visits"],
-    summary="Get active visit",
-    description="Returns the currently active visit for the authenticated employee, or `null` if none.",
-    responses={200: SIMPLE_SUCCESS},
+    summary="(Deprecated) Active visit",
+    deprecated=True,
+    responses={410: error_schema("VisitFlowDeprecated")},
 )
-class ActiveVisitAPI(APIView):
-    """
-    Return the employee's currently active visit (if any).
-    """
-
-    permission_classes = [IsAuthenticated]
-
+class ActiveVisitAPI(_DeprecatedVisitFlowAPI):
     def get(self, request):
-        try:
-            visit = (
-                Visit.objects.filter(employee=request.user, status="active")
-                .select_related("employee", "district", "village")
-                .first()
-            )
-            if not visit:
-                return api_response(
-                    success=True, message="No active visit", data={"visit": None}
-                )
-            serializer = VisitSerializer(visit, context={"request": request})
-            return api_response(
-                success=True, message="Active visit fetched", data=serializer.data
-            )
-        except Exception as e:
-            return api_response(success=False, message=str(e), status=500)
+        return self._gone()
 
 
-# ======================================================
-#  COMPLETE VISIT  –  POST /api/v1/visits/<id>/complete/
-# ======================================================
 @extend_schema(
     tags=["Visits"],
-    summary="Complete a visit",
-    description="Marks an active visit as completed. Optionally accepts `notes` in the request body.",
-    request={
-        "application/json": {
-            "type": "object",
-            "properties": {"notes": {"type": "string"}},
-        }
-    },
-    responses={200: SIMPLE_SUCCESS, 400: error_schema("CompleteVisitError")},
+    summary="(Deprecated) Complete visit",
+    deprecated=True,
+    responses={410: error_schema("VisitFlowDeprecated")},
 )
-class CompleteVisitAPI(APIView):
-    """
-    Mark an active visit as completed.
-    """
-
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser, MultiPartParser, FormParser]
-
+class CompleteVisitAPI(_DeprecatedVisitFlowAPI):
     def post(self, request, id):
-        visit = get_object_or_404(Visit, id=id)
-
-        if visit.employee != request.user:
-            return api_response(
-                success=False,
-                message="Not authorized",
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        if visit.status == "completed":
-            return api_response(
-                success=False,
-                message="Visit already completed",
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        visit.status = "completed"
-        visit.end_time = timezone.now()
-        if request.data.get("notes"):
-            visit.notes = request.data["notes"]
-        visit.save(update_fields=["status", "end_time", "notes"])
-
-        return api_response(
-            success=True,
-            message="Visit completed successfully",
-            data={
-                "visit_id": visit.id,
-                "status": visit.status,
-                "end_time": visit.end_time.isoformat() if visit.end_time else None,
-            },
-        )
+        return self._gone()
 
 
 # ======================================================
@@ -535,9 +434,9 @@ class VisitPhotoUploadAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        visit = get_object_or_404(Visit, id=visit_id)
+        visit = get_visit_for_user(request.user, visit_id)
 
-        if not request.user.is_staff and visit.employee != request.user:
+        if not is_privileged_user(request.user) and visit.employee != request.user:
             return api_response(
                 success=False,
                 message="Not authorized",

@@ -4,14 +4,16 @@ from drf_spectacular.utils import extend_schema
 from .permissions import IsEmployeeUser
 from utils.response import success_response
 from utils.schema import SIMPLE_SUCCESS
-from visits.models import Visit
+from visits.submitted import submitted_visits_qs
 from django.utils import timezone
 
 
 @extend_schema(
     tags=["Mobile", "Visits"],
     summary="Mobile visit stats",
-    description="Returns today's visit counts for the logged-in employee: total, completed, pending.",
+    description=(
+        "Returns today's submitted visit counts for the logged-in employee."
+    ),
     responses={200: SIMPLE_SUCCESS},
 )
 class MobileVisitStatsAPI(APIView):
@@ -20,16 +22,13 @@ class MobileVisitStatsAPI(APIView):
     def get(self, request):
         user = request.user
         today = timezone.localdate()
-        today_visits = Visit.objects.filter(employee=user, visit_date=today).count()
-        completed = Visit.objects.filter(
-            employee=user, visit_date=today, status="completed"
-        ).count()
-        pending = Visit.objects.filter(
-            employee=user, visit_date=today, status="pending"
-        ).count()
+        qs = submitted_visits_qs().filter(employee=user)
+        today_count = qs.filter(visit_date=today).count()
+        total_count = qs.count()
         data = {
-            "today_visits": today_visits,
-            "completed": completed,
-            "pending": pending,
+            "today_visits": today_count,
+            "total_visits": total_count,
+            "completed": total_count,
+            "pending": 0,
         }
         return success_response(data=data, message="Visit stats fetched")

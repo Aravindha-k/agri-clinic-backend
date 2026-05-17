@@ -14,6 +14,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 
 from .models import Visit
+from .submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, visit_has_submitted_details
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +32,18 @@ class VisitServiceError(Exception):
 def create_visit(
     *,
     employee: User,
+    farmer_id: int,
+    crop_id: int,
+    latitude: float,
+    longitude: float,
     farmer_name: Optional[str] = None,
     farmer_phone: Optional[str] = None,
     village_id: Optional[int] = None,
     district_id: Optional[int] = None,
     visit_date: Optional[date] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
     address: str = "",
     land_name: Optional[str] = None,
     land_area: Optional[float] = None,
-    crop_id: Optional[int] = None,
     crop_stage: str = "",
     variety: str = "",
     season: str = "",
@@ -94,6 +96,10 @@ def create_visit(
         next_visit_date=next_visit_date,
         status="completed",
     )
+    if not visit_has_submitted_details(visit):
+        raise VisitServiceError(SUBMIT_VISIT_REQUIRED_MESSAGE)
+
+    visit.save()
 
     # Trigger async notification (import here to avoid circular imports)
     try:

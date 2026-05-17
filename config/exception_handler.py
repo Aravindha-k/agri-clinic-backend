@@ -2,6 +2,7 @@ from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import IntegrityError, DatabaseError
+from django.db.utils import OperationalError
 from django.conf import settings
 import logging
 
@@ -25,8 +26,39 @@ def custom_exception_handler(exc, context):
             status=response.status_code,
         )
 
-    # Handle database errors
-    if isinstance(exc, (IntegrityError, DatabaseError)):
+    # Connection / availability errors (e.g. Postgres in recovery mode)
+    if isinstance(exc, OperationalError):
+        detail = str(exc)
+        logger.error("Database unavailable: %s", detail)
+        message = "Database is temporarily unavailable. Please retry in a moment."
+        if "recovery mode" in detail.lower():
+            message = (
+                "PostgreSQL is still starting or recovering. "
+                "Wait a minute or restart the PostgreSQL service, then retry."
+            )
+        return Response(
+            {
+                "success": False,
+                "message": message,
+                "errors": {"detail": detail} if settings.DEBUG else {},
+                "code": "DATABASE_UNAVAILABLE",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    if isinstance(exc, IntegrityError):
+        logger.exception("Database integrity error")
+        return Response(
+            {
+                "success": False,
+                "message": "A database constraint was violated.",
+                "errors": {"detail": str(exc)} if settings.DEBUG else {},
+                "code": "DATABASE_ERROR",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if isinstance(exc, DatabaseError):
         logger.exception("Database error")
         return Response(
             {
@@ -35,7 +67,7 @@ def custom_exception_handler(exc, context):
                 "errors": {"detail": str(exc)} if settings.DEBUG else {},
                 "code": "DATABASE_ERROR",
             },
-            status=status.HTTP_400_BAD_REQUEST,
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
     # Handle all other errors

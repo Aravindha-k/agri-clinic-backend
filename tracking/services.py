@@ -148,3 +148,40 @@ def update_location(
         longitude,
     )
     return payload
+
+
+def refresh_workday_live_state(
+    *,
+    user: User,
+    workday: WorkDay,
+    latitude: float,
+    longitude: float,
+    accuracy: Optional[float] = None,
+    battery_level: Optional[int] = None,
+    recorded_at: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """
+    After a LocationLog row is written elsewhere, sync heartbeat + Redis live map
+    so admin tracking/status/geo views reflect the latest mobile ping.
+    """
+    if recorded_at is None:
+        recorded_at = timezone.now()
+
+    workday.last_heartbeat = timezone.now()
+    workday.save(update_fields=["last_heartbeat"])
+
+    payload: Dict[str, Any] = {
+        "user_id": user.pk,
+        "username": user.username,
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "accuracy": accuracy,
+        "battery_level": battery_level,
+        "timestamp": recorded_at.isoformat(),
+        "workday_id": workday.pk,
+    }
+    if hasattr(user, "employee_profile"):
+        payload["employee_id"] = user.employee_profile.employee_id
+
+    cache.set(_live_key(user.pk), payload, timeout=LIVE_LOCATION_TTL)
+    return payload

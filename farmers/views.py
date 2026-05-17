@@ -1,5 +1,8 @@
+import logging
+
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Count, Max, OuterRef, Q, Subquery, CharField
+from django.db.models.functions import Coalesce
 
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
@@ -35,12 +38,15 @@ from masters.models import (
     FarmerActivity,
 )
 from visits.models import Visit, VisitMedia
+from visits.access import get_visit_for_user, is_privileged_user
 from visits.serializers import (
     VisitMediaSerializer,
     VisitSerializer as BaseVisitSerializer,
 )
 
+from .helpers import farmers_directory_queryset
 from .permissions import IsAdminOnly
+from .services import invalidate_farmers_list_cache
 from .serializers import (
     FarmerListSerializer,
     FarmerDetailSerializer,
@@ -72,6 +78,57 @@ class StandardPagination(PageNumberPagination):
     max_page_size = 100
 
 
+logger = logging.getLogger(__name__)
+
+
+def _farmers_queryset_with_visit_counts(user):
+    latest_crop_subq = (
+        Visit.objects.filter(farmer_id=OuterRef("pk"))
+        .order_by("-visit_date", "-id")
+        .values("crop__name_en")[:1]
+    )
+    primary_field_crop_subq = (
+        FieldCrop.objects.filter(
+            land__farmer_id=OuterRef("pk"),
+            land__is_active=True,
+        )
+        .order_by("-created_at", "-id")
+        .values("crop__name_en")[:1]
+    )
+    return (
+        _farmers_queryset_for_user(user)
+        .annotate(
+            visit_count=Count("visits", distinct=True),
+            latest_visit_date=Max("visits__visit_date"),
+            list_crop_name=Coalesce(
+                Subquery(latest_crop_subq, output_field=CharField()),
+                Subquery(primary_field_crop_subq, output_field=CharField()),
+                output_field=CharField(),
+            ),
+        )
+        .select_related("district", "village", "assigned_employee")
+    )
+
+
+def _is_admin_user(user):
+    return is_privileged_user(user)
+
+
+def _scoped_visits_for_user(user):
+    from visits.access import visits_for_user
+
+    return visits_for_user(user)
+
+
+def _farmers_queryset_for_user(user):
+    """All farmer master records — independent of visits."""
+    return farmers_directory_queryset()
+
+
+def _get_scoped_farmer_or_404(user, **kwargs):
+    return get_object_or_404(_farmers_queryset_for_user(user), **kwargs)
+
+
 # ══════════════════════════════════════════════
 # FARMERS
 # GET  /api/v1/farmers/
@@ -84,7 +141,7 @@ class StandardPagination(PageNumberPagination):
     methods=["GET"],
     summary="List farmers",
     request=CropMasterCreateSerializer,
-    description="Paginated list of active farmers with their fields and crops. Searchable by name or phone.",
+    description="Paginated list of all farmers (master directory). Searchable by name or phone.",
     parameters=[*PAGINATION_PARAMS, SEARCH_PARAM],
     responses={200: FarmerListSerializer(many=True)},
 )
@@ -100,16 +157,38 @@ class FarmerListCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        farmers = (
-            Farmer.objects.select_related("district", "village", "assigned_employee")
-            .prefetch_related("fields__crops__crop")
-            .filter(is_active=True)
-            .order_by("name")
-        )
+        farmers = _farmers_queryset_with_visit_counts(request.user).order_by("name")
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            farmers = farmers.filter(
+                Q(name__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(farmer_code__icontains=search)
+                | Q(village__name__icontains=search)
+            )
         paginator = StandardPagination()
         page = paginator.paginate_queryset(farmers, request)
         serializer = FarmerListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        data = serializer.data
+        list_total = (
+            paginator.page.paginator.count
+            if page is not None and getattr(paginator, "page", None)
+            else len(data)
+        )
+        logger.info(
+            "farmers_list count=%s page_size=%s search=%s",
+            list_total,
+            request.query_params.get("page_size", StandardPagination.page_size),
+            search or None,
+        )
+        for row in data[:5]:
+            logger.info(
+                "farmers_list farmer_id=%s farmer_name=%s visit_count=%s",
+                row.get("id"),
+                row.get("name"),
+                row.get("total_visits"),
+            )
+        return paginator.get_paginated_response(data)
 
     def post(self, request):
         if request.user.is_staff:
@@ -118,11 +197,41 @@ class FarmerListCreateAPI(APIView):
             )
         serializer = FarmerCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        farmer = serializer.save(created_by_employee=request.user)
+        farmer = serializer.save(
+            created_by_employee=request.user,
+            assigned_employee=request.user,
+        )
+        invalidate_farmers_list_cache()
+        farmer = _farmers_queryset_with_visit_counts(request.user).get(pk=farmer.pk)
         return created_response(
             data=FarmerListSerializer(farmer, context={"request": request}).data
         )
 
+
+
+@extend_schema(
+    tags=["Farmers"],
+    summary="Farmer stats",
+    description="Aggregate farmer counters used by the admin dashboard and farmer management screens.",
+    responses={200: dict},
+)
+class FarmerStatsAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = _farmers_queryset_for_user(request.user)
+        totals = qs.aggregate(
+            total=Count("id"),
+            districts=Count("district", filter=Q(district__isnull=False), distinct=True),
+            villages=Count("village", filter=Q(village__isnull=False), distinct=True),
+        )
+        return success_response(
+            data={
+                "total": totals["total"],
+                "districts": totals["districts"],
+                "villages": totals["villages"],
+            }
+        )
 
 # ══════════════════════════════════════════════
 # FARMER DETAIL
@@ -151,16 +260,16 @@ class FarmerDetailAPI(APIView):
 
     def _get_farmer(self, pk):
         return get_object_or_404(
-            Farmer.objects.select_related(
+            _farmers_queryset_for_user(self.request.user).select_related(
                 "village", "district", "assigned_employee"
             ).prefetch_related(
                 "fields__crops__crop",
             ),
             pk=pk,
-            is_active=True,
         )
 
     def get(self, request, pk):
+        self.request = request
         farmer = self._get_farmer(pk)
         serializer = FarmerDetailSerializer(farmer, context={"request": request})
         return success_response(data=serializer.data)
@@ -170,6 +279,7 @@ class FarmerDetailAPI(APIView):
             return forbidden_response(
                 "Admin users cannot edit farmers. Employee access only."
             )
+        self.request = request
         farmer = self._get_farmer(pk)
         serializer = FarmerUpdateSerializer(farmer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -206,11 +316,11 @@ class FarmerFieldListCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, farmer_id):
-        farmer = get_object_or_404(Farmer, pk=farmer_id, is_active=True)
+        farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
         fields = (
             FarmerField.objects.filter(farmer=farmer, is_active=True)
             .prefetch_related("crops__crop")
-            .order_by("field_name")
+            .order_by("land_name")
         )
         serializer = FarmerFieldSerializer(
             fields, many=True, context={"request": request}
@@ -222,7 +332,7 @@ class FarmerFieldListCreateAPI(APIView):
             return forbidden_response(
                 "Admin users cannot create fields. Employee access only."
             )
-        farmer = get_object_or_404(Farmer, pk=farmer_id, is_active=True)
+        farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
         serializer = FarmerFieldCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         field = serializer.save(farmer=farmer, created_by_employee=request.user)
@@ -252,7 +362,12 @@ class FieldCropCreateAPI(APIView):
             return forbidden_response(
                 "Admin users cannot add crops. Employee access only."
             )
-        field = get_object_or_404(FarmerField, pk=field_id, is_active=True)
+        field = get_object_or_404(
+            FarmerField,
+            pk=field_id,
+            farmer__in=_farmers_queryset_for_user(request.user),
+            is_active=True,
+        )
         serializer = FieldCropCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         crop = serializer.save(land=field)
@@ -294,7 +409,8 @@ class VisitListCreateAPI(APIView):
 
     def get(self, request):
         qs = (
-            Visit.objects.select_related(
+            _scoped_visits_for_user(request.user)
+            .select_related(
                 "farmer",
                 "farmer__village",
                 "farmer__village__district",
@@ -319,7 +435,7 @@ class VisitListCreateAPI(APIView):
                 Q(farmer__name__icontains=search)
                 | Q(farmer_name__icontains=search)
                 | Q(farmer__village__name__icontains=search)
-                | Q(field__field_name__icontains=search)
+                | Q(field__land_name__icontains=search)
                 | Q(employee__username__icontains=search)
                 | Q(crop__name_en__icontains=search)
             )
@@ -350,6 +466,12 @@ class VisitListCreateAPI(APIView):
         )
         serializer.is_valid(raise_exception=True)
         visit = serializer.save(employee=request.user)
+        try:
+            from dashboard.services import invalidate_dashboard_caches
+
+            invalidate_dashboard_caches()
+        except Exception:
+            pass
         return created_response(
             data=FarmerVisitSerializer(visit, context={"request": request}).data
         )
@@ -371,17 +493,31 @@ class FarmerVisitListAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, farmer_id):
-        farmer = get_object_or_404(Farmer, pk=farmer_id, is_active=True)
+        farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
         visits = (
-            Visit.objects.filter(farmer=farmer)
-            .select_related("employee")
+            Visit.objects.filter(
+                Q(farmer=farmer)
+                | Q(farmer_phone=farmer.phone)
+                | Q(farmer_name__iexact=farmer.name)
+            )
+            .select_related(
+                "employee",
+                "employee__employee_profile",
+                "village",
+                "district",
+                "crop",
+                "farmer",
+                "field",
+            )
             .prefetch_related(
                 "media_files",
                 "issues__crop",
                 "issues__recommendations",
             )
-            .order_by("-visit_date")
+            .order_by("-created_at", "-id")
         )
+        if not _is_admin_user(request.user):
+            visits = visits.filter(employee=request.user)
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(visits, request)
@@ -415,7 +551,7 @@ class VisitIssueCreateAPI(APIView):
             return forbidden_response(
                 "Admin users cannot report issues. Employee access only."
             )
-        visit = get_object_or_404(Visit, pk=visit_id)
+        visit = get_object_or_404(_scoped_visits_for_user(request.user), pk=visit_id)
         serializer = CropIssueCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         issue = serializer.save(visit=visit)
@@ -450,6 +586,10 @@ class CropIssueListAPI(APIView):
                 "visit",
                 "visit__employee",
                 "visit__employee__employee_profile",
+                "visit__farmer",
+                "visit__farmer__village",
+                "visit__farmer__district",
+                "visit__field",
                 "visit__district",
                 "visit__village",
                 "crop",
@@ -457,6 +597,8 @@ class CropIssueListAPI(APIView):
             .prefetch_related("recommendations__given_by")
             .order_by("-created_at")
         )
+        if not _is_admin_user(request.user):
+            qs = qs.filter(visit__employee=request.user)
 
         severity = request.query_params.get("severity")
         if severity:
@@ -465,8 +607,12 @@ class CropIssueListAPI(APIView):
         farmer_id = request.query_params.get("farmer")
         if farmer_id:
             try:
-                farmer = Farmer.objects.only("phone").get(pk=farmer_id)
-                qs = qs.filter(visit__farmer_phone=farmer.phone)
+                farmer = _farmers_queryset_for_user(request.user).only("id", "phone").get(
+                    pk=farmer_id
+                )
+                qs = qs.filter(
+                    Q(visit__farmer=farmer) | Q(visit__farmer_phone=farmer.phone)
+                )
             except Farmer.DoesNotExist:
                 qs = qs.none()
 
@@ -513,10 +659,7 @@ class VisitMediaUploadAPI(APIView):
             return forbidden_response(
                 "Admin users cannot upload media. Employee access only."
             )
-        visit = get_object_or_404(Visit, pk=visit_id)
-
-        if visit.employee != request.user:
-            return forbidden_response("Not authorized")
+        visit = get_visit_for_user(request.user, visit_id)
 
         file = request.FILES.get("file")
         media_type = request.data.get("media_type", "").strip().lower()
@@ -566,7 +709,7 @@ class FarmerActivityListAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, farmer_id):
-        farmer = get_object_or_404(Farmer, pk=farmer_id, is_active=True)
+        farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
         qs = (
             FarmerActivity.objects.filter(farmer=farmer)
             .select_related("created_by")
