@@ -10,7 +10,7 @@ services:
     autoDeployTrigger: commit
     healthCheckPath: /healthz/
     buildCommand: chmod +x build.sh && ./build.sh
-    preDeployCommand: python manage.py migrate --noinput
+    preDeployCommand: python manage.py migrate --noinput && python manage.py verify_production_db
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120 --access-logfile -
     envVars:
       - key: APP_ENV
@@ -22,7 +22,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: RENDER_POSTGRES_HOST_SUFFIX
-        sync: false
+        value: singapore-postgres.render.com
       - key: DB_SSL_REQUIRE
         value: "false"
       - key: ALLOWED_HOSTS

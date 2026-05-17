@@ -10,7 +10,18 @@ from dotenv import load_dotenv
 # BASE DIR & ENV
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv()
+
+
+def _is_production_env():
+    app_env = os.getenv("APP_ENV", "local").strip().lower()
+    if app_env in {"prod", "production", "render", "staging"}:
+        return True
+    return os.getenv("RENDER", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Production (Render) must use platform env vars only — never a local .env file.
+if not _is_production_env():
+    load_dotenv(override=False)
 
 
 def env_bool(name, default=False):
@@ -41,6 +52,8 @@ def normalize_database_url(raw_url):
         return raw_url
 
     host_suffix = os.getenv("RENDER_POSTGRES_HOST_SUFFIX", "").strip()
+    if not host_suffix and _is_production_env():
+        host_suffix = "singapore-postgres.render.com"
     if not host_suffix:
         return raw_url
 
@@ -239,6 +252,14 @@ ROOT_URLCONF = "config.urls"
 # --------------------------------------------------
 # DATABASE CONFIG
 # --------------------------------------------------
+# Retired Render Postgres (suspended) — refuse if still set in Render env.
+_BLOCKED_RENDER_DB_HOSTS = frozenset(
+    {
+        "dpg-d7ckj7dckfvc739s0frg-a",
+        "dpg-d7ckj7dckfvc739s0frg-a.singapore-postgres.render.com",
+    }
+)
+
 DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
 
 if DATABASE_URL:
@@ -259,6 +280,19 @@ if DATABASE_URL:
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
     DATABASES["default"].setdefault("OPTIONS", {})
     DATABASES["default"]["OPTIONS"].setdefault("connect_timeout", 10)
+
+    if IS_PRODUCTION:
+        resolved_host = (urlsplit(DATABASE_URL).hostname or "").strip().lower()
+        short_host = resolved_host.split(".")[0] if resolved_host else ""
+        if resolved_host in _BLOCKED_RENDER_DB_HOSTS or short_host in _BLOCKED_RENDER_DB_HOSTS:
+            raise RuntimeError(
+                "DATABASE_URL points to a retired Render Postgres instance "
+                f"({short_host or resolved_host}). Update Render Dashboard → "
+                "agri-clinic-backend → Environment: set DATABASE_URL to the "
+                "agri_clinic_db instance (dpg-d84t75d7vvec73fhlpfg-a) and "
+                "RENDER_POSTGRES_HOST_SUFFIX=singapore-postgres.render.com, "
+                "then clear build cache and redeploy."
+            )
 elif IS_PRODUCTION:
     raise RuntimeError("DATABASE_URL is required when APP_ENV is production-like")
 else:
@@ -464,3 +498,7 @@ SPECTACULAR_SETTINGS = {
     "PREPROCESSING_HOOKS": ["drf_spectacular.hooks.preprocess_exclude_path_format"],
     "POSTPROCESSING_HOOKS": ["drf_spectacular.hooks.postprocess_schema_enums"],
 }
+
+if IS_PRODUCTION and DATABASE_URL:
+    _resolved_db_host = urlsplit(DATABASE_URL).hostname or "(unknown)"
+    print(f"[agri-clinic] DATABASE_URL host={_resolved_db_host}", flush=True)
