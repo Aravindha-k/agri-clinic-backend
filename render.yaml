@@ -1,11 +1,6 @@
-# Render Blueprint — Agri Clinic backend + fresh PostgreSQL
-# Docs: https://render.com/docs/blueprint-spec
-
-databases:
-  - name: agri-clinic-db
-    databaseName: agri_clinic
-    user: agri_clinic
-    plan: free
+# Render Blueprint — Agri Clinic backend (production web service)
+# PostgreSQL: use your Render Postgres instance (set DATABASE_URL in dashboard).
+# Do NOT commit real DATABASE_URL or SECRET_KEY to git.
 
 services:
   - type: web
@@ -23,11 +18,11 @@ services:
       - key: DEBUG
         value: "False"
       - key: SECRET_KEY
-        generateValue: true
+        sync: false
       - key: DATABASE_URL
-        fromDatabase:
-          name: agri-clinic-db
-          property: connectionString
+        sync: false
+      - key: RENDER_POSTGRES_HOST_SUFFIX
+        sync: false
       - key: DB_SSL_REQUIRE
         value: "false"
       - key: ALLOWED_HOSTS

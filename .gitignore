@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+render.production.env
+__pycache__/
+*.py[cod]
+.venv/
+staticfiles/
+media/
+db.sqlite3
+*.log
