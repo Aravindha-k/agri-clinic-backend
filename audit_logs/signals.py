@@ -12,7 +12,9 @@ User = get_user_model()
 
 # VISIT CREATE
 @receiver(post_save, sender=Visit)
-def log_visit_create(sender, instance, created, **kwargs):
+def log_visit_create(sender, instance, created, raw=False, **kwargs):
+    if raw:
+        return
     if created:
         try:
             create_audit_log(
@@ -27,7 +29,9 @@ def log_visit_create(sender, instance, created, **kwargs):
 
 # EMPLOYEE CREATE/UPDATE
 @receiver(post_save, sender=EmployeeProfile)
-def log_employee_create_update(sender, instance, created, **kwargs):
+def log_employee_create_update(sender, instance, created, raw=False, **kwargs):
+    if raw:
+        return
     try:
         action = "CREATE" if created else "UPDATE"
         create_audit_log(
@@ -42,7 +46,9 @@ def log_employee_create_update(sender, instance, created, **kwargs):
 
 # FARMER CREATE/UPDATE
 @receiver(post_save, sender=Farmer)
-def log_farmer_create_update(sender, instance, created, **kwargs):
+def log_farmer_create_update(sender, instance, created, raw=False, **kwargs):
+    if raw:
+        return
     try:
         action = "CREATE" if created else "UPDATE"
         create_audit_log(
@@ -57,7 +63,9 @@ def log_farmer_create_update(sender, instance, created, **kwargs):
 
 # WORKDAY START/END
 @receiver(post_save, sender=WorkDay)
-def log_workday_start_end(sender, instance, created, **kwargs):
+def log_workday_start_end(sender, instance, created, raw=False, **kwargs):
+    if raw:
+        return
     try:
         action = "START" if created and instance.is_active else "END"
         if action == "START" or (not created and not instance.is_active):

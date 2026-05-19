@@ -13,6 +13,9 @@ from .views import (
     DashboardOverviewAPI,
     FarmerVisitAuditAPI,
 )
+from visits.attachment_views import AdminVisitAttachmentListAPI
+from accounts.profile_photos import AdminEmployeePhotoAPI
+from farmers.photo_views import AdminFarmerPhotoAPI
 
 router = DefaultRouter()
 router.register(r"farmers", FarmerViewSet, basename="admin-farmer")
@@ -41,6 +44,21 @@ urlpatterns = [
         "crop-issues/",
         CropIssueViewSet.as_view({"get": "list"}),
         name="admin-crop-issue-list",
+    ),
+    path(
+        "visits/<int:visit_id>/attachments/",
+        AdminVisitAttachmentListAPI.as_view(),
+        name="admin-visit-attachments",
+    ),
+    path(
+        "employees/<int:pk>/photo/",
+        AdminEmployeePhotoAPI.as_view(),
+        name="admin-employee-photo",
+    ),
+    path(
+        "farmers/<int:pk>/photo/",
+        AdminFarmerPhotoAPI.as_view(),
+        name="admin-farmer-photo",
     ),
     path("", include(router.urls)),
 ]

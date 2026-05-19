@@ -11,8 +11,14 @@ from masters.models import (
     Recommendation,
 )
 from visits.models import Visit, VisitMedia
+from visits.attachment_serializers import VisitAttachmentSerializer
 from visits.api_fields import strip_visit_status_from_representation
-from visits.visit_response import build_visit_farmer_block, crop_display_name
+from visits.visit_response import (
+    build_visit_employee_block,
+    build_visit_farmer_block,
+    crop_display_name,
+)
+from utils.serializer_mixins import ProfilePhotoUrlMixin
 
 
 # ──────────────────────────────────────────────
@@ -313,6 +319,8 @@ class AdminVisitSerializer(serializers.ModelSerializer):
     crop_name = serializers.SerializerMethodField()
     issues = AdminCropIssueSerializer(many=True, read_only=True)
     media_files = AdminVisitMediaSerializer(many=True, read_only=True)
+    attachments = VisitAttachmentSerializer(many=True, read_only=True)
+    employee_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Visit
@@ -320,7 +328,17 @@ class AdminVisitSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "visit_time")
 
     def to_representation(self, instance):
-        return strip_visit_status_from_representation(super().to_representation(instance))
+        data = strip_visit_status_from_representation(super().to_representation(instance))
+        request = self.context.get("request")
+        data["employee_detail"] = build_visit_employee_block(instance, request)
+        farmer_block = build_visit_farmer_block(instance, request)
+        if farmer_block:
+            data["farmer"] = farmer_block
+        return data
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_employee_detail(self, obj):
+        return build_visit_employee_block(obj, self.context.get("request"))
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_crop_name(self, obj):
@@ -344,17 +362,18 @@ class AdminVisitSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_farmer(self, obj):
-        return build_visit_farmer_block(obj)
+        return build_visit_farmer_block(obj, self.context.get("request"))
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_farmer_display(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         if not block:
             return None
         out = {
             "id": block.get("id"),
             "name": block.get("name"),
             "phone": block.get("mobile") or block.get("phone"),
+            "profile_photo_url": block.get("profile_photo_url"),
         }
         if obj.farmer_id and obj.farmer.farmer_code:
             out["farmer_code"] = obj.farmer.farmer_code
@@ -362,17 +381,17 @@ class AdminVisitSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_farmer_name(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         return block.get("name") if block else None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_farmer_mobile(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         return block.get("mobile") if block else None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_farmer_village(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         return block.get("village") if block else None
 
     @extend_schema_field(OpenApiTypes.OBJECT)
@@ -391,7 +410,7 @@ class AdminVisitSerializer(serializers.ModelSerializer):
 # ──────────────────────────────────────────────
 
 
-class AdminFarmerSerializer(serializers.ModelSerializer):
+class AdminFarmerSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
@@ -421,9 +440,10 @@ class AdminFarmerSerializer(serializers.ModelSerializer):
             "soil_type",
             "assigned_employee",
             "assigned_employee_name",
+            "profile_photo_url",
             "fields",
             "is_active",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("id", "farmer_code", "created_at", "updated_at")
+        read_only_fields = ("id", "farmer_code", "created_at", "updated_at", "profile_photo_url")

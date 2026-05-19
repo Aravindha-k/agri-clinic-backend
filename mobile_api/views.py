@@ -8,5 +8,11 @@ from .visits import (
     MobileVisitDetailAPI,
     MobileVisitMediaUploadAPI,
 )
+from visits.attachment_views import (
+    MobileVisitAttachmentListCreateAPI,
+    MobileVisitAttachmentDeleteAPI,
+)
+from mobile_api.profile import MobileProfilePhotoAPI
+from farmers.photo_views import MobileFarmerPhotoAPI
 from .farmers import MobileFarmerListAPI, MobileFarmerDetailAPI
 from .map import MobileVisitMapAPI

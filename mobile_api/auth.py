@@ -26,15 +26,9 @@ class MobileMeView(APIView):
         profile = getattr(user, "employee_profile", None)
         if not profile:
             return error_response(message="Employee profile not found", status_code=404)
-        return success_response(
-            data={
-                "id": user.id,
-                "username": user.username,
-                "employee_id": profile.employee_id,
-                "phone": profile.phone,
-                "is_active_employee": profile.is_active_employee,
-            }
-        )
+        from accounts.employee_photo import employee_me_payload
+
+        return success_response(data=employee_me_payload(request, profile))
 
 
 class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):

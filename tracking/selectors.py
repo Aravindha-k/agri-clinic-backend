@@ -83,7 +83,14 @@ def get_location_logs(
 
 
 def get_active_workday(user: User) -> Optional[WorkDay]:
-    return WorkDay.objects.filter(user=user, is_active=True).order_by("-date").first()
+    from .workday_utils import expire_overlong_workdays_for_user
+
+    expire_overlong_workdays_for_user(user)
+    return (
+        WorkDay.objects.filter(user=user, is_active=True)
+        .order_by("-start_time")
+        .first()
+    )
 
 
 def get_workday_history(user: User, limit: int = 30) -> QuerySet:
@@ -92,10 +99,13 @@ def get_workday_history(user: User, limit: int = 30) -> QuerySet:
 
 def get_active_employees_on_field() -> QuerySet:
     """Return WorkDay records for employees currently clocked in."""
+    from .workday_utils import expire_old_workdays
+
+    expire_old_workdays()
     return (
         WorkDay.objects.select_related("user", "user__employee_profile")
         .filter(is_active=True)
-        .order_by("-date")
+        .order_by("-start_time")
     )
 
 

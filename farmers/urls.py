@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .photo_views import FarmerPhotoAPI
 from .views import (
     FarmerListCreateAPI,
     FarmerStatsAPI,
@@ -24,6 +25,11 @@ urlpatterns = [
     path("farmers/", FarmerListCreateAPI.as_view(), name="farmer-list-create"),
     path("farmers/stats/", FarmerStatsAPI.as_view(), name="farmer-stats"),
     path("farmers/<int:pk>/", FarmerDetailAPI.as_view(), name="farmer-detail"),
+    path(
+        "farmers/<int:pk>/photo/",
+        FarmerPhotoAPI.as_view(),
+        name="farmer-photo",
+    ),
     # ── Farmer Fields ──────────────────────────
     path(
         "farmers/<int:farmer_id>/fields/",

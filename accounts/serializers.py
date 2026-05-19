@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers
 from .models import EmployeeProfile
+from utils.serializer_mixins import ProfilePhotoUrlMixin
 
 
 # =========================
@@ -170,7 +171,7 @@ class AdminCreateSerializer(serializers.Serializer):
 # =========================
 # ADMIN EMPLOYEE LIST / DETAIL
 # =========================
-class AdminEmployeeListSerializer(serializers.ModelSerializer):
+class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
     first_name = serializers.CharField(source="user.first_name", read_only=True)
@@ -198,9 +199,17 @@ class AdminEmployeeListSerializer(serializers.ModelSerializer):
             "district_name",
             "is_active_employee",
             "can_login",
+            "profile_photo_url",
+            "profile_photo_updated_at",
             "created_at",
         ]
-        read_only_fields = ("id", "employee_id", "created_at")
+        read_only_fields = (
+            "id",
+            "employee_id",
+            "created_at",
+            "profile_photo_url",
+            "profile_photo_updated_at",
+        )
 
 
 # =========================

@@ -8,4 +8,6 @@ __pycache__/
 staticfiles/
 media/
 db.sqlite3
+agri_local_data.json
+agri_local_data_*.json
 *.log

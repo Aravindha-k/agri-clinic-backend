@@ -1,7 +1,6 @@
 from django.urls import path
 from .views import (
     CreateEmployeeAPI,
-    MeAPI,
     AdminResetPasswordAPI,
     EmployeeListAPI,
     ToggleEmployeeStatusAPI,
@@ -14,13 +13,13 @@ from .views import (
     ChangePasswordAPI,
 )
 from .profile_api import EmployeeProfileAPI
+from .profile_photos import EmployeeSelfPhotoAPI
 
 app_name = "accounts"
 
 urlpatterns = [
     # Auth / Context
     path("create-admin/", CreateAdminAPI.as_view()),
-    path("me/", MeAPI.as_view(), name="me"),
     # Main employees list endpoint (now root)
     path("", EmployeeListAPI.as_view(), name="employee-list"),
     path("create/", CreateEmployeeAPI.as_view(), name="employee-create"),
@@ -62,6 +61,7 @@ urlpatterns = [
         name="change-password",
     ),
     path("logout/", LogoutAPI.as_view(), name="logout"),
-    # Profile endpoint
+    # Profile photo + me (specific paths before me/)
+    path("me/photo/", EmployeeSelfPhotoAPI.as_view(), name="employee-self-photo"),
     path("me/", EmployeeProfileAPI.as_view(), name="employee-profile-me"),
 ]

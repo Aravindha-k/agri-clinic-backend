@@ -317,6 +317,8 @@ USE_S3 = os.getenv("USE_S3", "false").lower() == "true"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+# Profile photos: employee_photos/ and farmer_photos/ under MEDIA_ROOT.
+# On Render without S3, files live on ephemeral disk — use a persistent disk or S3 for production.
 
 if USE_S3:
     DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"

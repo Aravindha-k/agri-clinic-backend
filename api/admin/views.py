@@ -148,6 +148,9 @@ class VisitViewSet(ReadOnlyViewSet):
         .prefetch_related(
             Prefetch("issues", queryset=ISSUE_QS),
             "media_files",
+            "attachments",
+            "attachments__uploaded_by",
+            "attachments__employee",
         )
         .order_by("-created_at", "-id")
     )
@@ -313,20 +316,28 @@ class DashboardOverviewAPI(APIView):
             ).count(),
         }
 
-        recent_visits = [
-            {
-                "id": visit.id,
-                "farmer_name": visit.farmer_name,
-                "farmer_phone": visit.farmer_phone,
-                "visit_date": visit.visit_date,
-                "visit_time": visit.visit_time,
-                "employee_name": _display_name(visit.employee),
-                "village": visit.village.name if visit.village else None,
-            }
-            for visit in submitted_visits_with_relations().order_by("-created_at")[
-                :recent_limit
-            ]
-        ]
+        from visits.visit_response import build_visit_employee_block
+
+        recent_visits = []
+        for visit in submitted_visits_with_relations().order_by("-created_at")[
+            :recent_limit
+        ]:
+            emp_block = build_visit_employee_block(visit, request)
+            recent_visits.append(
+                {
+                    "id": visit.id,
+                    "farmer_name": visit.farmer_name,
+                    "farmer_phone": visit.farmer_phone,
+                    "visit_date": visit.visit_date,
+                    "visit_time": visit.visit_time,
+                    "employee_name": _display_name(visit.employee),
+                    "employee_profile_photo_url": emp_block.get("profile_photo_url"),
+                    "employee_profile_photo_updated_at": emp_block.get(
+                        "profile_photo_updated_at"
+                    ),
+                    "village": visit.village.name if visit.village else None,
+                }
+            )
 
         open_issues = [
             {

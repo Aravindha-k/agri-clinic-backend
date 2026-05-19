@@ -6,7 +6,9 @@ from visits.models import Visit
 
 
 @receiver(post_save, sender=Farmer)
-def log_farmer_created(sender, instance, created, **kwargs):
+def log_farmer_created(sender, instance, created, raw=False, **kwargs):
+    if raw:
+        return
     if created:
         FarmerActivity.objects.create(
             farmer=instance,
@@ -18,7 +20,9 @@ def log_farmer_created(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Visit)
-def log_visit_activity(sender, instance, created, **kwargs):
+def log_visit_activity(sender, instance, created, raw=False, **kwargs):
+    if raw:
+        return
     farmer = instance.farmer
     if not farmer and instance.farmer_phone:
         farmer = Farmer.objects.filter(phone=instance.farmer_phone).order_by("id").first()

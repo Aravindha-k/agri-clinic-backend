@@ -24,6 +24,9 @@ def get_dashboard_stats() -> Dict:
     from visits.models import Visit
     from masters.models import Farmer
     from accounts.models import EmployeeProfile
+    from tracking.workday_utils import expire_old_workdays
+
+    expire_old_workdays()
 
     today = date.today()
 

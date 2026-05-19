@@ -3,6 +3,8 @@ from django.db import models
 from masters.models import Village, Crop
 from django.contrib.auth.models import User
 
+from visits.attachments import ATTACHMENT_TYPE_CHOICES
+
 
 # New Visit model as per requirements
 class Visit(models.Model):
@@ -139,26 +141,57 @@ class VisitMedia(models.Model):
 
 
 class VisitAttachment(models.Model):
-    FILE_TYPES = (
-        ("CROP", "Crop Photo"),
-        ("SOIL", "Soil Photo"),
-        ("BILL", "Bill"),
-        ("VOICE", "Voice Note"),
-        ("PDF", "PDF Report"),
-        ("OTHER", "Other"),
-    )
+    """Evidence attached to a visit (photo, PDF, audio, text note, etc.)."""
 
     visit = models.ForeignKey(
         Visit,
         related_name="attachments",
         on_delete=models.CASCADE,
+        db_index=True,
+    )
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="visit_attachments",
+        db_index=True,
+    )
+    attachment_type = models.CharField(
+        max_length=20,
+        choices=ATTACHMENT_TYPE_CHOICES,
+        db_index=True,
+    )
+    file = models.FileField(
+        upload_to="visit_attachments/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+    text_content = models.TextField(blank=True, null=True)
+    original_filename = models.CharField(max_length=255, blank=True, default="")
+    mime_type = models.CharField(max_length=128, blank=True, default="")
+    file_size = models.PositiveIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_visit_attachments",
     )
 
-    file_type = models.CharField(max_length=20, choices=FILE_TYPES)
-
-    file = models.FileField(upload_to="visit_attachments/")
-
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["-uploaded_at", "-id"]
 
     def __str__(self):
-        return f"{self.file_type} | Visit {self.visit_id}"
+        return f"{self.attachment_type} | Visit {self.visit_id}"
+
+    @property
+    def file_type(self):
+        """Backward-compatible alias used by legacy upload endpoints."""
+        legacy = {
+            "image": "CROP",
+            "pdf": "PDF",
+            "audio": "VOICE",
+            "text": "OTHER",
+            "other": "OTHER",
+        }
+        return legacy.get(self.attachment_type, "OTHER")

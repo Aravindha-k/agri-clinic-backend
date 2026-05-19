@@ -6,7 +6,7 @@ from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 from tracking.models import LocationLog, WorkDay
 from tracking.serializers import LocationLogCreateSerializer
-from tracking.workday_utils import expire_overlong_workdays_for_user
+from tracking.workday_utils import WORKDAY_EXPIRED_MESSAGE, expire_overlong_workdays_for_user
 from django.utils import timezone
 
 
@@ -26,7 +26,7 @@ class MobileTrackingAPI(APIView):
         workday = WorkDay.objects.filter(user=user, is_active=True).first()
         if not workday:
             return error_response(
-                message="Workday not started or was auto-ended after 9 hours. Start a new workday.",
+                message=WORKDAY_EXPIRED_MESSAGE,
                 status_code=400,
             )
         serializer = LocationLogCreateSerializer(

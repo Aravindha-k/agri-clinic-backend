@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 
 from .models import EmployeeProfile
@@ -291,3 +291,94 @@ class AdminResetPasswordTests(TestCase):
             format="json",
         )
         self.assertNotIn("password", str(resp.json()))
+
+
+class ProfilePhotoAPITest(APITestCase):
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from masters.models import Crop, District, Farmer, Village
+        from visits.models import Visit
+
+        self._SimpleUploadedFile = SimpleUploadedFile
+        self.admin = User.objects.create_user(
+            username="admin_photo", password="x", is_staff=True, is_superuser=True
+        )
+        self.employee = User.objects.create_user(username="emp_photo", password="x")
+        self.other = User.objects.create_user(username="emp_other", password="x")
+        EmployeeProfile.objects.create(
+            user=self.employee,
+            employee_id="EMP-PHOTO-1",
+            phone="9000000401",
+            is_active_employee=True,
+        )
+        EmployeeProfile.objects.create(
+            user=self.other,
+            employee_id="EMP-PHOTO-2",
+            phone="9000000402",
+            is_active_employee=True,
+        )
+        district = District.objects.create(name="Photo D")
+        village = Village.objects.create(name="Photo V", district=district)
+        self.farmer = Farmer.objects.create(
+            name="Photo Farmer",
+            phone="9111222333",
+            district=district,
+            village=village,
+            created_by_employee=self.employee,
+        )
+        self.crop = Crop.objects.create(name_en="Rice", name_ta="Rice", is_active=True)
+        Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+        )
+
+        self.emp_client = APIClient()
+        self.emp_client.force_authenticate(user=self.employee)
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(user=self.admin)
+
+    def _photo(self, name="me.jpg"):
+        return self._SimpleUploadedFile(name, b"imgbytes", content_type="image/jpeg")
+
+    def test_employee_upload_own_photo_mobile(self):
+        r = self.emp_client.patch(
+            "/api/v1/mobile/profile/photo/",
+            {"profile_photo": self._photo()},
+            format="multipart",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.data["success"])
+        self.assertIn("profile_photo_url", r.data["data"])
+        self.assertIn("profile_photo_updated_at", r.data["data"])
+
+    def test_employee_upload_own_photo_me_alias(self):
+        r = self.emp_client.patch(
+            "/api/v1/employees/me/photo/",
+            {"profile_photo": self._photo("me-alias.jpg")},
+            format="multipart",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("profile_photo_url", r.data["data"])
+
+    def test_admin_upload_employee_photo(self):
+        profile = self.employee.employee_profile
+        r = self.admin_client.patch(
+            f"/api/v1/admin/employees/{profile.id}/photo/",
+            {"profile_photo": self._photo("admin-emp.jpg")},
+            format="multipart",
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_invalid_photo_type_rejected(self):
+        bad = self._SimpleUploadedFile(
+            "x.exe", b"z", content_type="application/octet-stream"
+        )
+        r = self.emp_client.patch(
+            "/api/v1/mobile/profile/photo/",
+            {"profile_photo": bad},
+            format="multipart",
+        )
+        self.assertEqual(r.status_code, 400)

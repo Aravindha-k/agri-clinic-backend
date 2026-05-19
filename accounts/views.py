@@ -428,22 +428,10 @@ class EmployeeListAPI(APIView):
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(qs, request)
-        data = [
-            {
-                "id": emp.id,
-                "user_id": emp.user.id,
-                "employee_id": emp.employee_id,
-                "name": emp.user.get_full_name() or emp.user.username,
-                "username": emp.user.username,
-                "phone": emp.phone,
-                "role": emp.role,
-                "district": emp.district.name if emp.district else None,
-                "is_active_employee": emp.is_active_employee,
-                "can_login": emp.user.is_active,
-            }
-            for emp in page
-        ]
-        return paginator.get_paginated_response(data)
+        serializer = AdminEmployeeListSerializer(
+            page, many=True, context={"request": request}
+        )
+        return paginator.get_paginated_response(serializer.data)
 
 
 # ============================
@@ -718,7 +706,9 @@ class AdminEmployeeManagementAPI(APIView):
         paginator = PageNumberPagination()
         paginator.page_size = min(int(request.query_params.get("page_size", 20)), 100)
         page = paginator.paginate_queryset(qs, request)
-        serializer = AdminEmployeeListSerializer(page, many=True)
+        serializer = AdminEmployeeListSerializer(
+            page, many=True, context={"request": request}
+        )
         # Custom paginated response
         paginated_data = paginator.get_paginated_response(serializer.data).data
         return success_response(data=paginated_data)

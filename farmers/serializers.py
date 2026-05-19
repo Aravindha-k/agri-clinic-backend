@@ -22,6 +22,7 @@ from masters.models import (
 )
 from visits.models import Visit, VisitMedia
 from visits.serializers import VisitMediaSerializer
+from utils.serializer_mixins import ProfilePhotoUrlMixin
 
 
 # ══════════════════════════════════════════════
@@ -407,7 +408,7 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
 # ══════════════════════════════════════════════
 
 
-class FarmerListSerializer(serializers.ModelSerializer):
+class FarmerListSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     """Admin list — core fields + visit stats (no nested fields payload)."""
 
     mobile = serializers.CharField(source="phone", read_only=True)
@@ -468,13 +469,14 @@ class FarmerListSerializer(serializers.ModelSerializer):
             "visits",
             "total_visits",
             "latest_visit_date",
+            "profile_photo_url",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
 
 
-class FarmerDetailSerializer(serializers.ModelSerializer):
+class FarmerDetailSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     """
     Full nested serializer:
     Farmer
@@ -514,6 +516,7 @@ class FarmerDetailSerializer(serializers.ModelSerializer):
             "soil_type",
             "assigned_employee",
             "assigned_employee_name",
+            "profile_photo_url",
             "farmer_fields",
             "recent_visits",
             "activity",

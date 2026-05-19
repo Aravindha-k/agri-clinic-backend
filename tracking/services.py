@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from .models import LocationLog, WorkDay
 from .selectors import LIVE_LOCATION_TTL, _live_key, get_active_workday
+from .workday_utils import expire_overlong_workdays_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ def start_workday(
     Start a work session for the employee.
     Idempotent: returns the existing active session if one exists.
     """
+    expire_overlong_workdays_for_user(user)
     existing = get_active_workday(user)
     if existing:
         logger.info(

@@ -202,25 +202,34 @@ class VisitAttachmentUploadAPI(APIView):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        file = request.FILES.get("file")
-        file_type = request.data.get("file_type", "OTHER")
+        from visits.attachment_serializers import (
+            VisitAttachmentCreateSerializer,
+            VisitAttachmentSerializer,
+        )
 
-        if not file:
+        serializer = VisitAttachmentCreateSerializer(
+            data={
+                "attachment_type": request.data.get("attachment_type")
+                or request.data.get("file_type", "other"),
+                "file": request.FILES.get("file"),
+                "text_content": request.data.get("text_content"),
+            },
+            context={"request": request, "visit": visit},
+        )
+        if not serializer.is_valid():
             return error_response(
-                message="File required",
+                message="Validation failed",
+                errors=serializer.errors,
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        attachment = VisitAttachment.objects.create(
-            visit=visit,
-            file=file,
-            file_type=file_type,
-        )
-
+        attachment = serializer.save()
         return api_response(
             success=True,
             message="Attachment uploaded",
-            data={"file_url": request.build_absolute_uri(attachment.file.url)},
+            data=VisitAttachmentSerializer(
+                attachment, context={"request": request}
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 

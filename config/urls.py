@@ -78,8 +78,8 @@ urlpatterns = [
     path("api/v1/mobile/", include("mobile_api.urls")),
 ]
 
-# ✅ Local media serving (safe even if S3 enabled)
-if settings.DEBUG:
+# Serve uploaded media from disk when not using S3 (local dev + Render disk).
+if not settings.USE_S3:
     urlpatterns += static(
         settings.MEDIA_URL,
         document_root=settings.MEDIA_ROOT,

@@ -189,6 +189,11 @@ class Farmer(BaseMaster):
         blank=True,
         default="",
     )
+    profile_photo = models.ImageField(
+        upload_to="farmer_photos/%Y/%m/",
+        null=True,
+        blank=True,
+    )
     assigned_employee = models.ForeignKey(
         "auth.User",
         on_delete=models.SET_NULL,

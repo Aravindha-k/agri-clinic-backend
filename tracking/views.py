@@ -23,9 +23,16 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
 from accounts.models import EmployeeProfile
+from utils.photo_urls import build_profile_photo_url
 from .models import WorkDay, AvailabilityEvent, LocationLog, EmployeeDailySummary
 from .selectors import get_last_known_location
-from .workday_utils import expire_overlong_workdays_for_user
+from .status_utils import build_admin_tracking_row
+from .workday_utils import (
+    WORKDAY_EXPIRED_MESSAGE,
+    expire_old_workdays,
+    expire_overlong_workdays_for_user,
+    is_workday_within_duration,
+)
 from .serializers import (
     LocationLogCreateSerializer,
     LocationLogSerializer,
@@ -83,7 +90,7 @@ class BulkLocationUploadAPI(APIView):
         if not WorkDay.objects.filter(user=request.user, is_active=True).exists():
             return api_response(
                 success=False,
-                message="Workday not started or was auto-ended after 9 hours. Start a new workday.",
+                message=WORKDAY_EXPIRED_MESSAGE,
                 data={"errors": [{"detail": "No active workday"}]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -170,7 +177,7 @@ def _format_duration(delta):
 
 def _tracking_health(workday, now):
     """Return OK / STALE / STOPPED for an active workday."""
-    if not workday or not workday.is_active:
+    if not is_workday_within_duration(workday, now):
         return "STOPPED"
     hb = workday.last_heartbeat
     if not hb:
@@ -273,9 +280,12 @@ class EndWorkDayAPI(APIView):
         if not workdays.exists():
             return Response({"detail": "No active workday"}, status=400)
 
+        from .workday_utils import clear_live_tracking_for_user
+
         now = timezone.now()
         count = workdays.count()
-        workdays.update(end_time=now, is_active=False)
+        workdays.update(end_time=now, is_active=False, auto_ended=False)
+        clear_live_tracking_for_user(request.user.pk)
         return Response({"message": "Workday ended", "ended_count": count}, status=200)
 
 
@@ -341,7 +351,7 @@ class PushLocationAPI(APIView):
         if not workday:
             return Response(
                 {
-                    "detail": "Workday not started or was auto-ended after 9 hours. Start a new workday."
+                    "detail": WORKDAY_EXPIRED_MESSAGE
                 },
                 status=400,
             )
@@ -418,7 +428,7 @@ class BulkPushLocationAPI(APIView):
         if not workday:
             return Response(
                 {
-                    "detail": "Workday not started or was auto-ended after 9 hours. Start a new workday."
+                    "detail": WORKDAY_EXPIRED_MESSAGE
                 },
                 status=400,
             )
@@ -540,6 +550,7 @@ class AdminTrackingDashboardStatsAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        expire_old_workdays()
         now = timezone.now()
         heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
 
@@ -547,12 +558,19 @@ class AdminTrackingDashboardStatsAPI(APIView):
             is_active_employee=True,
         ).count()
 
-        working_now = WorkDay.objects.filter(is_active=True).count()
-
-        online = WorkDay.objects.filter(
-            is_active=True,
-            last_heartbeat__gte=heartbeat_threshold,
-        ).count()
+        active_wds = list(
+            WorkDay.objects.filter(is_active=True).only(
+                "start_time", "last_heartbeat", "is_active", "user_id"
+            )
+        )
+        working_now = sum(1 for wd in active_wds if is_workday_within_duration(wd, now))
+        online = sum(
+            1
+            for wd in active_wds
+            if is_workday_within_duration(wd, now)
+            and wd.last_heartbeat
+            and wd.last_heartbeat >= heartbeat_threshold
+        )
 
         offline = total_employees - online
 
@@ -587,6 +605,7 @@ class AdminTrackingStatusAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        expire_old_workdays()
         now = timezone.now()
         heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
 
@@ -599,6 +618,7 @@ class AdminTrackingStatusAPI(APIView):
         active_workdays = {
             wd.user_id: wd
             for wd in WorkDay.objects.filter(is_active=True).select_related("user")
+            if is_workday_within_duration(wd, now=now)
         }
         working_user_ids = list(active_workdays.keys())
 
@@ -625,63 +645,34 @@ class AdminTrackingStatusAPI(APIView):
             ).values_list("user_id", flat=True)
         )
 
-        # 5. Build response — zero extra queries in the loop
         data = []
         for emp in employees:
             uid = emp.user_id
-            user = emp.user
             workday = active_workdays.get(uid)
-
-            district_name = None
-            if emp.village and emp.village.district:
-                district_name = emp.village.district.name
-
-            row = {
-                "user_id": uid,
-                "employee_id": emp.employee_id,
-                "username": user.username or emp.employee_id,
-                "employee_name": user.username or emp.employee_id,
-                "phone": emp.phone or "",
-                "district": district_name,
-                "work_status": "NOT_WORKING",
-                "connection": "OFFLINE",
-                "gps_status": "GPS_OFF",
-                "tracking_health": "STOPPED",
-                "last_seen": None,
-                "today_duration": None,
-                "last_latitude": None,
-                "last_longitude": None,
-            }
-
-            if workday:
-                row["work_status"] = "WORKING"
-                row["tracking_health"] = _tracking_health(workday, now)
-
-                loc = last_locations.get(uid)
-                loc_recent = (
-                    loc
-                    and loc.get("recorded_at")
-                    and loc["recorded_at"] >= heartbeat_threshold
+            loc = last_locations.get(uid)
+            try:
+                row = build_admin_tracking_row(
+                    emp=emp,
+                    user=emp.user,
+                    workday=workday,
+                    last_location=loc,
+                    gps_off=uid in gps_off_user_ids,
+                    now=now,
+                    request=request,
                 )
-                if (workday.last_heartbeat and workday.last_heartbeat >= heartbeat_threshold) or loc_recent:
-                    row["connection"] = "ONLINE"
-
-                row["gps_status"] = "GPS_OFF" if uid in gps_off_user_ids else "GPS_ON"
-
-                if workday.end_time:
-                    duration = workday.end_time - workday.start_time
-                else:
-                    duration = now - workday.start_time
-                row["today_duration"] = _format_duration(duration)
-
-                lat, lng, last_seen = _employee_location_tuple(
-                    uid, last_locations, active_workdays, now
-                )
-                if lat is not None:
-                    row["last_latitude"] = lat
-                    row["last_longitude"] = lng
-                    row["last_seen"] = last_seen
-
+            except Exception:
+                logger.exception("Failed to build tracking row user_id=%s", uid)
+                row = {
+                    "user_id": uid,
+                    "employee_id": emp.employee_id,
+                    "employee_name": emp.user.username or emp.employee_id,
+                    "work_status": "NOT_WORKING",
+                    "connection": "OFFLINE",
+                    "gps_status": "GPS_OFF",
+                    "movement_status": "stopped",
+                    "tracking_health": "STOPPED",
+                    "active_workday": False,
+                }
             data.append(row)
 
         logger.info("AdminTrackingStatus map_rows=%s online=%s", len(data), sum(1 for r in data if r["connection"] == "ONLINE"))
@@ -702,6 +693,7 @@ class AdminEmployeesGeoJSONAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        expire_old_workdays()
         now = timezone.now()
         heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
 
@@ -712,6 +704,7 @@ class AdminEmployeesGeoJSONAPI(APIView):
         active_workdays = {
             wd.user_id: wd
             for wd in WorkDay.objects.filter(is_active=True).select_related("user")
+            if is_workday_within_duration(wd, now=now)
         }
         working_user_ids = list(active_workdays.keys())
 
@@ -742,11 +735,16 @@ class AdminEmployeesGeoJSONAPI(APIView):
             user = emp.user
             workday = active_workdays.get(uid)
 
+            geo_photo_updated = emp.profile_photo_updated_at
             props = {
                 "employee_id": emp.employee_id,
                 "username": user.username,
                 "employee_name": user.username or emp.employee_id,
                 "phone": emp.phone,
+                "profile_photo_url": build_profile_photo_url(request, emp.profile_photo),
+                "profile_photo_updated_at": (
+                    geo_photo_updated.isoformat() if geo_photo_updated else None
+                ),
                 "work_status": "NOT_WORKING",
                 "connection": "OFFLINE",
                 "gps_status": "GPS_OFF",
@@ -754,7 +752,7 @@ class AdminEmployeesGeoJSONAPI(APIView):
             }
             geom = None
 
-            if workday:
+            if workday and is_workday_within_duration(workday, now):
                 props["work_status"] = "WORKING"
                 props["tracking_health"] = _tracking_health(workday, now)
 
@@ -878,7 +876,13 @@ class CurrentWorkdayAPI(APIView):
         expire_overlong_workdays_for_user(request.user)
         workday = WorkDay.objects.filter(user=request.user, is_active=True).first()
         if not workday:
-            return Response({"detail": "No active workday"}, status=404)
+            return Response(
+                {
+                    "detail": WORKDAY_EXPIRED_MESSAGE,
+                    "code": "workday_expired",
+                },
+                status=404,
+            )
 
         last_loc = (
             LocationLog.objects.filter(user=request.user, workday=workday)
@@ -890,6 +894,8 @@ class CurrentWorkdayAPI(APIView):
             "date": workday.date,
             "start_time": workday.start_time,
             "end_time": workday.end_time,
+            "is_active": workday.is_active,
+            "auto_ended": workday.auto_ended,
             "last_heartbeat": workday.last_heartbeat,
             "last_location": (
                 LocationLogSerializer(last_loc, context={"request": request}).data
@@ -1096,9 +1102,9 @@ class AdminEmployeeSummaryAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request, user_id):
+        expire_old_workdays()
         now = timezone.now()
         today = now.date()
-        heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
 
         emp = get_object_or_404(
             EmployeeProfile.objects.select_related(
@@ -1108,15 +1114,16 @@ class AdminEmployeeSummaryAPI(APIView):
         )
         user = emp.user
 
-        district_name = None
-        if emp.village and emp.village.district:
-            district_name = emp.village.district.name
-
         workday = (
-            WorkDay.objects.filter(user=user, date=today)
+            WorkDay.objects.filter(user=user, is_active=True)
             .order_by("-start_time")
             .first()
         )
+        status_workday = workday
+        if not status_workday:
+            status_workday = (
+                WorkDay.objects.filter(user=user).order_by("-start_time").first()
+            )
 
         last_location = (
             LocationLog.objects.filter(user=user)
@@ -1125,63 +1132,48 @@ class AdminEmployeeSummaryAPI(APIView):
             .first()
         )
 
-        is_online = False
-        is_on_field = False
-        today_duration = None
-        gps_status = "GPS_OFF"
-        tracking_health = "STOPPED"
-        today_distance_km = 0.0
-
+        gps_off = False
         if workday:
-            is_on_field = workday.is_active
-            tracking_health = _tracking_health(workday, now)
-
-            if workday.last_heartbeat and workday.last_heartbeat >= heartbeat_threshold:
-                is_online = True
-
-            if workday.end_time:
-                duration = workday.end_time - workday.start_time
-            else:
-                duration = now - workday.start_time
-            today_duration = _format_duration(duration)
-
             gps_off = AvailabilityEvent.objects.filter(
                 user=user,
                 workday=workday,
                 event_type="GPS_OFF",
                 end_time__isnull=True,
             ).exists()
-            gps_status = "GPS_OFF" if gps_off else "GPS_ON"
 
-            today_distance_km = _compute_distance_km(user.id, today)
-
-        return Response(
-            {
+        try:
+            row = build_admin_tracking_row(
+                emp=emp,
+                user=user,
+                workday=workday or status_workday,
+                last_location=last_location,
+                gps_off=gps_off,
+                now=now,
+                request=request,
+            )
+        except Exception:
+            logger.exception("Employee summary tracking failed user_id=%s", user_id)
+            row = {
                 "user_id": user.id,
                 "employee_id": emp.employee_id,
-                "username": user.username,
                 "employee_name": user.username or emp.employee_id,
-                "phone": emp.phone,
-                "district": district_name,
-                "is_online": is_online,
-                "is_on_field": is_on_field,
-                "connection": "ONLINE" if is_online else "OFFLINE",
-                "gps_status": gps_status,
-                "tracking_health": tracking_health,
-                "today_duration": today_duration,
-                "today_distance_km": today_distance_km,
-                "last_latitude": (
-                    float(last_location["latitude"]) if last_location else None
-                ),
-                "last_longitude": (
-                    float(last_location["longitude"]) if last_location else None
-                ),
-                "last_seen": (
-                    last_location["recorded_at"].isoformat() if last_location else None
-                ),
-                "accuracy": (last_location["accuracy"] if last_location else None),
+                "work_status": "NOT_WORKING",
+                "connection": "OFFLINE",
+                "gps_status": "GPS_OFF",
+                "movement_status": "stopped",
+                "active_workday": False,
             }
-        )
+
+        today_distance_km = 0.0
+        try:
+            today_distance_km = _compute_distance_km(user.id, today)
+        except Exception:
+            logger.debug("Distance calc skipped user_id=%s", user_id, exc_info=True)
+
+        row["today_distance_km"] = today_distance_km
+        row["accuracy"] = last_location["accuracy"] if last_location else None
+        row["is_on_field"] = row.get("active_workday", False)
+        return Response(row)
 
 
 # ──────────────────────────────────────────────
@@ -1302,13 +1294,18 @@ class EmployeeStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        expire_old_workdays()
         total = EmployeeProfile.objects.count()
         today = timezone.localdate()
-        online = (
-            WorkDay.objects.filter(date=today, is_active=True)
-            .values("user")
-            .distinct()
-            .count()
+        now = timezone.now()
+        online = sum(
+            1
+            for wd in WorkDay.objects.filter(date=today, is_active=True).only(
+                "start_time", "last_heartbeat", "is_active"
+            )
+            if is_workday_within_duration(wd, now)
+            and wd.last_heartbeat
+            and wd.last_heartbeat >= now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
         )
         offline = total - online
 

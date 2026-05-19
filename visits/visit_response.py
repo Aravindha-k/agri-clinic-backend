@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 
 from visits.models import Visit
 
+from utils.photo_urls import build_profile_photo_url
+
 # Use on all visit list/detail querysets so farmer/crop are not blank when FK exists.
 VISIT_LIST_SELECT_RELATED = (
     "employee",
@@ -29,14 +31,20 @@ def crop_display_name(visit: Visit) -> str:
     return crop.name_en or ""
 
 
-def build_visit_farmer_block(visit: Visit) -> Optional[Dict[str, Any]]:
+def build_visit_farmer_block(
+    visit: Visit, request=None
+) -> Optional[Dict[str, Any]]:
     """
     Nested farmer object for visit responses (mobile + admin).
     Includes both `mobile` and `phone` (same value) for client compatibility.
     """
+    profile_photo_url = None
     if visit.farmer_id:
         name = visit.farmer.name
         mobile = visit.farmer.phone
+        profile_photo_url = build_profile_photo_url(
+            request, visit.farmer.profile_photo
+        )
         village = ""
         if visit.farmer.village_id:
             village = visit.farmer.village.name
@@ -61,11 +69,27 @@ def build_visit_farmer_block(visit: Visit) -> Optional[Dict[str, Any]]:
         "mobile": mobile or "",
         "phone": mobile or "",
         "village": village or "",
+        "profile_photo_url": profile_photo_url,
         "crop_name": crop_display_name(visit),
         "acreage": acreage,
         "land_area": acreage,
         "latitude": visit.latitude,
         "longitude": visit.longitude,
+    }
+
+
+def build_visit_employee_block(visit: Visit, request=None) -> Dict[str, Any]:
+    profile = getattr(visit.employee, "employee_profile", None)
+    updated_at = profile.profile_photo_updated_at if profile else None
+    return {
+        "id": visit.employee_id,
+        "username": visit.employee.username,
+        "employee_id": profile.employee_id if profile else None,
+        "phone": profile.phone if profile else "",
+        "profile_photo_url": build_profile_photo_url(
+            request, profile.profile_photo if profile else None
+        ),
+        "profile_photo_updated_at": updated_at.isoformat() if updated_at else None,
     }
 
 

@@ -8,7 +8,11 @@ from visits.access import is_privileged_user
 from visits.api_fields import strip_visit_status_from_representation
 from visits.submitted import validate_visit_submit_data
 from .models import Visit, VisitMedia, VisitAttachment
-from .visit_response import build_visit_farmer_block, crop_display_name
+from .visit_response import (
+    build_visit_employee_block,
+    build_visit_farmer_block,
+    crop_display_name,
+)
 
 
 class VisitMediaSerializer(serializers.ModelSerializer):
@@ -48,6 +52,7 @@ class VisitSerializer(serializers.ModelSerializer):
     farmer_mobile = serializers.SerializerMethodField()
     farmer_village = serializers.SerializerMethodField()
     field_info = serializers.SerializerMethodField()
+    employee_profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Visit
@@ -75,23 +80,31 @@ class VisitSerializer(serializers.ModelSerializer):
     def get_crop_name(self, obj):
         return crop_display_name(obj)
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_employee_profile_photo_url(self, obj):
+        block = build_visit_employee_block(obj, self.context.get("request"))
+        return block.get("profile_photo_url")
+
     def to_representation(self, instance):
+        request = self.context.get("request")
         data = strip_visit_status_from_representation(super().to_representation(instance))
         data["employee"] = instance.employee_id
-        block = build_visit_farmer_block(instance)
+        data["employee_detail"] = build_visit_employee_block(instance, request)
+        block = build_visit_farmer_block(instance, request)
         if block:
             data["farmer"] = block
         return data
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_farmer_info(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         if not block:
             return None
         out = {
             "id": block.get("id"),
             "name": block.get("name"),
             "phone": block.get("mobile") or block.get("phone"),
+            "profile_photo_url": block.get("profile_photo_url"),
         }
         if obj.farmer_id and obj.farmer.farmer_code:
             out["farmer_code"] = obj.farmer.farmer_code
@@ -99,17 +112,17 @@ class VisitSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_farmer_name(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         return block.get("name") if block else None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_farmer_mobile(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         return block.get("mobile") if block else None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_farmer_village(self, obj):
-        block = build_visit_farmer_block(obj)
+        block = build_visit_farmer_block(obj, self.context.get("request"))
         return block.get("village") if block else None
 
     @extend_schema_field(OpenApiTypes.OBJECT)

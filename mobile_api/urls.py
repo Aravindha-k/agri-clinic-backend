@@ -28,11 +28,31 @@ urlpatterns = [
         views.MobileVisitMediaUploadAPI.as_view(),
         name="mobile-visit-media",
     ),
+    path(
+        "visits/<int:visit_id>/attachments/",
+        views.MobileVisitAttachmentListCreateAPI.as_view(),
+        name="mobile-visit-attachments",
+    ),
+    path(
+        "visits/<int:visit_id>/attachments/<int:attachment_id>/",
+        views.MobileVisitAttachmentDeleteAPI.as_view(),
+        name="mobile-visit-attachment-delete",
+    ),
     path("farmers/", views.MobileFarmerListAPI.as_view(), name="mobile-farmers"),
     path(
         "farmers/<int:pk>/",
         views.MobileFarmerDetailAPI.as_view(),
         name="mobile-farmer-detail",
+    ),
+    path(
+        "farmers/<int:pk>/photo/",
+        views.MobileFarmerPhotoAPI.as_view(),
+        name="mobile-farmer-photo",
+    ),
+    path(
+        "profile/photo/",
+        views.MobileProfilePhotoAPI.as_view(),
+        name="mobile-profile-photo",
     ),
     path("map/visits/", views.MobileVisitMapAPI.as_view(), name="mobile-map-visits"),
 ]

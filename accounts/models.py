@@ -53,6 +53,14 @@ class EmployeeProfile(models.Model):
 
     can_login = models.BooleanField(default=True)
 
+    profile_photo = models.ImageField(
+        upload_to="employee_photos/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+
+    profile_photo_updated_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -23,7 +23,9 @@ def _invalidate_after_visit_change():
 
 
 @receiver(post_save, sender=Visit)
-def visit_post_save_sync_farmer(sender, instance, **kwargs):
+def visit_post_save_sync_farmer(sender, instance, raw=False, **kwargs):
+    if raw:
+        return
     global _syncing
     if _syncing:
         return
