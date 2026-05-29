@@ -34,6 +34,7 @@ urlpatterns = [
     path("heartbeat/", HeartbeatAPI.as_view()),
     path("location/push/", PushLocationAPI.as_view()),
     path("location/bulk/", BulkLocationUploadAPI.as_view()),
+    path("location/bulk-push/", BulkPushLocationAPI.as_view()),
     # WorkLog endpoints
     path("work/start/", WorkLogStartAPI.as_view()),
     path("work/end/", WorkLogEndAPI.as_view()),

@@ -73,6 +73,16 @@ class LocationLog(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6)
 
     accuracy = models.FloatField(null=True, blank=True)
+    speed = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Speed in km/h when provided by the device",
+    )
+    heading = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Heading/bearing in degrees when provided by the device",
+    )
 
     # Device / context fields (mobile-ready)
     battery_level = models.IntegerField(null=True, blank=True)

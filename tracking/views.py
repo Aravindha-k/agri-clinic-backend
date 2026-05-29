@@ -39,8 +39,13 @@ from .serializers import (
     BulkLocationPushSerializer,
     HeartbeatSerializer,
 )
-from utils.response import api_response
+from utils.response import api_response, not_found_response, success_response
 from utils.schema import SIMPLE_SUCCESS, PAGINATION_PARAMS, error_schema
+from .route_utils import (
+    build_admin_route_data,
+    build_route_points,
+    get_route_queryset,
+)
 
 
 @extend_schema(
@@ -102,7 +107,7 @@ class BulkLocationUploadAPI(APIView):
                 data=ldata, context={"request": request}
             )
             if serializer.is_valid():
-                loc = serializer.save(user=request.user)
+                loc = serializer.save()
                 created.append(loc.id)
             else:
                 errors.append(serializer.errors)
@@ -253,8 +258,14 @@ class StartWorkDayAPI(APIView):
                 workday_kwargs["longitude"] = float(lng)
             except (TypeError, ValueError):
                 pass
-        WorkDay.objects.create(**workday_kwargs)
-        return Response({"message": "Workday started"}, status=201)
+        workday = WorkDay.objects.create(**workday_kwargs)
+        logger.info(
+            "WorkdayStart user_id=%s workday_id=%s start_time=%s",
+            request.user.pk,
+            workday.pk,
+            workday.start_time,
+        )
+        return Response({"message": "Workday started", "workday_id": workday.id}, status=201)
 
 
 # ──────────────────────────────────────────────
@@ -446,8 +457,11 @@ class BulkPushLocationAPI(APIView):
         device_model = serializer.validated_data.get("device_model")
         app_version = serializer.validated_data.get("app_version")
 
-        # Sort by recorded_at so jump detection is sequential
-        points.sort(key=lambda p: p["recorded_at"])
+        def _point_time(pt):
+            return pt.get("captured_at") or pt.get("recorded_at") or timezone.now()
+
+        # Sort by device timestamp so jump detection is sequential
+        points.sort(key=_point_time)
 
         # Get last saved point for jump detection
         prev = (
@@ -477,6 +491,7 @@ class BulkPushLocationAPI(APIView):
                 if jump > GPS_JUMP_KM:
                     is_sus = True
 
+            recorded_at = _point_time(pt)
             objects_to_create.append(
                 LocationLog(
                     user=user,
@@ -484,11 +499,13 @@ class BulkPushLocationAPI(APIView):
                     latitude=pt["latitude"],
                     longitude=pt["longitude"],
                     accuracy=pt.get("accuracy"),
+                    speed=pt.get("speed"),
+                    heading=pt.get("heading"),
                     battery_level=pt.get("battery_level"),
                     network_type=pt.get("network_type"),
                     device_model=device_model,
                     app_version=app_version,
-                    recorded_at=pt["recorded_at"],
+                    recorded_at=recorded_at,
                     is_suspicious=is_sus,
                 )
             )
@@ -1029,62 +1046,48 @@ class AdminEmployeeRouteAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request, user_id):
-        get_object_or_404(EmployeeProfile, user_id=user_id)
+        try:
+            emp = EmployeeProfile.objects.get(
+                user_id=user_id,
+                is_active_employee=True,
+            )
+        except EmployeeProfile.DoesNotExist:
+            logger.info("AdminRoute employee not found or inactive user_id=%s", user_id)
+            return not_found_response("Employee not found")
 
         date_str = request.GET.get("date")
         target_date = parse_date(date_str) if date_str else timezone.now().date()
 
-        points = list(
-            LocationLog.objects.filter(
+        try:
+            qs = get_route_queryset(user_id=user_id, target_date=target_date)
+            route = build_route_points(qs)
+            data = build_admin_route_data(
+                employee_id=emp.employee_id,
                 user_id=user_id,
-                recorded_at__date=target_date,
+                target_date=target_date,
+                route=route,
             )
-            .order_by("recorded_at")
-            .values(
-                "id",
-                "user_id",
-                "workday_id",
-                "latitude",
-                "longitude",
-                "accuracy",
-                "is_suspicious",
-                "recorded_at",
-                "created_at",
+        except Exception:
+            logger.exception(
+                "AdminRoute failed user_id=%s date=%s", user_id, target_date
             )
+            data = build_admin_route_data(
+                employee_id=emp.employee_id,
+                user_id=user_id,
+                target_date=target_date,
+                route=[],
+            )
+
+        logger.info(
+            "AdminRoute user_id=%s employee_id=%s date=%s total_points=%s",
+            user_id,
+            emp.employee_id,
+            target_date,
+            data["total_points"],
         )
-
-        route = [
-            {
-                "id": p["id"],
-                "user_id": p["user_id"],
-                "workday_id": p["workday_id"],
-                "latitude": float(p["latitude"]),
-                "longitude": float(p["longitude"]),
-                "accuracy": p["accuracy"],
-                "is_suspicious": p["is_suspicious"],
-                "recorded_at": p["recorded_at"].isoformat(),
-                "created_at": p["created_at"].isoformat() if p["created_at"] else None,
-            }
-            for p in points
-        ]
-
-        total_km = 0.0
-        for i in range(1, len(route)):
-            total_km += distance_km(
-                route[i - 1]["latitude"],
-                route[i - 1]["longitude"],
-                route[i]["latitude"],
-                route[i]["longitude"],
-            )
-
-        return Response(
-            {
-                "user_id": user_id,
-                "date": str(target_date),
-                "total_points": len(route),
-                "total_distance_km": round(total_km, 2),
-                "route": route,
-            }
+        return success_response(
+            data=data,
+            message="Route loaded" if data["total_points"] else "No route points for date",
         )
 
 

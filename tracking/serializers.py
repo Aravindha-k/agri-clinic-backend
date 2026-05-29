@@ -84,7 +84,10 @@ class LocationLogCreateSerializer(serializers.Serializer):
     latitude = FlexibleDecimalField(max_digits=9, decimal_places=6)
     longitude = FlexibleDecimalField(max_digits=9, decimal_places=6)
     accuracy = serializers.FloatField(required=False)
+    speed = serializers.FloatField(required=False)
+    heading = serializers.FloatField(required=False)
     recorded_at = FlexibleDateTimeField(required=False)
+    captured_at = FlexibleDateTimeField(required=False)
     battery_level = serializers.IntegerField(required=False, min_value=0, max_value=100)
     network_type = serializers.CharField(required=False, max_length=20)
     device_model = serializers.CharField(required=False, max_length=100)
@@ -107,7 +110,11 @@ class LocationLogCreateSerializer(serializers.Serializer):
         if not workday:
             raise serializers.ValidationError("No active workday")
 
-        recorded_at = self.validated_data.get("recorded_at") or timezone.now()
+        recorded_at = (
+            self.validated_data.get("captured_at")
+            or self.validated_data.get("recorded_at")
+            or timezone.now()
+        )
 
         location = LocationLog.objects.create(
             user=user,
@@ -115,6 +122,8 @@ class LocationLogCreateSerializer(serializers.Serializer):
             latitude=self.validated_data["latitude"],
             longitude=self.validated_data["longitude"],
             accuracy=self.validated_data.get("accuracy"),
+            speed=self.validated_data.get("speed"),
+            heading=self.validated_data.get("heading"),
             battery_level=self.validated_data.get("battery_level"),
             network_type=self.validated_data.get("network_type"),
             device_model=self.validated_data.get("device_model"),
@@ -141,7 +150,10 @@ class BulkLocationPointSerializer(serializers.Serializer):
     latitude = FlexibleDecimalField(max_digits=9, decimal_places=6)
     longitude = FlexibleDecimalField(max_digits=9, decimal_places=6)
     accuracy = serializers.FloatField(required=False)
-    recorded_at = FlexibleDateTimeField()
+    speed = serializers.FloatField(required=False)
+    heading = serializers.FloatField(required=False)
+    recorded_at = FlexibleDateTimeField(required=False)
+    captured_at = FlexibleDateTimeField(required=False)
     battery_level = serializers.IntegerField(required=False, min_value=0, max_value=100)
     network_type = serializers.CharField(required=False, max_length=20)
 
@@ -158,6 +170,8 @@ class BulkLocationPushSerializer(serializers.Serializer):
 
 
 class LocationLogSerializer(serializers.ModelSerializer):
+    captured_at = serializers.DateTimeField(source="recorded_at", read_only=True)
+
     class Meta:
         model = LocationLog
         fields = [
@@ -165,9 +179,12 @@ class LocationLogSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "accuracy",
+            "speed",
+            "heading",
             "battery_level",
             "is_suspicious",
             "recorded_at",
+            "captured_at",
             "created_at",
         ]
 
