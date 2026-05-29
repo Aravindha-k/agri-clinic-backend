@@ -46,6 +46,7 @@ from .route_utils import (
     build_route_points,
     get_route_queryset,
 )
+from mobile_api.device_session import DeviceSessionRequiredMixin
 
 
 @extend_schema(
@@ -65,7 +66,7 @@ from .route_utils import (
     },
     responses={201: SIMPLE_SUCCESS},
 )
-class BulkLocationUploadAPI(APIView):
+class BulkLocationUploadAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -226,7 +227,7 @@ def _compute_distance_km(user_id, date):
     request=None,
     responses={201: SIMPLE_SUCCESS, 400: error_schema("WorkdayAlreadyStarted")},
 )
-class StartWorkDayAPI(APIView):
+class StartWorkDayAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -278,7 +279,7 @@ class StartWorkDayAPI(APIView):
     request=None,
     responses={200: SIMPLE_SUCCESS, 400: error_schema("NoActiveWorkday")},
 )
-class EndWorkDayAPI(APIView):
+class EndWorkDayAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -310,7 +311,7 @@ class EndWorkDayAPI(APIView):
     request=None,
     responses={200: SIMPLE_SUCCESS},
 )
-class HeartbeatAPI(APIView):
+class HeartbeatAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -338,7 +339,7 @@ class HeartbeatAPI(APIView):
     request=BulkLocationPushSerializer,
     responses={201: SIMPLE_SUCCESS, 400: error_schema("LocationPushError")},
 )
-class PushLocationAPI(APIView):
+class PushLocationAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -420,7 +421,7 @@ class PushLocationAPI(APIView):
     description="Batch-upload up to 500 GPS location points. Used for offline sync. Validates and filters suspicious points.",
     responses={201: SIMPLE_SUCCESS, 207: SIMPLE_SUCCESS},
 )
-class BulkPushLocationAPI(APIView):
+class BulkPushLocationAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):

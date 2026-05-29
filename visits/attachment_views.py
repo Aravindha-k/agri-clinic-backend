@@ -6,6 +6,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from api.admin.permissions import IsAdminUser
 from utils.response import created_response, error_response, success_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
@@ -48,7 +49,7 @@ def _serialize_list(request, queryset):
     summary="List visit attachments (mobile)",
     responses={200: SIMPLE_SUCCESS, 403: error_schema("Forbidden")},
 )
-class MobileVisitAttachmentListCreateAPI(APIView):
+class MobileVisitAttachmentListCreateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -89,7 +90,7 @@ class MobileVisitAttachmentListCreateAPI(APIView):
     summary="Delete visit attachment (mobile)",
     responses={200: SIMPLE_SUCCESS, 403: error_schema("Forbidden")},
 )
-class MobileVisitAttachmentDeleteAPI(APIView):
+class MobileVisitAttachmentDeleteAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, visit_id, attachment_id):

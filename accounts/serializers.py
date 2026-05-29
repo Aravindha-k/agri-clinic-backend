@@ -177,6 +177,7 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
     first_name = serializers.CharField(source="user.first_name", read_only=True)
     last_name = serializers.CharField(source="user.last_name", read_only=True)
     can_login = serializers.BooleanField(source="user.is_active", read_only=True)
+    device_status = serializers.SerializerMethodField()
     district_id = serializers.IntegerField(
         source="district.id", read_only=True, allow_null=True
     )
@@ -201,6 +202,7 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             "can_login",
             "profile_photo_url",
             "profile_photo_updated_at",
+            "device_status",
             "created_at",
         ]
         read_only_fields = (
@@ -210,6 +212,11 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             "profile_photo_url",
             "profile_photo_updated_at",
         )
+
+    def get_device_status(self, obj):
+        from accounts.device_sessions import device_status_payload
+
+        return device_status_payload(obj.user)
 
 
 # =========================

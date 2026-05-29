@@ -107,6 +107,7 @@ def _extract_code(http_status: int) -> str:
         404: "NOT_FOUND",
         405: "METHOD_NOT_ALLOWED",
         422: "VALIDATION_ERROR",
+        409: "DEVICE_SESSION_CONFLICT",
         429: "THROTTLED",
         500: "SERVER_ERROR",
     }

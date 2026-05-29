@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.conf import settings
 
@@ -68,3 +70,35 @@ class EmployeeProfile(models.Model):
 
     def __str__(self):
         return f"{self.employee_id} | {self.user.username}"
+
+
+class EmployeeDeviceSession(models.Model):
+    """
+    One active mobile device session per employee.
+    Latest login invalidates previous sessions (latest wins).
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="device_sessions",
+    )
+    session_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    device_name = models.CharField(max_length=120, null=True, blank=True)
+    device_model = models.CharField(max_length=120, null=True, blank=True)
+    platform = models.CharField(max_length=40, null=True, blank=True)
+    app_version = models.CharField(max_length=40, null=True, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_login_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_login_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} | {self.session_key} | active={self.is_active}"

@@ -1,12 +1,11 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
-
 from utils.response import success_response
 from utils.schema import SIMPLE_SUCCESS
 from visits.submitted import submitted_visits_qs
 from visits.visit_response import crop_display_name
 
+from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 
 
@@ -19,7 +18,7 @@ from .permissions import IsEmployeeUser
     ),
     responses={200: SIMPLE_SUCCESS},
 )
-class MobileVisitMapAPI(APIView):
+class MobileVisitMapAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request):

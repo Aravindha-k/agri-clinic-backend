@@ -4,13 +4,13 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
 
 from farmers.serializers import FarmerFieldSerializer, FarmerListSerializer
 from farmers.views import StandardPagination, _farmers_queryset_with_visit_counts
 from utils.response import success_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 
+from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
     ),
     responses={200: FarmerListSerializer(many=True), 403: error_schema("Forbidden")},
 )
-class MobileFarmerListAPI(APIView):
+class MobileFarmerListAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request):
@@ -55,7 +55,7 @@ class MobileFarmerListAPI(APIView):
     description="Farmer profile with active fields for the mobile detail screen.",
     responses={200: FarmerListSerializer, 404: error_schema("FarmerNotFound")},
 )
-class MobileFarmerDetailAPI(APIView):
+class MobileFarmerDetailAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request, pk):

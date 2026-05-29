@@ -1,10 +1,10 @@
 import logging
 
 from django.shortcuts import get_object_or_404
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
+from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
@@ -57,7 +57,7 @@ def _visit_timeline(visit: Visit) -> list[dict]:
         400: error_schema("MobileVisitValidationError"),
     },
 )
-class MobileVisitListCreateAPI(APIView):
+class MobileVisitListCreateAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
@@ -152,7 +152,7 @@ class MobileVisitListCreateAPI(APIView):
     description="Submitted visit detail plus farmer visit timeline for the employee.",
     responses={200: SIMPLE_SUCCESS, 404: error_schema("VisitNotFound")},
 )
-class MobileVisitDetailAPI(APIView):
+class MobileVisitDetailAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request, pk):
@@ -172,7 +172,7 @@ class MobileVisitDetailAPI(APIView):
     request=VisitMediaUploadSerializer,
     responses={201: SIMPLE_SUCCESS, 400: error_schema("MediaUploadError")},
 )
-class MobileVisitMediaUploadAPI(APIView):
+class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
     parser_classes = [MultiPartParser, FormParser]
 

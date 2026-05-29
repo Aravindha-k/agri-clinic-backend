@@ -10,6 +10,7 @@ from accounts.employee_photo import employee_me_payload, save_employee_profile_p
 from accounts.models import EmployeeProfile
 from accounts.serializers import AdminEmployeeListSerializer
 from api.admin.permissions import IsAdminUser
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from mobile_api.permissions import IsEmployeeUser
 from utils.profile_photos import validate_profile_photo
 from utils.response import error_response, success_response
@@ -77,7 +78,7 @@ class EmployeeSelfPhotoAPI(APIView):
     summary="Upload own profile photo (mobile)",
     responses={200: SIMPLE_SUCCESS, 404: error_schema("ProfileNotFound")},
 )
-class MobileEmployeePhotoAPI(EmployeeSelfPhotoAPI):
+class MobileEmployeePhotoAPI(DeviceSessionRequiredMixin, EmployeeSelfPhotoAPI):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
 

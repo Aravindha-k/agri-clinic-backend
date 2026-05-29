@@ -190,9 +190,12 @@ def build_admin_tracking_row(
         elif diff <= 15:
             tracking_health = "STALE"
 
+    from accounts.device_sessions import device_status_payload
+
     return {
         "user_id": uid,
         "employee_id": emp.employee_id,
+        "device_status": device_status_payload(user),
         "username": user.username or emp.employee_id,
         "employee_name": user.username or emp.employee_id,
         "phone": emp.phone or "",

@@ -7,8 +7,10 @@ from rest_framework.response import Response
 from rest_framework import serializers, status
 from drf_spectacular.utils import extend_schema
 from accounts.models import EmployeeProfile
+from accounts.device_sessions import register_device_session
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
+from .device_session import DeviceSessionRequiredMixin
 import logging
 
 
@@ -18,7 +20,7 @@ import logging
     description="Returns the authenticated employee profile details for mobile clients.",
     responses={200: SIMPLE_SUCCESS, 404: error_schema("MobileProfileNotFound")},
 )
-class MobileMeView(APIView):
+class MobileMeView(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -79,9 +81,15 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
             )
             raise AuthenticationFailed("Invalid username or password")
 
+        request = self.context.get("request")
+        device_session = register_device_session(
+            user,
+            request_data=request.data if request else None,
+        )
         return {
             "access": data["access"],
             "refresh": data["refresh"],
+            "device_session_id": str(device_session.session_key),
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -97,10 +105,12 @@ class MobileTokenObtainPairView(TokenObtainPairView):
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
-        # Print the response data to server logs
-        import logging
-
-        logging.warning("LOGIN RESPONSE: %s", response.data)
+        if response.status_code == 200:
+            logging.info(
+                "Mobile login OK user_id=%s device_session=%s",
+                response.data.get("user", {}).get("id"),
+                bool(response.data.get("device_session_id")),
+            )
         return response
 
 

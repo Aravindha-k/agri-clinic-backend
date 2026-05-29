@@ -1,6 +1,6 @@
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
+from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
     },
     responses={200: SIMPLE_SUCCESS, 400: error_schema("MobileWorkStartError")},
 )
-class MobileWorkStartAPI(APIView):
+class MobileWorkStartAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def post(self, request):
@@ -72,7 +72,7 @@ class MobileWorkStartAPI(APIView):
     request=None,
     responses={200: SIMPLE_SUCCESS, 400: error_schema("MobileWorkStopError")},
 )
-class MobileWorkStopAPI(APIView):
+class MobileWorkStopAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def post(self, request):
@@ -96,7 +96,7 @@ class MobileWorkStopAPI(APIView):
     description="Returns whether workday is started, expired, or not_started.",
     responses={200: SIMPLE_SUCCESS},
 )
-class MobileWorkStatusAPI(APIView):
+class MobileWorkStatusAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request):

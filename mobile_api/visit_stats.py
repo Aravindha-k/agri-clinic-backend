@@ -1,6 +1,6 @@
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
+from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 from utils.response import success_response
 from utils.schema import SIMPLE_SUCCESS
@@ -16,7 +16,7 @@ from django.utils import timezone
     ),
     responses={200: SIMPLE_SUCCESS},
 )
-class MobileVisitStatsAPI(APIView):
+class MobileVisitStatsAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request):

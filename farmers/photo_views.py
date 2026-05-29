@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from api.admin.permissions import IsAdminUser
+from mobile_api.device_session import DeviceSessionRequiredMixin
+from mobile_api.permissions import IsEmployeeUser
 from farmers.access import farmer_photo_editable_by
 from farmers.serializers import FarmerListSerializer
 from farmers.views import _farmers_queryset_for_user
@@ -71,9 +73,7 @@ class FarmerPhotoAPI(BaseFarmerPhotoAPI):
     summary="Upload farmer profile photo (admin)",
     responses={200: SIMPLE_SUCCESS},
 )
-class MobileFarmerPhotoAPI(BaseFarmerPhotoAPI):
-    from mobile_api.permissions import IsEmployeeUser
-
+class MobileFarmerPhotoAPI(DeviceSessionRequiredMixin, BaseFarmerPhotoAPI):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
 

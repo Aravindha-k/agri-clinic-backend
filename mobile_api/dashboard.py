@@ -1,6 +1,6 @@
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
+from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
@@ -20,7 +20,7 @@ from django.utils import timezone
     ),
     responses={200: SIMPLE_SUCCESS, 500: error_schema("MobileDashboardError")},
 )
-class MobileDashboardAPI(APIView):
+class MobileDashboardAPI(MobileEmployeeAPIView):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
     def get(self, request):
