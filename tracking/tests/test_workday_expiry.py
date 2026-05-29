@@ -24,6 +24,8 @@ class WorkdayExpiryTest(TestCase):
             username="admin_wd", password="x", is_staff=True, is_superuser=True
         )
         self.employee = User.objects.create_user(username="emp_wd", password="x")
+        self.employee.set_password("x")
+        self.employee.save()
         EmployeeProfile.objects.create(
             user=self.employee,
             employee_id="WD-001",
@@ -33,7 +35,15 @@ class WorkdayExpiryTest(TestCase):
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
         self.emp_client = APIClient()
-        self.emp_client.force_authenticate(user=self.employee)
+        login = self.emp_client.post(
+            "/api/v1/mobile/auth/login/",
+            {"employee_id": "WD-001", "password": "x"},
+            format="json",
+        )
+        self.emp_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login.data['access']}",
+            HTTP_X_DEVICE_SESSION=login.data["device_session_id"],
+        )
 
     def _active_workday(self, *, hours_ago=1):
         now = timezone.now()

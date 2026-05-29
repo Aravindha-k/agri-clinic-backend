@@ -34,9 +34,22 @@ class RouteTrackingAPITest(APITestCase):
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
         self.emp_client = APIClient()
-        self.emp_client.force_authenticate(user=self.employee)
         self.other_client = APIClient()
-        self.other_client.force_authenticate(user=self.other)
+        self._mobile_login(self.emp_client, "RT-001")
+        self._mobile_login(self.other_client, "RT-002")
+
+    def _mobile_login(self, client, employee_id, password="x"):
+        r = client.post(
+            "/api/v1/mobile/auth/login/",
+            {"employee_id": employee_id, "password": password},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {r.data['access']}",
+            HTTP_X_DEVICE_SESSION=r.data["device_session_id"],
+        )
+        return r
 
     def _start_workday(self, client=None):
         client = client or self.emp_client
