@@ -3,6 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile
+from mobile_api.test_helpers import login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.models import Visit
 from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, visit_has_submitted_details
@@ -40,8 +41,7 @@ class VisitSubmitOnlyCreationTest(TestCase):
             "latitude": 12.9716,
             "longitude": 77.5946,
         }
-        self.emp_client = APIClient()
-        self.emp_client.force_authenticate(user=self.employee)
+        self.emp_client = login_mobile_client(employee_id="EMP-SUBMIT-01")
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
 

@@ -145,6 +145,8 @@ class RouteTrackingAPITest(APITestCase):
         self.assertEqual(r.data["data"]["locations"], route)
         self.assertIn("captured_at", route[0])
         self.assertIn("created_at", route[0])
+        self.assertIn("polyline", r.data["data"])
+        self.assertEqual(len(r.data["data"]["polyline"]), 2)
 
     def test_admin_route_empty_when_no_logs(self):
         today = timezone.localdate()

@@ -152,7 +152,8 @@ class ToggleActiveTests(TestCase):
         toggle_url = f"/api/v1/employees/{self.profile.employee_id}/toggle/"
         self.client.post(toggle_url)
         list_resp = self.client.get("/api/v1/employees/")
-        employees = list_resp.json()["data"]
+        payload = list_resp.json()
+        employees = payload.get("results") or payload.get("data", {}).get("results") or []
         match = next(
             (e for e in employees if e["employee_id"] == self.profile.employee_id), None
         )
@@ -335,8 +336,9 @@ class ProfilePhotoAPITest(APITestCase):
             longitude=77.59,
         )
 
-        self.emp_client = APIClient()
-        self.emp_client.force_authenticate(user=self.employee)
+        from mobile_api.test_helpers import login_mobile_client
+
+        self.emp_client = login_mobile_client(employee_id="EMP-PHOTO-1")
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
 

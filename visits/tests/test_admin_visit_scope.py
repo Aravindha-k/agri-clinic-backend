@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
+from mobile_api.test_helpers import login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
@@ -24,10 +25,8 @@ class AdminVisitScopeTest(APITestCase):
 
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
-        self.client_a = APIClient()
-        self.client_a.force_authenticate(user=self.emp_a)
-        self.client_b = APIClient()
-        self.client_b.force_authenticate(user=self.emp_b)
+        self.client_a = login_mobile_client(employee_id="EMP-A")
+        self.client_b = login_mobile_client(employee_id="EMP-B")
 
         district = District.objects.create(name="Scope District")
         village = Village.objects.create(name="Scope Village", district=district)

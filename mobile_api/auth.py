@@ -86,10 +86,13 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
             user,
             request_data=request.data if request else None,
         )
+        profile.refresh_from_db()
         return {
             "access": data["access"],
             "refresh": data["refresh"],
             "device_session_id": str(device_session.session_key),
+            "active_device_id": profile.active_device_id,
+            "session_version": profile.mobile_session_version,
             "user": {
                 "id": user.id,
                 "username": user.username,

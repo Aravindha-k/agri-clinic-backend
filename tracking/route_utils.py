@@ -94,21 +94,66 @@ def compute_route_distance_km(route: list[dict[str, Any]]) -> float:
     return round(total, 2)
 
 
+def _format_duration(seconds: int) -> str:
+    seconds = max(int(seconds), 0)
+    hours, remainder = divmod(seconds, 3600)
+    minutes = remainder // 60
+    return f"{hours}h {minutes}m"
+
+
+def build_route_polyline(route: list[dict[str, Any]]) -> list[list[float]]:
+    """[[lat, lng], ...] for map polylines."""
+    return [[p["latitude"], p["longitude"]] for p in route]
+
+
 def build_admin_route_data(
     *,
     employee_id: str,
     user_id: int,
     target_date: date,
     route: list[dict[str, Any]],
+    workdays: list | None = None,
 ) -> dict[str, Any]:
-    """Payload for admin route API (includes legacy keys)."""
+    """Payload for admin route API (includes legacy keys + polyline)."""
+    start_time = route[0]["captured_at"] if route else None
+    end_time = route[-1]["captured_at"] if route else None
+    duration_seconds = 0
+    if len(route) >= 2 and route[0].get("captured_at") and route[-1].get("captured_at"):
+        from django.utils.dateparse import parse_datetime
+
+        t0 = parse_datetime(route[0]["captured_at"])
+        t1 = parse_datetime(route[-1]["captured_at"])
+        if t0 and t1:
+            duration_seconds = max(int((t1 - t0).total_seconds()), 0)
+
+    workday_start = None
+    workday_end = None
+    if workdays:
+        starts = [w.start_time for w in workdays if w.start_time]
+        ends = [w.end_time for w in workdays if w.end_time]
+        if starts:
+            workday_start = min(starts).isoformat()
+        if ends:
+            workday_end = max(ends).isoformat()
+        elif starts:
+            from .workday_utils import workday_scheduled_end
+
+            workday_end = workday_scheduled_end(max(starts)).isoformat()
+
     return {
         "date": str(target_date),
         "employee_id": employee_id,
         "user_id": user_id,
         "total_points": len(route),
         "total_distance_km": compute_route_distance_km(route),
+        "start_time": start_time,
+        "end_time": end_time,
+        "duration_seconds": duration_seconds,
+        "duration": _format_duration(duration_seconds),
+        "workday_start_time": workday_start,
+        "workday_end_time": workday_end,
         "route": route,
         "points": route,
         "locations": route,
+        "polyline": build_route_polyline(route),
     }

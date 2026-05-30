@@ -63,7 +63,7 @@ class DeviceSessionTest(TestCase):
             "/api/v1/tracking/workday/start/", {}, format="json"
         )
         self.assertEqual(r_conflict.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(r_conflict.data.get("code"), "DEVICE_SESSION_CONFLICT")
+        self.assertEqual(r_conflict.data.get("code"), "SESSION_REPLACED")
 
     def test_workday_start_requires_device_session_header(self):
         r = self._mobile_login()
@@ -92,6 +92,21 @@ class DeviceSessionTest(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertTrue(r.data.get("success"))
+
+    def test_mobile_me_returns_profile_fields(self):
+        r = self._mobile_login()
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {r.data['access']}",
+            HTTP_X_DEVICE_SESSION=r.data["device_session_id"],
+        )
+        me = self.client.get("/api/v1/mobile/auth/me/")
+        self.assertEqual(me.status_code, status.HTTP_200_OK)
+        data = me.data["data"]
+        self.assertEqual(data["employee_id"], "DS-001")
+        self.assertIn("designation", data)
+        self.assertIn("profile_photo_url", data)
+        self.assertIn("workday_status", data)
+        self.assertIn("active_device", data)
 
     def test_admin_employee_list_includes_device_status(self):
         self._mobile_login()

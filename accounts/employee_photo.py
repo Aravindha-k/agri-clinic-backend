@@ -29,9 +29,53 @@ def employee_photo_fields(request, profile: EmployeeProfile) -> dict:
     }
 
 
+def _workday_status_for_user(user) -> dict:
+    from tracking.models import WorkDay
+    from tracking.workday_utils import (
+        expire_overlong_workdays_for_user,
+        is_workday_within_duration,
+        workday_scheduled_end,
+    )
+
+    expire_overlong_workdays_for_user(user)
+    workday = (
+        WorkDay.objects.filter(user=user, is_active=True)
+        .order_by("-start_time")
+        .first()
+    )
+    if workday and is_workday_within_duration(workday):
+        return {
+            "status": "working",
+            "is_active": True,
+            "workday_id": workday.id,
+            "started_at": workday.start_time.isoformat(),
+            "ends_at": workday_scheduled_end(workday.start_time).isoformat(),
+            "auto_ended": False,
+        }
+    if workday and workday.auto_ended:
+        return {
+            "status": "auto_ended",
+            "is_active": False,
+            "workday_id": workday.id,
+            "started_at": workday.start_time.isoformat() if workday.start_time else None,
+            "ends_at": workday.end_time.isoformat() if workday.end_time else None,
+            "auto_ended": True,
+        }
+    return {
+        "status": "stopped",
+        "is_active": False,
+        "workday_id": None,
+        "started_at": None,
+        "ends_at": None,
+        "auto_ended": False,
+    }
+
+
 def employee_me_payload(request, profile: EmployeeProfile) -> dict:
     user = profile.user
     display_name = user.get_full_name() or user.username
+    from accounts.device_sessions import active_device_payload, device_status_payload
+
     payload = {
         "id": user.id,
         "profile_id": profile.id,
@@ -43,9 +87,13 @@ def employee_me_payload(request, profile: EmployeeProfile) -> dict:
         "last_name": user.last_name,
         "employee_id": profile.employee_id,
         "phone": profile.phone,
+        "designation": profile.get_role_display(),
         "role": profile.role,
         "is_active_employee": profile.is_active_employee,
         "can_login": user.is_active,
+        "workday_status": _workday_status_for_user(user),
+        "active_device": active_device_payload(user),
+        "device_status": device_status_payload(user),
     }
     payload.update(employee_photo_fields(request, profile))
     return payload

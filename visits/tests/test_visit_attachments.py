@@ -3,6 +3,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
+from mobile_api.test_helpers import login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.attachments import MAX_ATTACHMENT_BYTES
 from visits.models import Visit, VisitAttachment
@@ -38,10 +39,8 @@ class VisitAttachmentAPITest(APITestCase):
         )
         self.crop = Crop.objects.create(name_en="Maize", name_ta="Maize", is_active=True)
 
-        self.client_a = APIClient()
-        self.client_a.force_authenticate(user=self.employee_a)
-        self.client_b = APIClient()
-        self.client_b.force_authenticate(user=self.employee_b)
+        self.client_a = login_mobile_client(employee_id="EMP-ATT-A")
+        self.client_b = login_mobile_client(employee_id="EMP-ATT-B")
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
 

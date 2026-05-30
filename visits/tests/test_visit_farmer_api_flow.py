@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
+from mobile_api.test_helpers import login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
@@ -19,8 +20,7 @@ class VisitFarmerAPIFlowTest(APITestCase):
             phone="9000000100",
             is_active_employee=True,
         )
-        self.emp_client = APIClient()
-        self.emp_client.force_authenticate(user=self.employee)
+        self.emp_client = login_mobile_client(employee_id="EMP-FLOW-01")
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(user=self.admin)
 

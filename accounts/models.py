@@ -63,6 +63,9 @@ class EmployeeProfile(models.Model):
 
     profile_photo_updated_at = models.DateTimeField(null=True, blank=True)
 
+    mobile_session_version = models.PositiveIntegerField(default=0)
+    active_device_id = models.CharField(max_length=64, null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -84,6 +87,8 @@ class EmployeeDeviceSession(models.Model):
         related_name="device_sessions",
     )
     session_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    active_device_id = models.CharField(max_length=64, null=True, blank=True)
+    session_version = models.PositiveIntegerField(default=1)
     device_name = models.CharField(max_length=120, null=True, blank=True)
     device_model = models.CharField(max_length=120, null=True, blank=True)
     platform = models.CharField(max_length=40, null=True, blank=True)

@@ -1059,6 +1059,11 @@ class AdminEmployeeRouteAPI(APIView):
         date_str = request.GET.get("date")
         target_date = parse_date(date_str) if date_str else timezone.now().date()
 
+        workdays = list(
+            WorkDay.objects.filter(user_id=user_id, date=target_date).order_by(
+                "start_time"
+            )
+        )
         try:
             qs = get_route_queryset(user_id=user_id, target_date=target_date)
             route = build_route_points(qs)
@@ -1067,6 +1072,7 @@ class AdminEmployeeRouteAPI(APIView):
                 user_id=user_id,
                 target_date=target_date,
                 route=route,
+                workdays=workdays,
             )
         except Exception:
             logger.exception(
@@ -1077,6 +1083,7 @@ class AdminEmployeeRouteAPI(APIView):
                 user_id=user_id,
                 target_date=target_date,
                 route=[],
+                workdays=workdays,
             )
 
         logger.info(

@@ -2,27 +2,29 @@
 
 from __future__ import annotations
 
-from rest_framework.response import Response
+from rest_framework.exceptions import APIException
 from rest_framework.views import APIView
 
-from rest_framework.exceptions import APIException
-
-from accounts.device_sessions import DEVICE_SESSION_HEADER, validate_device_session
+from accounts.device_sessions import (
+    DEVICE_SESSION_HEADER,
+    SessionCheckResult,
+    check_device_session,
+)
 from utils.response import error_response
 
 
-class DeviceSessionConflict(APIException):
+class SessionReplaced(APIException):
     status_code = 409
-    default_code = "DEVICE_SESSION_CONFLICT"
+    default_code = "SESSION_REPLACED"
     default_detail = (
-        "Your account is active on another device. Please login again."
+        "You were logged out because this account was used on another device."
     )
 
 
-def device_session_conflict_response() -> Response:
+def session_replaced_response():
     return error_response(
-        message="Your account is active on another device. Please login again.",
-        code="DEVICE_SESSION_CONFLICT",
+        message="You were logged out because this account was used on another device.",
+        code="SESSION_REPLACED",
         status_code=409,
     )
 
@@ -38,13 +40,13 @@ class DeviceSessionRequiredMixin:
             session_id = request.headers.get(DEVICE_SESSION_HEADER) or request.META.get(
                 "HTTP_X_DEVICE_SESSION"
             )
-            session = validate_device_session(request.user, session_id)
-            if not session:
-                raise DeviceSessionConflict()
+            result = check_device_session(request.user, session_id)
+            if result != SessionCheckResult.OK:
+                raise SessionReplaced()
 
     def handle_exception(self, exc):
-        if isinstance(exc, DeviceSessionConflict):
-            return device_session_conflict_response()
+        if isinstance(exc, SessionReplaced):
+            return session_replaced_response()
         return super().handle_exception(exc)
 
     @staticmethod
