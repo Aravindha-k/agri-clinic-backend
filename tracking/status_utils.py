@@ -74,6 +74,71 @@ def is_recently_online(
     return bool(hb_ok or loc_ok)
 
 
+def batch_movement_status_map(
+    user_ids: list[int],
+    active_workdays: dict[int, WorkDay],
+    *,
+    now=None,
+) -> dict[int, str]:
+    """Last-two-point movement for many users (single query)."""
+    from django.db.models import F, Window
+    from django.db.models.functions import RowNumber
+
+    now = now or timezone.now()
+    result = {uid: "stopped" for uid in user_ids}
+    working_ids = [
+        uid
+        for uid in user_ids
+        if uid in active_workdays
+        and is_workday_within_duration(active_workdays[uid], now)
+    ]
+    if not working_ids:
+        return result
+
+    ranked = (
+        LocationLog.objects.filter(user_id__in=working_ids)
+        .annotate(
+            rn=Window(
+                expression=RowNumber(),
+                partition_by=[F("user_id")],
+                order_by=F("recorded_at").desc(),
+            )
+        )
+        .filter(rn__lte=2)
+        .values("user_id", "latitude", "longitude", "recorded_at")
+    )
+    points_by_user: dict[int, list] = {}
+    for row in ranked:
+        points_by_user.setdefault(row["user_id"], []).append(row)
+
+    for uid in working_ids:
+        points = sorted(
+            points_by_user.get(uid, []),
+            key=lambda p: p["recorded_at"],
+            reverse=True,
+        )
+        if len(points) < 2:
+            result[uid] = "idle"
+            continue
+        newer, older = points[0], points[1]
+        dt = (newer["recorded_at"] - older["recorded_at"]).total_seconds()
+        if dt <= 0 or dt > MOVEMENT_WINDOW_MINUTES * 60:
+            result[uid] = "idle"
+            continue
+        dist = _distance_km(
+            float(older["latitude"]),
+            float(older["longitude"]),
+            float(newer["latitude"]),
+            float(newer["longitude"]),
+        )
+        speed_kmh = (dist / dt) * 3600 if dt else 0
+        if dist >= MOVEMENT_MIN_DISTANCE_KM or speed_kmh >= MOVEMENT_MIN_SPEED_KMH:
+            result[uid] = "moving"
+        else:
+            result[uid] = "idle"
+    return result
+
+
 def resolve_movement_status(
     user_id: int,
     workday: WorkDay | None,
@@ -121,6 +186,8 @@ def build_admin_tracking_row(
     gps_off: bool,
     now=None,
     request=None,
+    movement_status: str | None = None,
+    device_status: dict | None = None,
 ) -> dict[str, Any]:
     """Standard admin tracking row; safe when workday/location is missing."""
     from utils.photo_urls import build_profile_photo_url
@@ -155,7 +222,8 @@ def build_admin_tracking_row(
         last_location_at=last_loc_at,
         now=now,
     )
-    movement_status = resolve_movement_status(uid, workday, now=now)
+    if movement_status is None:
+        movement_status = resolve_movement_status(uid, workday, now=now)
     work_status_internal = resolve_work_status(workday, now=now)
     work_status = _work_status_api(workday, now=now)
 
@@ -190,12 +258,15 @@ def build_admin_tracking_row(
         elif diff <= 15:
             tracking_health = "STALE"
 
-    from accounts.device_sessions import device_status_payload
+    if device_status is None:
+        from accounts.device_sessions import device_status_payload
+
+        device_status = device_status_payload(user)
 
     return {
         "user_id": uid,
         "employee_id": emp.employee_id,
-        "device_status": device_status_payload(user),
+        "device_status": device_status,
         "username": user.username or emp.employee_id,
         "employee_name": user.username or emp.employee_id,
         "phone": emp.phone or "",

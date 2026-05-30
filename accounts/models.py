@@ -70,6 +70,10 @@ class EmployeeProfile(models.Model):
 
     class Meta:
         ordering = ["employee_id"]
+        indexes = [
+            models.Index(fields=["is_active_employee"]),
+            models.Index(fields=["is_active_employee", "district"]),
+        ]
 
     def __str__(self):
         return f"{self.employee_id} | {self.user.username}"

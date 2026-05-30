@@ -26,7 +26,8 @@ from accounts.models import EmployeeProfile
 from utils.photo_urls import build_profile_photo_url
 from .models import WorkDay, AvailabilityEvent, LocationLog, EmployeeDailySummary
 from .selectors import get_last_known_location
-from .status_utils import build_admin_tracking_row
+from .status_utils import batch_movement_status_map, build_admin_tracking_row
+from accounts.device_sessions import batch_device_status_map
 from .workday_utils import (
     WORKDAY_EXPIRED_MESSAGE,
     expire_old_workdays,
@@ -39,7 +40,7 @@ from .serializers import (
     BulkLocationPushSerializer,
     HeartbeatSerializer,
 )
-from utils.response import api_response, not_found_response, success_response
+from utils.response import api_response, error_response, not_found_response, success_response
 from utils.schema import SIMPLE_SUCCESS, PAGINATION_PARAMS, error_schema
 from .route_utils import (
     build_admin_route_data,
@@ -406,6 +407,12 @@ class PushLocationAPI(DeviceSessionRequiredMixin, APIView):
             lat,
             lng,
         )
+        try:
+            from dashboard.services import invalidate_stats_cache_only
+
+            invalidate_stats_cache_only()
+        except Exception:
+            logger.exception("Stats cache invalidation failed after location push")
 
         out = LocationLogSerializer(location, context={"request": request}).data
         return Response({"message": "Location saved", "location": out}, status=201)
@@ -663,6 +670,12 @@ class AdminTrackingStatusAPI(APIView):
             ).values_list("user_id", flat=True)
         )
 
+        employee_user_ids = [emp.user_id for emp in employees]
+        device_status_map = batch_device_status_map(employee_user_ids)
+        movement_map = batch_movement_status_map(
+            employee_user_ids, active_workdays, now=now
+        )
+
         data = []
         for emp in employees:
             uid = emp.user_id
@@ -677,6 +690,8 @@ class AdminTrackingStatusAPI(APIView):
                     gps_off=uid in gps_off_user_ids,
                     now=now,
                     request=request,
+                    movement_status=movement_map.get(uid, "stopped"),
+                    device_status=device_status_map.get(uid),
                 )
             except Exception:
                 logger.exception("Failed to build tracking row user_id=%s", uid)
@@ -1047,6 +1062,7 @@ class AdminEmployeeRouteAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request, user_id):
+        expire_old_workdays()
         try:
             emp = EmployeeProfile.objects.get(
                 user_id=user_id,
@@ -1057,41 +1073,55 @@ class AdminEmployeeRouteAPI(APIView):
             return not_found_response("Employee not found")
 
         date_str = request.GET.get("date")
-        target_date = parse_date(date_str) if date_str else timezone.now().date()
+        if date_str:
+            target_date = parse_date(date_str)
+            if not target_date:
+                return error_response(
+                    message="Invalid date. Use YYYY-MM-DD.",
+                    code="INVALID_DATE",
+                    status_code=400,
+                )
+        else:
+            target_date = timezone.now().date()
+
+        from .route_utils import (
+            RouteDisplayOptions,
+            apply_route_display,
+            build_admin_route_data,
+            build_route_points,
+            get_route_queryset,
+        )
+
+        options = RouteDisplayOptions.from_request_params(
+            limit_raw=request.GET.get("limit"),
+            simplify_raw=request.GET.get("simplify"),
+        )
 
         workdays = list(
             WorkDay.objects.filter(user_id=user_id, date=target_date).order_by(
                 "start_time"
             )
         )
-        try:
-            qs = get_route_queryset(user_id=user_id, target_date=target_date)
-            route = build_route_points(qs)
-            data = build_admin_route_data(
-                employee_id=emp.employee_id,
-                user_id=user_id,
-                target_date=target_date,
-                route=route,
-                workdays=workdays,
-            )
-        except Exception:
-            logger.exception(
-                "AdminRoute failed user_id=%s date=%s", user_id, target_date
-            )
-            data = build_admin_route_data(
-                employee_id=emp.employee_id,
-                user_id=user_id,
-                target_date=target_date,
-                route=[],
-                workdays=workdays,
-            )
+        qs = get_route_queryset(user_id=user_id, target_date=target_date)
+        raw_route = build_route_points(qs)
+        display_route, display_meta = apply_route_display(raw_route, options)
+        data = build_admin_route_data(
+            employee_id=emp.employee_id,
+            user_id=user_id,
+            target_date=target_date,
+            route=display_route,
+            workdays=workdays,
+            display_meta=display_meta,
+        )
 
         logger.info(
-            "AdminRoute user_id=%s employee_id=%s date=%s total_points=%s",
+            "AdminRoute user_id=%s employee_id=%s date=%s raw=%s display=%s simplified=%s",
             user_id,
             emp.employee_id,
             target_date,
-            data["total_points"],
+            data.get("raw_point_count"),
+            data.get("display_point_count"),
+            data.get("simplified"),
         )
         return success_response(
             data=data,

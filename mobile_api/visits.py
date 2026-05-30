@@ -6,6 +6,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
 from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
+from utils.pagination import StandardPagination
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 from visits.serializers import VisitSerializer, VisitMediaSerializer, VisitMediaUploadSerializer
@@ -68,8 +69,10 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
             .filter(employee=user)
             .order_by("-created_at", "-id")
         )
-        serializer = VisitSerializer(visits, many=True, context={"request": request})
-        return success_response(data=serializer.data)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(visits, request)
+        serializer = VisitSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         sync_id = (request.data.get("local_sync_id") or "").strip()

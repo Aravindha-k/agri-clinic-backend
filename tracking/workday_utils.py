@@ -53,6 +53,12 @@ def _expire_workday_row(workday: WorkDay, *, now=None) -> None:
     workday.auto_ended = True
     workday.save(update_fields=["end_time", "is_active", "auto_ended"])
     cache.delete(_live_cache_key(workday.user_id))
+    try:
+        from dashboard.services import invalidate_dashboard_caches
+
+        invalidate_dashboard_caches()
+    except Exception:
+        logger.exception("Dashboard cache invalidation failed after workday expiry")
     logger.info(
         "WorkDay auto-ended: user_id=%s workday_id=%s end_time=%s",
         workday.user_id,

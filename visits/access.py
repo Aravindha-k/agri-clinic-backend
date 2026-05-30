@@ -3,6 +3,7 @@
 from django.shortcuts import get_object_or_404
 
 from .models import Visit
+from .visit_response import VISIT_LIST_SELECT_RELATED
 
 
 def is_privileged_user(user) -> bool:
@@ -17,7 +18,9 @@ def is_privileged_user(user) -> bool:
 
 
 def visits_for_user(user):
-    qs = Visit.objects.all()
+    qs = Visit.objects.select_related(*VISIT_LIST_SELECT_RELATED).prefetch_related(
+        "media_files"
+    )
     if not is_privileged_user(user):
         qs = qs.filter(employee=user)
     return qs

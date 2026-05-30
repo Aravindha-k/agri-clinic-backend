@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
 from django.db.models import QuerySet
 
 from .models import LocationLog
+
+# Max segment length counted toward distance (filters GPS jumps).
+MAX_ROUTE_SEGMENT_KM = 5.0
+DEFAULT_ROUTE_DISPLAY_LIMIT = 2000
+MAX_ROUTE_DISPLAY_LIMIT = 10000
+SIMPLIFY_THRESHOLD_POINTS = 500
 
 
 def distance_km(lat1, lon1, lat2, lon2) -> float:
@@ -22,6 +29,17 @@ def distance_km(lat1, lon1, lat2, lon2) -> float:
         * math.sin(dlon / 2) ** 2
     )
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def is_valid_coordinate(lat, lng) -> bool:
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return False
+    if lat_f == 0 and lng_f == 0:
+        return False
+    return -90 <= lat_f <= 90 and -180 <= lng_f <= 180
 
 
 def _iso(dt) -> str | None:
@@ -69,29 +87,112 @@ def serialize_route_point(log: LocationLog | dict) -> dict[str, Any]:
 
 def get_route_queryset(*, user_id: int, target_date: date) -> QuerySet:
     """LocationLog rows for one employee on one calendar date, chronological."""
-    return (
-        LocationLog.objects.filter(
-            user_id=user_id,
-            recorded_at__date=target_date,
-        )
-        .order_by("recorded_at", "id")
-    )
+    return LocationLog.objects.filter(
+        user_id=user_id,
+        recorded_at__date=target_date,
+    ).order_by("recorded_at", "id")
 
 
 def build_route_points(qs: QuerySet) -> list[dict[str, Any]]:
     return [serialize_route_point(row) for row in qs]
 
 
-def compute_route_distance_km(route: list[dict[str, Any]]) -> float:
+def compute_route_distance_km(
+    route: list[dict[str, Any]],
+    *,
+    max_segment_km: float = MAX_ROUTE_SEGMENT_KM,
+) -> float:
+    """Sum Haversine segments; skip invalid coords, suspicious points, and GPS jumps."""
     total = 0.0
-    for i in range(1, len(route)):
-        total += distance_km(
-            route[i - 1]["latitude"],
-            route[i - 1]["longitude"],
-            route[i]["latitude"],
-            route[i]["longitude"],
-        )
+    prev = None
+    for point in route:
+        if point.get("is_suspicious"):
+            prev = None
+            continue
+        lat = point.get("latitude")
+        lng = point.get("longitude")
+        if not is_valid_coordinate(lat, lng):
+            prev = None
+            continue
+        if prev is not None:
+            segment = distance_km(prev[0], prev[1], lat, lng)
+            if segment <= max_segment_km:
+                total += segment
+        prev = (lat, lng)
     return round(total, 2)
+
+
+def simplify_route_uniform(
+    route: list[dict[str, Any]], *, max_points: int
+) -> list[dict[str, Any]]:
+    """Decimate route for map display; raw LocationLog rows are never modified."""
+    if max_points <= 0 or len(route) <= max_points:
+        return route
+    if max_points == 1:
+        return [route[0]]
+    step = (len(route) - 1) / (max_points - 1)
+    indices = {0, len(route) - 1}
+    for i in range(1, max_points - 1):
+        indices.add(int(round(i * step)))
+    ordered = sorted(indices)
+    return [route[i] for i in ordered]
+
+
+@dataclass(frozen=True)
+class RouteDisplayOptions:
+    limit: int = DEFAULT_ROUTE_DISPLAY_LIMIT
+    simplify: bool = False
+
+    @classmethod
+    def from_request_params(
+        cls,
+        *,
+        limit_raw: str | None,
+        simplify_raw: str | None,
+    ) -> RouteDisplayOptions:
+        limit = DEFAULT_ROUTE_DISPLAY_LIMIT
+        if limit_raw is not None:
+            try:
+                limit = max(1, min(int(limit_raw), MAX_ROUTE_DISPLAY_LIMIT))
+            except (TypeError, ValueError):
+                limit = DEFAULT_ROUTE_DISPLAY_LIMIT
+        simplify = str(simplify_raw or "").lower() in ("1", "true", "yes")
+        return cls(limit=limit, simplify=simplify)
+
+
+def apply_route_display(
+    route: list[dict[str, Any]], options: RouteDisplayOptions
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Return display route + metadata (raw count preserved)."""
+    raw_count = len(route)
+    display = route
+    simplified = False
+
+    if options.simplify and raw_count > SIMPLIFY_THRESHOLD_POINTS:
+        target = min(options.limit, SIMPLIFY_THRESHOLD_POINTS)
+        display = simplify_route_uniform(route, max_points=target)
+        simplified = True
+    elif raw_count > options.limit:
+        display = simplify_route_uniform(route, max_points=options.limit)
+        simplified = True
+
+    meta = {
+        "raw_point_count": raw_count,
+        "display_point_count": len(display),
+        "simplified": simplified,
+        "limit": options.limit,
+        "simplify_requested": options.simplify,
+    }
+    return display, meta
+
+
+def build_route_polyline(route: list[dict[str, Any]]) -> list[list[float]]:
+    """[[lat, lng], ...] for map polylines."""
+    poly = []
+    for p in route:
+        if is_valid_coordinate(p.get("latitude"), p.get("longitude")):
+            poly.append([p["latitude"], p["longitude"]])
+    return poly
 
 
 def _format_duration(seconds: int) -> str:
@@ -101,11 +202,6 @@ def _format_duration(seconds: int) -> str:
     return f"{hours}h {minutes}m"
 
 
-def build_route_polyline(route: list[dict[str, Any]]) -> list[list[float]]:
-    """[[lat, lng], ...] for map polylines."""
-    return [[p["latitude"], p["longitude"]] for p in route]
-
-
 def build_admin_route_data(
     *,
     employee_id: str,
@@ -113,8 +209,11 @@ def build_admin_route_data(
     target_date: date,
     route: list[dict[str, Any]],
     workdays: list | None = None,
+    display_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Payload for admin route API (includes legacy keys + polyline)."""
+    meta = display_meta or {}
+    distance_route = route
     start_time = route[0]["captured_at"] if route else None
     end_time = route[-1]["captured_at"] if route else None
     duration_seconds = 0
@@ -145,7 +244,10 @@ def build_admin_route_data(
         "employee_id": employee_id,
         "user_id": user_id,
         "total_points": len(route),
-        "total_distance_km": compute_route_distance_km(route),
+        "raw_point_count": meta.get("raw_point_count", len(route)),
+        "display_point_count": meta.get("display_point_count", len(route)),
+        "simplified": meta.get("simplified", False),
+        "total_distance_km": compute_route_distance_km(distance_route),
         "start_time": start_time,
         "end_time": end_time,
         "duration_seconds": duration_seconds,

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from rest_framework.exceptions import APIException
+
+logger = logging.getLogger(__name__)
 from rest_framework.views import APIView
 
 from accounts.device_sessions import (
@@ -42,6 +46,11 @@ class DeviceSessionRequiredMixin:
             )
             result = check_device_session(request.user, session_id)
             if result != SessionCheckResult.OK:
+                logger.info(
+                    "SESSION_REPLACED user_id=%s result=%s",
+                    request.user.pk,
+                    result.value,
+                )
                 raise SessionReplaced()
 
     def handle_exception(self, exc):

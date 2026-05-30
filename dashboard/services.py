@@ -38,6 +38,12 @@ def invalidate_stats_cache() -> None:
     invalidate_dashboard_caches()
 
 
+def invalidate_stats_cache_only() -> None:
+    """Lightweight invalidation after high-frequency tracking updates."""
+    cache.delete("dashboard:stats")
+    logger.debug("Dashboard stats cache invalidated")
+
+
 def invalidate_dashboard_caches() -> None:
     """Invalidate cached dashboard aggregates after visits or tracking changes."""
     keys = [

@@ -67,10 +67,10 @@ class AdminVisitScopeTest(APITestCase):
 
         list_a = self.client_a.get("/api/v1/mobile/visits/")
         list_b = self.client_b.get("/api/v1/mobile/visits/")
-        self.assertEqual(len(list_a.data["data"]), 1)
-        self.assertEqual(len(list_b.data["data"]), 1)
-        self.assertEqual(list_a.data["data"][0]["employee"], self.emp_a.id)
-        self.assertEqual(list_b.data["data"][0]["employee"], self.emp_b.id)
+        self.assertEqual(len(list_a.data["data"]["results"]), 1)
+        self.assertEqual(len(list_b.data["data"]["results"]), 1)
+        self.assertEqual(list_a.data["data"]["results"][0]["employee"], self.emp_a.id)
+        self.assertEqual(list_b.data["data"]["results"][0]["employee"], self.emp_b.id)
 
     def test_incomplete_visit_excluded_from_admin_list(self):
         Visit.objects.create(

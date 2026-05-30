@@ -114,9 +114,19 @@ def check_device_session(user: User, session_id: str | None) -> SessionCheckResu
     if EmployeeDeviceSession.objects.filter(
         user=user, session_key=session_uuid, is_active=False
     ).exists():
+        logger.info(
+            "DeviceSession replaced user_id=%s session_id=%s reason=superseded",
+            user.pk,
+            session_uuid,
+        )
         return SessionCheckResult.REPLACED
 
     if active:
+        logger.info(
+            "DeviceSession replaced user_id=%s session_id=%s reason=another_device_active",
+            user.pk,
+            session_uuid,
+        )
         return SessionCheckResult.REPLACED
 
     return SessionCheckResult.MISSING
@@ -159,6 +169,46 @@ def active_device_payload(user: User) -> dict[str, Any]:
         "last_seen_at": _iso(session.last_seen_at) if session else None,
         "is_active": bool(session),
     }
+
+
+def batch_device_status_map(user_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """One query for active sessions; avoids N+1 on admin tracking lists."""
+    if not user_ids:
+        return {}
+    sessions = {
+        s.user_id: s
+        for s in EmployeeDeviceSession.objects.filter(
+            user_id__in=user_ids, is_active=True
+        ).order_by("user_id", "-last_login_at")
+    }
+    result: dict[int, dict[str, Any]] = {}
+    for uid in user_ids:
+        session = sessions.get(uid)
+        if session:
+            result[uid] = {
+                "active_device_id": session.active_device_id,
+                "session_version": session.session_version,
+                "device_name": session.device_name,
+                "device_model": session.device_model,
+                "platform": session.platform,
+                "app_version": session.app_version,
+                "last_login_at": _iso(session.last_login_at),
+                "last_seen_at": _iso(session.last_seen_at),
+                "is_active": True,
+            }
+        else:
+            result[uid] = {
+                "active_device_id": None,
+                "session_version": 0,
+                "device_name": None,
+                "device_model": None,
+                "platform": None,
+                "app_version": None,
+                "last_login_at": None,
+                "last_seen_at": None,
+                "is_active": False,
+            }
+    return result
 
 
 def device_status_payload(user: User) -> dict[str, Any]:

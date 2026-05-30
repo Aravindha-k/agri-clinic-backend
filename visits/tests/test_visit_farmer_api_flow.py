@@ -74,8 +74,9 @@ class VisitFarmerAPIFlowTest(APITestCase):
 
         mobile_list = self.emp_client.get("/api/v1/mobile/visits/")
         self.assertEqual(mobile_list.status_code, 200)
-        self.assertTrue(any(v["id"] == visit_id for v in mobile_list.data["data"]))
-        self.assertNotIn("status", mobile_list.data["data"][0])
+        results = mobile_list.data["data"]["results"]
+        self.assertTrue(any(v["id"] == visit_id for v in results))
+        self.assertNotIn("status", results[0])
 
         admin_list = self.admin_client.get("/api/v1/admin/visits/")
         results = admin_list.data["results"]
@@ -114,7 +115,7 @@ class VisitFarmerAPIFlowTest(APITestCase):
             format="json",
         )
         r = self.emp_client.get("/api/v1/mobile/visits/")
-        row = r.data["data"][0]
+        row = r.data["data"]["results"][0]
         farmer = row.get("farmer") or {}
         self.assertIn("mobile", farmer)
         self.assertIn("village", farmer)

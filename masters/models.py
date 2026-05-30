@@ -215,6 +215,8 @@ class Farmer(BaseMaster):
         indexes = [
             models.Index(fields=["farmer_code"]),
             models.Index(fields=["assigned_employee"]),
+            models.Index(fields=["phone"]),
+            models.Index(fields=["is_active", "name"]),
         ]
 
     def save(self, *args, **kwargs):

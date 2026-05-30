@@ -8,4 +8,6 @@ def visits_with_relations():
 
 
 def submitted_visits_with_relations():
-    return submitted_visits_qs(visits_with_relations())
+    return submitted_visits_qs(
+        visits_with_relations().prefetch_related("media_files")
+    )

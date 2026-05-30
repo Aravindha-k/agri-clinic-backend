@@ -104,6 +104,11 @@ class Visit(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        indexes = [
+            models.Index(fields=["employee", "created_at"]),
+            models.Index(fields=["employee", "visit_date"]),
+            models.Index(fields=["farmer", "visit_date"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["employee", "local_sync_id"],

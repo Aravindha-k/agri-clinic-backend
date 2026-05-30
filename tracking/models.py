@@ -46,6 +46,8 @@ class WorkDay(models.Model):
         indexes = [
             models.Index(fields=["user", "date"]),
             models.Index(fields=["is_active"]),
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["date", "is_active"]),
         ]
 
     def __str__(self):
@@ -103,6 +105,7 @@ class LocationLog(models.Model):
         indexes = [
             models.Index(fields=["user", "recorded_at"]),
             models.Index(fields=["recorded_at"]),
+            models.Index(fields=["workday", "recorded_at"]),
         ]
 
 
