@@ -167,6 +167,29 @@ class MobileVisitDetailAPI(MobileEmployeeAPIView):
         data["timeline"] = _visit_timeline(visit)
         return success_response(data=data, message="Visit fetched")
 
+    def patch(self, request, pk):
+        visit = get_object_or_404(
+            submitted_visits_with_relations().filter(employee=request.user),
+            pk=pk,
+        )
+        serializer = VisitSerializer(
+            visit,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        if not serializer.is_valid():
+            return error_response(
+                errors=serializer.errors,
+                message="Validation failed",
+            )
+        visit = serializer.save()
+        visit = reload_visit(visit.pk)
+        return success_response(
+            data=VisitSerializer(visit, context={"request": request}).data,
+            message="Visit updated",
+        )
+
 
 @extend_schema(
     tags=["Mobile", "Visits"],

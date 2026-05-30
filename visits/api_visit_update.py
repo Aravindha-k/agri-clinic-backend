@@ -8,6 +8,7 @@ from django.http import Http404
 from visits.models import Visit
 from visits.access import is_privileged_user, visits_for_user
 from visits.api_fields import strip_visit_status_from_representation
+from visits.field_notes import apply_observation_write, observation_response_block
 from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, visit_has_submitted_details
 from django.db.models import Q
 from utils.schema import SIMPLE_SUCCESS
@@ -103,6 +104,7 @@ class VisitDetailUpdateAPI(APIView):
                 "pesticide_advice": visit.pesticide_advice,
                 "irrigation_advice": visit.irrigation_advice,
                 "general_advice": visit.general_advice,
+                **observation_response_block(visit),
                 "visit_date": visit.visit_date,
                 "visit_time": visit.visit_time,
                 "latitude": visit.latitude,
@@ -149,6 +151,10 @@ class VisitDetailUpdateAPI(APIView):
             "land_name",
             "land_area",
             "notes",
+            "observation",
+            "field_notes",
+            "problem_seen",
+            "action_taken",
             "fertilizer_advice",
             "pesticide_advice",
             "irrigation_advice",
@@ -182,6 +188,14 @@ class VisitDetailUpdateAPI(APIView):
                 if field == "next_visit_date" and value == "":
                     value = None
                 setattr(visit, field, value)
+
+        patch_data = (
+            dict(request.data.items()) if hasattr(request.data, "items") else {}
+        )
+        observation_updates = {}
+        apply_observation_write(observation_updates, patch_data, instance=visit)
+        for key, value in observation_updates.items():
+            setattr(visit, key, value)
 
         if "crop_name" in request.data:
             crop_label = (request.data.get("crop_name") or "").strip()

@@ -8,6 +8,7 @@ from visits.access import is_privileged_user
 from visits.api_fields import strip_visit_status_from_representation
 from visits.submitted import validate_visit_submit_data
 from .models import Visit, VisitMedia, VisitAttachment
+from .field_notes import apply_observation_write, observation_response_block
 from .visit_response import (
     build_visit_employee_block,
     build_visit_farmer_block,
@@ -93,6 +94,9 @@ class VisitSerializer(serializers.ModelSerializer):
         block = build_visit_farmer_block(instance, request)
         if block:
             data["farmer"] = block
+        data.update(observation_response_block(instance))
+        if data.get("crop_info"):
+            data["crop"] = data["crop_info"]
         return data
 
     @extend_schema_field(OpenApiTypes.OBJECT)
@@ -148,6 +152,8 @@ class VisitSerializer(serializers.ModelSerializer):
             if raw.get("field_id") not in (None, "") and not data.get("field"):
                 data["field"] = raw.get("field_id")
         self._link_farmer_and_field(data)
+        raw = request.data if request is not None and hasattr(request, "data") else {}
+        apply_observation_write(data, raw, instance=self.instance)
         if self.instance is None:
             validate_visit_submit_data(data)
         return data

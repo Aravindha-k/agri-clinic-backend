@@ -72,14 +72,19 @@ class Visit(models.Model):
     season = models.CharField(max_length=100, null=True, blank=True)
     sowing_date = models.DateField(null=True, blank=True)
 
-    # Observations
+    # Observations / field notes (mobile + admin)
+    observation = models.TextField(blank=True, null=True)
+    field_notes = models.TextField(blank=True, null=True)
+    problem_seen = models.TextField(blank=True, null=True)
+    action_taken = models.TextField(blank=True, null=True)
+
     crop_health = models.CharField(max_length=100, null=True, blank=True)
     pest_issue = models.BooleanField(default=False, null=True, blank=True)
     disease_issue = models.BooleanField(default=False, null=True, blank=True)
     weed_condition = models.CharField(max_length=100, null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
 
-    # Recommendations
+    # Legacy recommendations (aliases; prefer field_notes / observation)
     fertilizer_advice = models.TextField(blank=True, null=True)
     pesticide_advice = models.TextField(blank=True, null=True)
     irrigation_advice = models.TextField(blank=True, null=True)

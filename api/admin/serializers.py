@@ -13,6 +13,7 @@ from masters.models import (
 from visits.models import Visit, VisitMedia
 from visits.attachment_serializers import VisitAttachmentSerializer
 from visits.api_fields import strip_visit_status_from_representation
+from visits.field_notes import observation_response_block
 from visits.visit_response import (
     build_visit_employee_block,
     build_visit_farmer_block,
@@ -317,6 +318,7 @@ class AdminVisitSerializer(serializers.ModelSerializer):
         source="village.name", read_only=True, default=""
     )
     crop_name = serializers.SerializerMethodField()
+    crop_info = serializers.SerializerMethodField()
     issues = AdminCropIssueSerializer(many=True, read_only=True)
     media_files = AdminVisitMediaSerializer(many=True, read_only=True)
     attachments = VisitAttachmentSerializer(many=True, read_only=True)
@@ -334,7 +336,16 @@ class AdminVisitSerializer(serializers.ModelSerializer):
         farmer_block = build_visit_farmer_block(instance, request)
         if farmer_block:
             data["farmer"] = farmer_block
+        data.update(observation_response_block(instance))
+        if data.get("crop_info"):
+            data["crop"] = data["crop_info"]
         return data
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_crop_info(self, obj):
+        from visits.field_notes import build_crop_object
+
+        return build_crop_object(obj)
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_employee_detail(self, obj):
