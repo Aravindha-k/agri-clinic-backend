@@ -1,9 +1,19 @@
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers
 from .models import EmployeeProfile
 from utils.serializer_mixins import ProfilePhotoUrlMixin
+from .password_policy import validate_strong_password
+
+
+def _validate_password_field(value):
+    try:
+        validate_strong_password(value)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(list(exc.messages))
+    return value
 
 
 # =========================
@@ -12,6 +22,10 @@ from utils.serializer_mixins import ProfilePhotoUrlMixin
 class EmployeeCreateSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
+
+    def validate_password(self, value):
+        return _validate_password_field(value)
+
     phone = serializers.CharField()
 
     def validate_phone(self, value):
@@ -79,7 +93,10 @@ class MeSerializer(serializers.ModelSerializer):
 # =========================
 class AdminResetPasswordSerializer(serializers.Serializer):
     employee_id = serializers.CharField()
-    new_password = serializers.CharField(write_only=True, min_length=6)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        return _validate_password_field(value)
 
     def save(self):
         employee_id = self.validated_data["employee_id"]
@@ -104,7 +121,10 @@ class AdminResetPasswordSerializer(serializers.Serializer):
 class ChangePasswordSerializer(serializers.Serializer):
     employee_id = serializers.CharField()
     current_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(write_only=True, min_length=6)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        return _validate_password_field(value)
 
     def validate(self, data):
         employee_id = data.get("employee_id")
@@ -133,8 +153,11 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class AdminCreateSerializer(serializers.Serializer):
     username = serializers.CharField()
-    password = serializers.CharField(min_length=8, write_only=True)
+    password = serializers.CharField(write_only=True)
     phone = serializers.CharField()
+
+    def validate_password(self, value):
+        return _validate_password_field(value)
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
@@ -224,7 +247,7 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
 # =========================
 class AdminEmployeeFullCreateSerializer(serializers.Serializer):
     username = serializers.CharField()
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True)
     phone = serializers.CharField(required=False, allow_blank=True, default="")
     employee_id = serializers.CharField()
     role = serializers.ChoiceField(
@@ -232,6 +255,9 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
     )
     district = serializers.IntegerField(required=False, allow_null=True)
     village = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_password(self, value):
+        return _validate_password_field(value)
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():

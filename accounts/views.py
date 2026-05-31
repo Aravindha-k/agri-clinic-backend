@@ -184,6 +184,35 @@ class LoginAPI(APIView):
             else:
                 logger.info("Login attempt with username=%s", username)
 
+            # ── Admin security pre-checks ──
+            from accounts.admin_security import (
+                admin_ip_allowed,
+                check_account_locked,
+                is_admin_user,
+                issue_tokens_for_user,
+                record_failed_login,
+                record_successful_admin_login,
+            )
+
+            prospective_user = User.objects.filter(username=username).first()
+            if prospective_user and is_admin_user(prospective_user):
+                if not admin_ip_allowed(request):
+                    logger.warning(
+                        "Admin login blocked by IP policy username=%s", username
+                    )
+                    return error_response(
+                        message="Admin login is not allowed from this network.",
+                        code="IP_NOT_ALLOWED",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
+                lock_check = check_account_locked(prospective_user)
+                if not lock_check.ok:
+                    return error_response(
+                        message=lock_check.message,
+                        code=lock_check.code,
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
+
             # ── Authenticate ──
             user = authenticate(request=request, username=username, password=password)
 
@@ -191,6 +220,7 @@ class LoginAPI(APIView):
                 logger.warning(
                     "Login failed: invalid credentials for username=%s", username
                 )
+                record_failed_login(prospective_user, username=username or "")
                 return error_response(
                     message="Invalid credentials",
                     code="INVALID_CREDENTIALS",
@@ -210,7 +240,7 @@ class LoginAPI(APIView):
                 )
 
             try:
-                refresh = RefreshToken.for_user(user)
+                refresh = issue_tokens_for_user(user)
             except Exception as token_err:
                 logger.exception(
                     "Token generation failed for user=%s: %s", user.username, token_err
@@ -265,6 +295,8 @@ class LoginAPI(APIView):
                     "username": user.username,
                 },
             }
+            if is_admin_user(user):
+                response_data["admin"] = record_successful_admin_login(user, request)
             if employee_data:
                 response_data["employee"] = employee_data
 
@@ -358,7 +390,18 @@ class AdminResetPasswordAPI(APIView):
     def post(self, request):
         serializer = AdminResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user = serializer.save()
+
+        from audit_logs.utils import create_audit_log
+
+        create_audit_log(
+            actor=request.user,
+            module="AUTH",
+            action="PASSWORD_CHANGE",
+            description=f"Admin reset password for {user.username}",
+            request=request,
+            object_id=user.id,
+        )
 
         return success_response(message="Password reset successfully")
 
@@ -615,6 +658,11 @@ class LogoutAPI(APIView):
             except Exception:
                 # If blacklist not configured or token invalid, ignore
                 pass
+
+        from accounts.admin_security import is_admin_user, record_admin_logout
+
+        if is_admin_user(request.user):
+            record_admin_logout(request.user, request)
 
         return success_response(message="Logged out")
 
@@ -890,4 +938,37 @@ class ChangePasswordAPI(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         serializer.save()
+        from audit_logs.utils import create_audit_log
+
+        create_audit_log(
+            actor=request.user,
+            module="AUTH",
+            action="PASSWORD_CHANGE",
+            description="Employee changed own password",
+            request=request,
+            object_id=request.user.id,
+        )
         return success_response(message="Password updated successfully")
+
+
+@extend_schema(
+    tags=["Auth"],
+    summary="Admin security monitoring",
+    description="Last login, failed attempts, lockout state, and active admin sessions.",
+    responses={200: SIMPLE_SUCCESS},
+)
+class AdminSecurityMonitoringAPI(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from django.conf import settings
+
+        from accounts.admin_security import build_admin_security_monitoring_payload
+
+        return success_response(
+            data={
+                "session_timeout_minutes": settings.ADMIN_SESSION_TIMEOUT_MINUTES,
+                "admins": build_admin_security_monitoring_payload(),
+            },
+            message="Admin security status",
+        )

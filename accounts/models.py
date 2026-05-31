@@ -111,3 +111,49 @@ class EmployeeDeviceSession(models.Model):
 
     def __str__(self):
         return f"{self.user_id} | {self.session_key} | active={self.is_active}"
+
+
+class AdminSecurityState(models.Model):
+    """Login lockout and activity tracking for admin (staff) users."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="admin_security",
+    )
+    failed_login_attempts = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+    last_activity_at = models.DateTimeField(null=True, blank=True)
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "Admin security states"
+
+    def __str__(self):
+        return f"AdminSecurity user_id={self.user_id}"
+
+
+class AdminSession(models.Model):
+    """Active admin panel sessions for monitoring and inactivity control."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="admin_sessions",
+    )
+    session_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    is_active = models.BooleanField(default=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_activity_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-last_activity_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"AdminSession user_id={self.user_id} active={self.is_active}"

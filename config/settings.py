@@ -196,6 +196,10 @@ TEMPLATES = [
 
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", not IS_PRODUCTION)
 DEFAULT_CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -207,7 +211,7 @@ CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ALLOWED_ORI
 # --------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accounts.authentication.AdminJWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ),
     "EXCEPTION_HANDLER": "config.exception_handler.custom_exception_handler",
@@ -246,6 +250,26 @@ SIMPLE_JWT = {
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
 }
+
+# Admin panel security (configurable via environment)
+ADMIN_SESSION_TIMEOUT_MINUTES = int(os.getenv("ADMIN_SESSION_TIMEOUT_MINUTES", "30"))
+ADMIN_LOGIN_MAX_ATTEMPTS = int(os.getenv("ADMIN_LOGIN_MAX_ATTEMPTS", "5"))
+ADMIN_LOGIN_LOCKOUT_MINUTES = int(os.getenv("ADMIN_LOGIN_LOCKOUT_MINUTES", "15"))
+ADMIN_IP_WHITELIST_ENABLED = env_bool("ADMIN_IP_WHITELIST_ENABLED", False)
+ADMIN_ALLOWED_IPS = env_list("ADMIN_ALLOWED_IPS", [])
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 10},
+    },
+    {
+        "NAME": "accounts.password_policy.StrongPasswordValidator",
+    },
+]
 
 ROOT_URLCONF = "config.urls"
 

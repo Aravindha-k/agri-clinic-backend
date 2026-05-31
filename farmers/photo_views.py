@@ -18,11 +18,24 @@ from utils.response import error_response, success_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 
 
-def _save_farmer_photo(farmer: Farmer, file_obj) -> Farmer:
+def _save_farmer_photo(farmer: Farmer, file_obj, *, actor=None, request=None) -> Farmer:
     if farmer.profile_photo:
         farmer.profile_photo.delete(save=False)
     farmer.profile_photo = file_obj
     farmer.save(update_fields=["profile_photo"])
+    try:
+        from audit_logs.utils import create_audit_log
+
+        create_audit_log(
+            actor=actor,
+            module="FARMERS",
+            action="UPLOAD",
+            object_id=farmer.pk,
+            description=f"Farmer profile photo updated: {farmer.name}",
+            request=request,
+        )
+    except Exception:
+        pass
     return farmer
 
 
@@ -42,7 +55,9 @@ class BaseFarmerPhotoAPI(APIView):
         if errors:
             return error_response(message="Validation failed", errors=errors, status_code=400)
 
-        farmer = _save_farmer_photo(farmer, file_obj)
+        farmer = _save_farmer_photo(
+            farmer, file_obj, actor=request.user, request=request
+        )
         try:
             from farmers.services import invalidate_farmers_list_cache
 
@@ -90,7 +105,9 @@ class AdminFarmerPhotoAPI(BaseFarmerPhotoAPI):
         if errors:
             return error_response(message="Validation failed", errors=errors, status_code=400)
 
-        farmer = _save_farmer_photo(farmer, file_obj)
+        farmer = _save_farmer_photo(
+            farmer, file_obj, actor=request.user, request=request
+        )
         return success_response(
             data=FarmerListSerializer(farmer, context={"request": request}).data,
             message="Farmer photo updated",

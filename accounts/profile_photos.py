@@ -44,7 +44,9 @@ class AdminEmployeePhotoAPI(APIView):
                 message="Validation failed", errors=errors, status_code=400
             )
 
-        profile = save_employee_profile_photo(profile, file_obj)
+        profile = save_employee_profile_photo(
+            profile, file_obj, actor=request.user, request=request
+        )
         return _upload_employee_photo_response(request, profile)
 
 
@@ -66,7 +68,9 @@ class EmployeeSelfPhotoAPI(APIView):
                 message="Validation failed", errors=errors, status_code=400
             )
 
-        profile = save_employee_profile_photo(profile, file_obj)
+        profile = save_employee_profile_photo(
+            profile, file_obj, actor=request.user, request=request
+        )
         return success_response(
             data=employee_me_payload(request, profile),
             message="Profile photo updated",

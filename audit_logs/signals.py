@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from visits.models import Visit
 from accounts.models import EmployeeProfile
@@ -10,21 +10,36 @@ from audit_logs.utils import create_audit_log
 User = get_user_model()
 
 
-# VISIT CREATE
+# VISIT CREATE / UPDATE
 @receiver(post_save, sender=Visit)
-def log_visit_create(sender, instance, created, raw=False, **kwargs):
+def log_visit_create_update(sender, instance, created, raw=False, **kwargs):
     if raw:
         return
-    if created:
-        try:
-            create_audit_log(
-                actor=instance.employee,
-                module="VISITS",
-                action="CREATE",
-                description=f"Visit created for farmer {instance.farmer_name}",
-            )
-        except Exception:
-            pass
+    try:
+        action = "CREATE" if created else "UPDATE"
+        create_audit_log(
+            actor=instance.employee,
+            module="VISITS",
+            action=action,
+            object_id=instance.pk,
+            description=f"Visit {action.lower()} for farmer {instance.farmer_name or instance.farmer_id}",
+        )
+    except Exception:
+        pass
+
+
+@receiver(post_delete, sender=Visit)
+def log_visit_delete(sender, instance, **kwargs):
+    try:
+        create_audit_log(
+            actor=instance.employee,
+            module="VISITS",
+            action="DELETE",
+            object_id=instance.pk,
+            description=f"Visit deleted for farmer {instance.farmer_name or instance.farmer_id}",
+        )
+    except Exception:
+        pass
 
 
 # EMPLOYEE CREATE/UPDATE
@@ -38,6 +53,7 @@ def log_employee_create_update(sender, instance, created, raw=False, **kwargs):
             actor=instance.user,
             module="EMPLOYEES",
             action=action,
+            object_id=instance.pk,
             description=f"Employee {action.lower()}d: {instance.user.username}",
         )
     except Exception:
@@ -51,10 +67,14 @@ def log_farmer_create_update(sender, instance, created, raw=False, **kwargs):
         return
     try:
         action = "CREATE" if created else "UPDATE"
+        actor = instance.created_by_employee
+        if actor is None and instance.assigned_employee_id:
+            actor = instance.assigned_employee
         create_audit_log(
-            actor=instance.created_by,
+            actor=actor,
             module="FARMERS",
             action=action,
+            object_id=instance.pk,
             description=f"Farmer {action.lower()}d: {instance.name}",
         )
     except Exception:

@@ -6,6 +6,11 @@ from rest_framework import status
 
 from .models import EmployeeProfile
 
+OLD_EMP_PASSWORD = "Oldsecret123!"
+NEW_EMP_PASSWORD = "Newsecret456!"
+RESET_EMP_PASSWORD = "Adminreset99!"
+ORIGINAL_EMP_PASSWORD = "Originalpass1!"
+
 
 def make_admin(username="admin", password="adminpass"):
     """Helper: create a Django staff user with an EmployeeProfile."""
@@ -167,7 +172,7 @@ class ToggleActiveTests(TestCase):
 class ChangePasswordTests(TestCase):
 
     def setUp(self):
-        self.emp = make_employee(username="fielduser", password="oldsecret123")
+        self.emp = make_employee(username="fielduser", password=OLD_EMP_PASSWORD)
         self.profile = self.emp.employee_profile
         self.client = auth_client(self.emp)  # authenticated as the employee
         self.url = "/api/v1/employees/change-password/"
@@ -178,7 +183,7 @@ class ChangePasswordTests(TestCase):
             {
                 "employee_id": self.profile.employee_id,
                 "current_password": "WRONGPASSWORD",
-                "new_password": "newsecret456",
+                "new_password": NEW_EMP_PASSWORD,
             },
             format="json",
         )
@@ -186,31 +191,31 @@ class ChangePasswordTests(TestCase):
         self.assertFalse(resp.json()["success"])
         # Ensure old password still works
         self.emp.refresh_from_db()
-        self.assertTrue(self.emp.check_password("oldsecret123"))
+        self.assertTrue(self.emp.check_password(OLD_EMP_PASSWORD))
 
     def test_correct_current_password_changes_successfully(self):
         resp = self.client.post(
             self.url,
             {
                 "employee_id": self.profile.employee_id,
-                "current_password": "oldsecret123",
-                "new_password": "newsecret456",
+                "current_password": OLD_EMP_PASSWORD,
+                "new_password": NEW_EMP_PASSWORD,
             },
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.json()["success"])
         self.emp.refresh_from_db()
-        self.assertTrue(self.emp.check_password("newsecret456"))
-        self.assertFalse(self.emp.check_password("oldsecret123"))
+        self.assertTrue(self.emp.check_password(NEW_EMP_PASSWORD))
+        self.assertFalse(self.emp.check_password(OLD_EMP_PASSWORD))
 
     def test_unknown_employee_id_returns_error(self):
         resp = self.client.post(
             self.url,
             {
                 "employee_id": "NON-EXISTENT",
-                "current_password": "oldsecret123",
-                "new_password": "newsecret456",
+                "current_password": OLD_EMP_PASSWORD,
+                "new_password": NEW_EMP_PASSWORD,
             },
             format="json",
         )
@@ -222,14 +227,14 @@ class ChangePasswordTests(TestCase):
             self.url,
             {
                 "employee_id": self.profile.employee_id,
-                "current_password": "oldsecret123",
-                "new_password": "newsecret456",
+                "current_password": OLD_EMP_PASSWORD,
+                "new_password": NEW_EMP_PASSWORD,
             },
             format="json",
         )
         body = resp.json()
-        self.assertNotIn("password", str(body))
-        self.assertNotIn("new_password", str(body))
+        self.assertNotIn(OLD_EMP_PASSWORD, str(body))
+        self.assertNotIn(NEW_EMP_PASSWORD, str(body))
 
     def test_unauthenticated_request_rejected(self):
         client = APIClient()  # no auth
@@ -237,8 +242,8 @@ class ChangePasswordTests(TestCase):
             self.url,
             {
                 "employee_id": self.profile.employee_id,
-                "current_password": "oldsecret123",
-                "new_password": "newsecret456",
+                "current_password": OLD_EMP_PASSWORD,
+                "new_password": NEW_EMP_PASSWORD,
             },
             format="json",
         )
@@ -252,7 +257,7 @@ class AdminResetPasswordTests(TestCase):
 
     def setUp(self):
         self.admin = make_admin()
-        self.emp = make_employee(username="target_user", password="originalpass")
+        self.emp = make_employee(username="target_user", password=ORIGINAL_EMP_PASSWORD)
         self.profile = self.emp.employee_profile
         self.client = auth_client(self.admin)
         self.url = "/api/v1/employees/admin/reset-password/"
@@ -260,19 +265,19 @@ class AdminResetPasswordTests(TestCase):
     def test_admin_can_reset_without_current_password(self):
         resp = self.client.post(
             self.url,
-            {"employee_id": self.profile.employee_id, "new_password": "adminreset99"},
+            {"employee_id": self.profile.employee_id, "new_password": RESET_EMP_PASSWORD},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.json()["success"])
         self.emp.refresh_from_db()
-        self.assertTrue(self.emp.check_password("adminreset99"))
+        self.assertTrue(self.emp.check_password(RESET_EMP_PASSWORD))
 
     def test_non_admin_cannot_reset_password(self):
         non_admin_client = auth_client(self.emp)
         resp = non_admin_client.post(
             self.url,
-            {"employee_id": self.profile.employee_id, "new_password": "hack123"},
+            {"employee_id": self.profile.employee_id, "new_password": "Hack1234!"},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
@@ -280,7 +285,7 @@ class AdminResetPasswordTests(TestCase):
     def test_unknown_employee_id_returns_error(self):
         resp = self.client.post(
             self.url,
-            {"employee_id": "GHOST-0000", "new_password": "abc123"},
+            {"employee_id": "GHOST-0000", "new_password": "Ghost1234!"},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -288,10 +293,10 @@ class AdminResetPasswordTests(TestCase):
     def test_response_does_not_expose_password(self):
         resp = self.client.post(
             self.url,
-            {"employee_id": self.profile.employee_id, "new_password": "adminreset99"},
+            {"employee_id": self.profile.employee_id, "new_password": RESET_EMP_PASSWORD},
             format="json",
         )
-        self.assertNotIn("password", str(resp.json()))
+        self.assertNotIn(RESET_EMP_PASSWORD, str(resp.json()))
 
 
 class ProfilePhotoAPITest(APITestCase):

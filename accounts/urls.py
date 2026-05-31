@@ -11,6 +11,7 @@ from .views import (
     AdminEmployeeDetailAPI,
     AdminEmployeeToggleStatusAPI,
     ChangePasswordAPI,
+    AdminSecurityMonitoringAPI,
 )
 from .profile_api import EmployeeProfileAPI
 from .profile_photos import EmployeeSelfPhotoAPI
@@ -59,6 +60,11 @@ urlpatterns = [
         "change-password/",
         ChangePasswordAPI.as_view(),
         name="change-password",
+    ),
+    path(
+        "admin/security/",
+        AdminSecurityMonitoringAPI.as_view(),
+        name="admin-security-monitoring",
     ),
     path("logout/", LogoutAPI.as_view(), name="logout"),
     # Profile photo + me (specific paths before me/)

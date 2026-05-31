@@ -11,6 +11,7 @@ class AuditLog(models.Model):
         ("LOGOUT", "Logout"),
         ("STATUS_CHANGE", "Status Change"),
         ("UPLOAD", "Upload"),
+        ("PASSWORD_CHANGE", "Password Change"),
     )
 
     actor = models.ForeignKey(

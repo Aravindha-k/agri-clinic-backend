@@ -99,13 +99,26 @@ def employee_me_payload(request, profile: EmployeeProfile) -> dict:
     return payload
 
 
-def save_employee_profile_photo(profile: EmployeeProfile, file_obj) -> EmployeeProfile:
+def save_employee_profile_photo(profile: EmployeeProfile, file_obj, *, actor=None, request=None) -> EmployeeProfile:
     if profile.profile_photo:
         profile.profile_photo.delete(save=False)
     profile.profile_photo = file_obj
     profile.profile_photo_updated_at = timezone.now()
     profile.save(update_fields=["profile_photo", "profile_photo_updated_at"])
     invalidate_employee_photo_caches()
+    try:
+        from audit_logs.utils import create_audit_log
+
+        create_audit_log(
+            actor=actor,
+            module="EMPLOYEES",
+            action="UPLOAD",
+            object_id=profile.pk,
+            description=f"Employee profile photo updated: {profile.employee_id}",
+            request=request,
+        )
+    except Exception:
+        logger.debug("Employee photo audit log skipped", exc_info=True)
     return profile
 
 
