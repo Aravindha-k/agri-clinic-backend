@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from .auth import MobileTokenObtainPairView, MobileTokenRefreshView, MobileMeView
+from masters.problem_views import VisitFormOptionsAPI
 
 urlpatterns = [
     path("auth/login/", MobileTokenObtainPairView.as_view(), name="mobile-login"),
@@ -55,4 +56,9 @@ urlpatterns = [
         name="mobile-profile-photo",
     ),
     path("map/visits/", views.MobileVisitMapAPI.as_view(), name="mobile-map-visits"),
+    path(
+        "visit-form-options/",
+        VisitFormOptionsAPI.as_view(),
+        name="mobile-visit-form-options",
+    ),
 ]

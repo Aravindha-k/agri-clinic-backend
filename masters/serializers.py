@@ -37,11 +37,10 @@ class CropSerializer(serializers.ModelSerializer):
         fields = ["id", "name_en", "name_ta"]
 
 
-class ProblemCategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProblemCategory
-        fields = ["id", "name", "description"]
-        read_only_fields = ["id"]
+from masters.problem_serializers import (  # noqa: F401
+    ProblemCategorySerializer,
+    ProblemMasterSerializer,
+)
 
 
 class FarmerSerializer(serializers.ModelSerializer):

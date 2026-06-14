@@ -513,6 +513,25 @@ def build_admin_collection():
                 },
             ),
             req("Admin — List Visits", "GET", "/admin/visits/"),
+            req(
+                "Admin — Create Field Visit (Add Visit)",
+                "POST",
+                "/admin/visits/",
+                body={
+                    "farmer_name": "Ravi Kumar",
+                    "phone_number": "9876543210",
+                    "village_id": "{{village_id}}",
+                    "crop_id": "{{crop_id}}",
+                    "acreage": 2.5,
+                    "problem_category_id": "{{problem_category_id}}",
+                    "problem_master_id": "{{problem_master_id}}",
+                    "problem_description": "Stem borer damage on lower nodes.",
+                },
+                description=(
+                    "Canonical Add Visit payload. age is optional. "
+                    "problem_master_id required for Pest/Disease/Nutrient categories."
+                ),
+            ),
             req("Admin — Visit Detail", "GET", "/admin/visits/{{visit_id}}/"),
         ],
     )

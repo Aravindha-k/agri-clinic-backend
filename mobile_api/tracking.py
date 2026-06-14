@@ -30,7 +30,8 @@ class MobileTrackingAPI(MobileEmployeeAPIView):
                 status_code=400,
             )
         serializer = LocationLogCreateSerializer(
-            data=request.data, context={"request": request}
+            data=request.data,
+            context={"request": request, "location_source": "mobile_tracking"},
         )
         serializer.is_valid(raise_exception=True)
         location = serializer.save()

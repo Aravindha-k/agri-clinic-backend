@@ -17,6 +17,7 @@ from .views import (
     WorkdayHistoryAPI,
     AvailabilityEventsAPI,
     AdminEmployeeSummaryAPI,
+    AdminEmployeeTrackingDiagnosticsAPI,
     AdminEmployeeActivityAPI,
     EmployeeStatsAPIView,
 )
@@ -33,8 +34,11 @@ urlpatterns = [
     path("workday/end/", EndWorkDayAPI.as_view()),
     path("heartbeat/", HeartbeatAPI.as_view()),
     path("location/push/", PushLocationAPI.as_view()),
+    path("locations/push/", PushLocationAPI.as_view()),
     path("location/bulk/", BulkLocationUploadAPI.as_view()),
+    path("locations/bulk/", BulkLocationUploadAPI.as_view()),
     path("location/bulk-push/", BulkPushLocationAPI.as_view()),
+    path("locations/bulk-push/", BulkPushLocationAPI.as_view()),
     # WorkLog endpoints
     path("work/start/", WorkLogStartAPI.as_view()),
     path("work/end/", WorkLogEndAPI.as_view()),
@@ -45,6 +49,10 @@ urlpatterns = [
     path("admin/status/", AdminTrackingStatusAPI.as_view()),
     # Admin: per-employee
     path("admin/employee/<int:user_id>/summary/", AdminEmployeeSummaryAPI.as_view()),
+    path(
+        "admin/employee/<int:user_id>/diagnostics/",
+        AdminEmployeeTrackingDiagnosticsAPI.as_view(),
+    ),
     path("admin/employee/<int:user_id>/route/", AdminEmployeeRouteAPI.as_view()),
     path("admin/employee/<int:user_id>/activity/", AdminEmployeeActivityAPI.as_view()),
     # Admin: GeoJSON

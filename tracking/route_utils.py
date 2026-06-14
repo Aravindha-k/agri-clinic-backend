@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 
 from .models import LocationLog
 
@@ -87,10 +87,13 @@ def serialize_route_point(log: LocationLog | dict) -> dict[str, Any]:
 
 def get_route_queryset(*, user_id: int, target_date: date) -> QuerySet:
     """LocationLog rows for one employee on one calendar date, chronological."""
-    return LocationLog.objects.filter(
-        user_id=user_id,
-        recorded_at__date=target_date,
-    ).order_by("recorded_at", "id")
+    return (
+        LocationLog.objects.filter(user_id=user_id)
+        .filter(
+            Q(recorded_at__date=target_date) | Q(workday__date=target_date)
+        )
+        .order_by("recorded_at", "id")
+    )
 
 
 def build_route_points(qs: QuerySet) -> list[dict[str, Any]]:
@@ -101,12 +104,20 @@ def compute_route_distance_km(
     route: list[dict[str, Any]],
     *,
     max_segment_km: float = MAX_ROUTE_SEGMENT_KM,
+    skip_suspicious: bool = False,
 ) -> float:
-    """Sum Haversine segments; skip invalid coords, suspicious points, and GPS jumps."""
+    """
+    Sum Haversine segments between ordered points.
+    Skips invalid coordinates and GPS jumps (> max_segment_km).
+    Suspicious points are still counted unless skip_suspicious=True.
+    """
+    if len(route) < 2:
+        return 0.0
+
     total = 0.0
     prev = None
     for point in route:
-        if point.get("is_suspicious"):
+        if skip_suspicious and point.get("is_suspicious"):
             prev = None
             continue
         lat = point.get("latitude")
@@ -118,6 +129,9 @@ def compute_route_distance_km(
             segment = distance_km(prev[0], prev[1], lat, lng)
             if segment <= max_segment_km:
                 total += segment
+            else:
+                prev = (lat, lng)
+                continue
         prev = (lat, lng)
     return round(total, 2)
 
@@ -210,18 +224,24 @@ def build_admin_route_data(
     route: list[dict[str, Any]],
     workdays: list | None = None,
     display_meta: dict[str, Any] | None = None,
+    raw_route: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Payload for admin route API (includes legacy keys + polyline)."""
     meta = display_meta or {}
-    distance_route = route
-    start_time = route[0]["captured_at"] if route else None
-    end_time = route[-1]["captured_at"] if route else None
+    raw_route = raw_route if raw_route is not None else route
+    distance_route = raw_route
+    start_time = raw_route[0]["captured_at"] if raw_route else None
+    end_time = raw_route[-1]["captured_at"] if raw_route else None
     duration_seconds = 0
-    if len(route) >= 2 and route[0].get("captured_at") and route[-1].get("captured_at"):
+    if (
+        len(raw_route) >= 2
+        and raw_route[0].get("captured_at")
+        and raw_route[-1].get("captured_at")
+    ):
         from django.utils.dateparse import parse_datetime
 
-        t0 = parse_datetime(route[0]["captured_at"])
-        t1 = parse_datetime(route[-1]["captured_at"])
+        t0 = parse_datetime(raw_route[0]["captured_at"])
+        t1 = parse_datetime(raw_route[-1]["captured_at"])
         if t0 and t1:
             duration_seconds = max(int((t1 - t0).total_seconds()), 0)
 
@@ -239,14 +259,16 @@ def build_admin_route_data(
 
             workday_end = workday_scheduled_end(max(starts)).isoformat()
 
+    raw_count = meta.get("raw_point_count", len(raw_route))
     return {
         "date": str(target_date),
         "employee_id": employee_id,
         "user_id": user_id,
-        "total_points": len(route),
-        "raw_point_count": meta.get("raw_point_count", len(route)),
+        "total_points": raw_count,
+        "raw_point_count": raw_count,
         "display_point_count": meta.get("display_point_count", len(route)),
         "simplified": meta.get("simplified", False),
+        "distance_km": compute_route_distance_km(distance_route),
         "total_distance_km": compute_route_distance_km(distance_route),
         "start_time": start_time,
         "end_time": end_time,

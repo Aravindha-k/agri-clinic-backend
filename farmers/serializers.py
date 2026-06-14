@@ -21,6 +21,7 @@ from masters.models import (
     FarmerActivity,
 )
 from visits.models import Visit, VisitMedia
+from visits.field_notes import observation_response_block
 from visits.serializers import VisitMediaSerializer
 from utils.serializer_mixins import ProfilePhotoUrlMixin
 
@@ -327,6 +328,11 @@ class FarmerFieldCreateSerializer(serializers.ModelSerializer):
             "gps_location",
         ]
 
+    def validate_gps_location(self, value):
+        from utils.gps import validate_gps_location_string
+
+        return validate_gps_location_string(value)
+
 
 # ══════════════════════════════════════════════
 # VISIT (farmer-centric, lightweight)
@@ -401,6 +407,11 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
         if obj.land_name or obj.land_area is not None:
             return {"id": None, "land_name": obj.land_name, "land_area": obj.land_area}
         return None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.update(observation_response_block(instance))
+        return data
 
 
 # ══════════════════════════════════════════════
@@ -584,6 +595,11 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
             "assigned_employee",
         ]
 
+    def validate_gps_location(self, value):
+        from utils.gps import validate_gps_location_string
+
+        return validate_gps_location_string(value)
+
     def validate_phone(self, value):
         phone = (value or "").strip()
         if not phone:
@@ -613,6 +629,11 @@ class FarmerUpdateSerializer(serializers.ModelSerializer):
             "soil_type",
             "assigned_employee",
         ]
+
+    def validate_gps_location(self, value):
+        from utils.gps import validate_gps_location_string
+
+        return validate_gps_location_string(value)
 
 
 # ══════════════════════════════════════════════

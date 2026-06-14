@@ -8,17 +8,32 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from accounts.views import LogoutAPI, LoginAPI
 from tracking.views import StartWorkDayAPI, EndWorkDayAPI
 from visits.dashboard_views import MapFarmersAPI
-from dashboard.views import DashboardView
 
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
+from masters.problem_item_views import (
+    CropListAPI,
+    CropProblemItemListAPI,
+    ProblemItemListAPI,
+)
 
 
 def health_check(_request):
-    return JsonResponse({"status": "ok"})
+    from django.db import connection
+
+    payload = {"status": "ok", "database": "ok"}
+    http_status = 200
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except Exception:
+        payload["status"] = "degraded"
+        payload["database"] = "error"
+        http_status = 503
+    return JsonResponse(payload, status=http_status)
 
 
 urlpatterns = [
@@ -31,8 +46,7 @@ urlpatterns = [
     # Work session endpoints
     path("api/v1/work/start/", StartWorkDayAPI.as_view(), name="work-start"),
     path("api/v1/work/stop/", EndWorkDayAPI.as_view(), name="work-stop"),
-    # Dashboard + Map
-    path("api/v1/dashboard/", DashboardView.as_view(), name="dashboard"),
+    # Dashboard + Map (root alias + nested routes share one mount)
     path("api/v1/dashboard/", include("dashboard.urls")),
     path("api/v1/map/farmers/", MapFarmersAPI.as_view(), name="map-farmers"),
     # Visits endpoints (CRUD, stats, attachments, media)
@@ -45,6 +59,14 @@ urlpatterns = [
     path("api/v1/tracking/", include("tracking.urls")),
     # Masters, notifications, system settings, audit logs
     path("api/v1/masters/", include("masters.urls")),
+    # Problem Items + crops (web/mobile aliases)
+    path("api/v1/problem-items/", ProblemItemListAPI.as_view(), name="problem-items-list"),
+    path("api/v1/crops/", CropListAPI.as_view(), name="crops-list"),
+    path(
+        "api/v1/crops/<int:crop_id>/problem-items/",
+        CropProblemItemListAPI.as_view(),
+        name="crop-problem-items-list",
+    ),
     # Farmer-centric APIs (central entity)
     path("api/v1/", include("farmers.urls")),
     path("api/v1/notifications/", include("notifications.urls")),

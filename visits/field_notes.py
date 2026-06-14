@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from visits.models import Visit
+from visits.request_parsing import apply_coerced_booleans
 
 NOT_ADDED_BY_EMPLOYEE = "Not added by employee"
 
@@ -14,6 +15,8 @@ _LEGACY_ADVICE_FIELDS = (
     ("pesticide_advice", "Pesticide"),
     ("irrigation_advice", "Irrigation"),
 )
+
+_BOOLEAN_WRITE_FIELDS = ("follow_up_required", "pest_issue", "disease_issue")
 
 
 def _text(value) -> str:
@@ -29,19 +32,38 @@ def legacy_advice_text(visit: Visit) -> str:
     return "\n".join(parts).strip()
 
 
+def stored_recommendation(visit: Visit) -> str:
+    return _text(getattr(visit, "recommendation", None))
+
+
 def stored_field_notes(visit: Visit) -> str:
-    return (
-        _text(getattr(visit, "field_notes", None))
-        or _text(getattr(visit, "observation", None))
-        or _text(visit.notes)
-    )
+    return _text(getattr(visit, "field_notes", None))
+
+
+def stored_observation(visit: Visit) -> str:
+    return _text(getattr(visit, "observation", None))
 
 
 def resolved_field_notes(visit: Visit) -> str:
     stored = stored_field_notes(visit)
     if stored:
         return stored
-    return legacy_advice_text(visit)
+    stored_obs = stored_observation(visit)
+    if stored_obs:
+        return stored_obs
+    return legacy_advice_text(visit) or _text(visit.notes)
+
+
+def resolved_recommendation(visit: Visit) -> str:
+    stored = stored_recommendation(visit)
+    if stored:
+        return stored
+    # Legacy rows: recommendation was aliased to field_notes before dedicated column.
+    if not stored_observation(visit):
+        legacy = stored_field_notes(visit) or legacy_advice_text(visit)
+        if legacy:
+            return legacy
+    return ""
 
 
 def display_text(value: str) -> str:
@@ -52,8 +74,16 @@ def display_field_notes(visit: Visit) -> str:
     return display_text(resolved_field_notes(visit))
 
 
+def display_recommendation(visit: Visit) -> str:
+    return display_text(resolved_recommendation(visit))
+
+
 def display_observation(visit: Visit) -> str:
-    return display_text(_text(getattr(visit, "observation", None)) or resolved_field_notes(visit))
+    stored = stored_observation(visit)
+    if stored:
+        return display_text(stored)
+    legacy = resolved_field_notes(visit)
+    return display_text(legacy)
 
 
 def display_problem_seen(visit: Visit) -> str:
@@ -93,8 +123,7 @@ def observation_response_block(visit: Visit) -> dict[str, Any]:
         "action_taken": display_action_taken(visit),
         "follow_up_date": follow_up_date_value(visit),
         "follow_up_required": visit.follow_up_required,
-        # Backward-compatible aliases (read-only in responses)
-        "recommendation": display_field_notes(visit),
+        "recommendation": display_recommendation(visit),
         "general_advice": visit.general_advice or "",
         "fertilizer_advice": visit.fertilizer_advice or "",
         "pesticide_advice": visit.pesticide_advice or "",
@@ -109,6 +138,20 @@ def _crop_name_label(visit: Visit) -> str:
     return crop_display_name(visit)
 
 
+def _legacy_field_notes_from_advice(raw: dict) -> str:
+    parts = [
+        _text(raw.get(key))
+        for key in (
+            "general_advice",
+            "fertilizer_advice",
+            "pesticide_advice",
+            "irrigation_advice",
+        )
+        if _text(raw.get(key))
+    ]
+    return "\n".join(parts).strip()
+
+
 def apply_observation_write(
     validated_data: dict[str, Any],
     raw: dict | None,
@@ -118,30 +161,14 @@ def apply_observation_write(
     """Map mobile/admin payload into Visit columns (create/update)."""
     raw = raw if isinstance(raw, dict) else {}
 
-    field_notes = (
-        _text(raw.get("field_notes"))
-        or _text(raw.get("observation"))
-        or _text(raw.get("notes"))
-        or _text(raw.get("recommendation"))
-        or _text(raw.get("advice"))
-        or _text(raw.get("general_advice"))
-    )
-    if not field_notes:
-        parts = [
-            _text(raw.get(key))
-            for key in (
-                "general_advice",
-                "fertilizer_advice",
-                "pesticide_advice",
-                "irrigation_advice",
-            )
-            if _text(raw.get(key))
-        ]
-        field_notes = "\n".join(parts) if parts else ""
-
-    observation = _text(raw.get("observation")) or field_notes
+    recommendation = _text(raw.get("recommendation")) or _text(raw.get("advice"))
+    observation = _text(raw.get("observation"))
+    field_notes = _text(raw.get("field_notes")) or _text(raw.get("notes"))
     problem_seen = _text(raw.get("problem_seen"))
     action_taken = _text(raw.get("action_taken"))
+
+    if not field_notes:
+        field_notes = _legacy_field_notes_from_advice(raw)
 
     write_keys = (
         "field_notes",
@@ -154,31 +181,44 @@ def apply_observation_write(
         "pesticide_advice",
         "irrigation_advice",
     )
-    if field_notes or any(k in raw for k in write_keys):
-        validated_data["field_notes"] = field_notes or None
-    if observation or "observation" in raw or any(k in raw for k in write_keys):
+
+    if recommendation or "recommendation" in raw or "advice" in raw:
+        validated_data["recommendation"] = recommendation or None
+
+    if "observation" in raw:
         validated_data["observation"] = observation or None
+    elif observation:
+        validated_data["observation"] = observation
+    elif recommendation and ("recommendation" in raw or "advice" in raw):
+        # Legacy clients: recommendation-only submit without a separate observation key.
+        validated_data["observation"] = recommendation
+    elif field_notes or any(k in raw for k in write_keys):
+        validated_data["observation"] = field_notes or None
+
+    if field_notes or "field_notes" in raw or "notes" in raw:
+        validated_data["field_notes"] = field_notes or None
+
     if problem_seen or "problem_seen" in raw:
         validated_data["problem_seen"] = problem_seen or None
     if action_taken or "action_taken" in raw:
         validated_data["action_taken"] = action_taken or None
 
-    if field_notes and not _text(raw.get("general_advice")):
-        validated_data.setdefault("general_advice", field_notes)
-    if field_notes and not _text(validated_data.get("notes")):
-        validated_data.setdefault("notes", field_notes)
+    if _text(raw.get("general_advice")) or "general_advice" in raw:
+        validated_data["general_advice"] = _text(raw.get("general_advice")) or None
 
     follow_up = raw.get("follow_up_date")
     if follow_up not in (None, ""):
         validated_data["next_visit_date"] = follow_up
-    if "follow_up_required" in raw:
-        validated_data["follow_up_required"] = raw.get("follow_up_required")
+
+    apply_coerced_booleans(validated_data, raw, *_BOOLEAN_WRITE_FIELDS)
+
+    if field_notes and not _text(validated_data.get("notes")):
+        validated_data.setdefault("notes", field_notes)
 
     for key in (
         "fertilizer_advice",
         "pesticide_advice",
         "irrigation_advice",
-        "general_advice",
     ):
         if key in raw:
             validated_data[key] = _text(raw.get(key)) or None

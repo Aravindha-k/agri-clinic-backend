@@ -181,6 +181,208 @@ class RouteTrackingAPITest(APITestCase):
         self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 0)
         self.assertEqual(LocationLog.objects.filter(user=self.other).count(), 1)
 
+    def test_three_location_points_create_three_logs(self):
+        self._start_workday()
+        t0 = timezone.now()
+        for index, (lat, lng) in enumerate(
+            (
+                ("12.971600", "77.594600"),
+                ("12.972000", "77.595000"),
+                ("12.972500", "77.595500"),
+            )
+        ):
+            r = self.emp_client.post(
+                "/api/v1/tracking/location/push/",
+                {
+                    "latitude": lat,
+                    "longitude": lng,
+                    "captured_at": (t0 + timedelta(minutes=index)).isoformat(),
+                },
+                format="json",
+            )
+            self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 3)
+
+    def test_route_history_distance_positive_for_movement(self):
+        self._start_workday()
+        wd = WorkDay.objects.get(user=self.employee, is_active=True)
+        today = timezone.localdate()
+        t0 = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+        coords = [
+            (12.9716, 77.5946),
+            (12.9720, 77.5950),
+            (12.9725, 77.5955),
+        ]
+        for index, (lat, lng) in enumerate(coords):
+            LocationLog.objects.create(
+                user=self.employee,
+                workday=wd,
+                latitude=lat,
+                longitude=lng,
+                recorded_at=t0 + timedelta(minutes=index * 5),
+            )
+        r = self.admin_client.get(
+            f"/api/v1/tracking/admin/employee/{self.employee.id}/route/",
+            {"date": str(today)},
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        data = r.data["data"]
+        self.assertEqual(data["total_points"], 3)
+        self.assertGreater(data["distance_km"], 0)
+        self.assertNotEqual(data["start_time"], data["end_time"])
+
+    def test_location_push_without_workday_returns_error(self):
+        r = self.emp_client.post(
+            "/api/v1/tracking/location/push/",
+            {"latitude": "12.971600", "longitude": "77.594600"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_alias_endpoint_saves_multiple_rows(self):
+        self._start_workday()
+        t0 = timezone.now()
+        r = self.emp_client.post(
+            "/api/v1/tracking/locations/bulk/",
+            {
+                "locations": [
+                    {
+                        "latitude": "12.971600",
+                        "longitude": "77.594600",
+                        "timestamp": t0.isoformat(),
+                    },
+                    {
+                        "latitude": "12.972000",
+                        "longitude": "77.595000",
+                        "timestamp": (t0 + timedelta(minutes=2)).isoformat(),
+                    },
+                ]
+            },
+            format="json",
+        )
+        self.assertIn(r.status_code, (status.HTTP_201_CREATED, status.HTTP_207_MULTI_STATUS))
+        self.assertEqual(r.data["data"]["saved_count"], 2)
+        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 2)
+
+    def test_movement_based_three_points_route_distance(self):
+        """Simulate movement-based points ~100m and ~500m apart."""
+        self._start_workday()
+        t0 = timezone.now()
+        points = [
+            ("12.971600", "77.594600", 0),
+            ("12.972500", "77.594600", 5),  # ~100m north
+            ("12.976100", "77.594600", 15),  # ~500m north of start
+        ]
+        for lat, lng, minutes in points:
+            r = self.emp_client.post(
+                "/api/v1/tracking/location/push/",
+                {
+                    "latitude": lat,
+                    "longitude": lng,
+                    "accuracy": 12,
+                    "speed": 5.5,
+                    "heading": 0,
+                    "timestamp": (t0 + timedelta(minutes=minutes)).isoformat(),
+                },
+                format="json",
+            )
+            self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+
+        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 3)
+        r = self.admin_client.get(
+            f"/api/v1/tracking/admin/employee/{self.employee.id}/route/",
+            {"date": str(timezone.localdate())},
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        data = r.data["data"]
+        self.assertEqual(data["total_points"], 3)
+        self.assertGreater(data["distance_km"], 0.4)
+        self.assertNotEqual(data["start_time"], data["end_time"])
+
+    def test_bulk_points_payload_key(self):
+        self._start_workday()
+        t0 = timezone.now()
+        r = self.emp_client.post(
+            "/api/v1/tracking/locations/bulk/",
+            {
+                "points": [
+                    {
+                        "latitude": 12.9716,
+                        "longitude": 77.5946,
+                        "accuracy": 15,
+                        "speed": 3.2,
+                        "heading": 120,
+                        "timestamp": t0.isoformat(),
+                    },
+                    {
+                        "latitude": 12.9720,
+                        "longitude": 77.5950,
+                        "accuracy": 14,
+                        "speed": 4.0,
+                        "heading": 125,
+                        "timestamp": (t0 + timedelta(minutes=3)).isoformat(),
+                    },
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(r.data["data"]["saved_count"], 2)
+        self.assertEqual(r.data["data"]["failed_count"], 0)
+        self.assertEqual(r.data["data"]["errors"], [])
+
+    def test_invalid_coordinates_rejected(self):
+        self._start_workday()
+        r = self.emp_client.post(
+            "/api/v1/tracking/location/push/",
+            {"latitude": 999, "longitude": 77.5946},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 0)
+
+    def test_poor_accuracy_rejected_after_first_point(self):
+        self._start_workday()
+        r1 = self.emp_client.post(
+            "/api/v1/tracking/location/push/",
+            {
+                "latitude": "12.971600",
+                "longitude": "77.594600",
+                "accuracy": 250,
+            },
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+        r2 = self.emp_client.post(
+            "/api/v1/tracking/location/push/",
+            {
+                "latitude": "12.972000",
+                "longitude": "77.595000",
+                "accuracy": 250,
+            },
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 1)
+
+    def test_duplicate_point_rejected(self):
+        self._start_workday()
+        t0 = timezone.now()
+        payload = {
+            "latitude": "12.971600",
+            "longitude": "77.594600",
+            "timestamp": t0.isoformat(),
+        }
+        r1 = self.emp_client.post(
+            "/api/v1/tracking/location/push/", payload, format="json"
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+        r2 = self.emp_client.post(
+            "/api/v1/tracking/location/push/", payload, format="json"
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 1)
+
     def test_workday_locations_chronological(self):
         self._start_workday()
         wd = WorkDay.objects.get(user=self.employee, is_active=True)

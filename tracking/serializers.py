@@ -4,8 +4,15 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from .models import WorkDay, LocationLog, AvailabilityEvent
+from .location_helpers import (
+    log_location_saved,
+    normalize_recorded_at,
+    resolve_workday_for_location,
+    validate_movement_point,
+)
 from .workday_utils import expire_overlong_workdays_for_user
 from notifications.utils import create_notification
+from utils.gps import validate_latitude_longitude
 
 
 class FlexibleDateTimeField(serializers.DateTimeField):
@@ -88,32 +95,41 @@ class LocationLogCreateSerializer(serializers.Serializer):
     heading = serializers.FloatField(required=False)
     recorded_at = FlexibleDateTimeField(required=False)
     captured_at = FlexibleDateTimeField(required=False)
+    timestamp = FlexibleDateTimeField(required=False)
+    workday_id = serializers.IntegerField(required=False, min_value=1)
     battery_level = serializers.IntegerField(required=False, min_value=0, max_value=100)
     network_type = serializers.CharField(required=False, max_length=20)
     device_model = serializers.CharField(required=False, max_length=100)
     app_version = serializers.CharField(required=False, max_length=20)
 
-    def save(self, **kwargs):
+    def validate(self, attrs):
+        validate_latitude_longitude(attrs["latitude"], attrs["longitude"])
         user = self.context["request"].user
-
-        # Admin cannot push location
         if user.is_staff:
             raise serializers.ValidationError("Admin cannot push location")
 
-        expire_overlong_workdays_for_user(user)
-
-        workday = (
-            WorkDay.objects.filter(user=user, is_active=True)
-            .order_by("-start_time")
-            .first()
+        workday = resolve_workday_for_location(user, attrs.get("workday_id"))
+        recorded_at = normalize_recorded_at(attrs)
+        validate_movement_point(
+            workday=workday,
+            latitude=attrs["latitude"],
+            longitude=attrs["longitude"],
+            recorded_at=recorded_at,
+            accuracy=attrs.get("accuracy"),
         )
-        if not workday:
-            raise serializers.ValidationError("No active workday")
+        attrs["_resolved_workday"] = workday
+        attrs["_resolved_recorded_at"] = recorded_at
+        return attrs
 
-        recorded_at = (
-            self.validated_data.get("captured_at")
-            or self.validated_data.get("recorded_at")
-            or timezone.now()
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        source = self.context.get("location_source", "location_push")
+
+        self.validated_data.pop("workday_id", None)
+        workday = self.validated_data.pop("_resolved_workday")
+        recorded_at = self.validated_data.pop(
+            "_resolved_recorded_at",
+            normalize_recorded_at(self.validated_data),
         )
 
         location = LocationLog.objects.create(
@@ -141,6 +157,15 @@ class LocationLogCreateSerializer(serializers.Serializer):
             battery_level=location.battery_level,
             recorded_at=recorded_at,
         )
+        workday.last_heartbeat = timezone.now()
+        workday.save(update_fields=["last_heartbeat"])
+        log_location_saved(
+            source=source,
+            user_id=user.pk,
+            workday_id=workday.pk,
+            location=location,
+            recorded_at=recorded_at,
+        )
         return location
 
 
@@ -154,8 +179,13 @@ class BulkLocationPointSerializer(serializers.Serializer):
     heading = serializers.FloatField(required=False)
     recorded_at = FlexibleDateTimeField(required=False)
     captured_at = FlexibleDateTimeField(required=False)
+    timestamp = FlexibleDateTimeField(required=False)
     battery_level = serializers.IntegerField(required=False, min_value=0, max_value=100)
     network_type = serializers.CharField(required=False, max_length=20)
+
+    def validate(self, attrs):
+        validate_latitude_longitude(attrs["latitude"], attrs["longitude"])
+        return attrs
 
 
 class BulkLocationPushSerializer(serializers.Serializer):

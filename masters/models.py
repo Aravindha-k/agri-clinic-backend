@@ -15,9 +15,6 @@ class BaseMaster(models.Model):
     class Meta:
         abstract = True
 
-    class Meta:
-        abstract = True
-
 
 # ==========================================================
 # LOCATION MASTERS
@@ -103,16 +100,77 @@ class Crop(BaseMaster):
 
 
 class ProblemCategory(models.Model):
+    """Top-level problem type for field visits (Pest, Disease, etc.)."""
+
+
+    CODE_PEST = "pest"
+    CODE_DISEASE = "disease"
+    CODE_NUTRIENT = "nutrient_deficiency"
+    CODE_OTHERS = "others"
+
+    code = models.CharField(
+        max_length=40,
+        unique=True,
+        blank=True,
+        default="",
+        help_text="Stable key, e.g. pest, disease, nutrient_deficiency, others",
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    requires_problem_master = models.BooleanField(
+        default=True,
+        help_text="When False (e.g. Others), problem_master dropdown is optional.",
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_others(self) -> bool:
+        if self.code == self.CODE_OTHERS:
+            return True
+        return self.name.strip().lower() == "others"
+
+
+class ProblemMaster(BaseMaster):
+    """Dropdown option under a problem category (admin-managed, no code deploy)."""
+
+    category = models.ForeignKey(
+        ProblemCategory,
+        on_delete=models.PROTECT,
+        related_name="problem_masters",
+    )
+    name = models.CharField(max_length=255)
+    tamil_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Tamil display name (optional).",
+    )
+    crop = models.ForeignKey(
+        Crop,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="problem_masters",
+        help_text="Optional: limit this problem to a crop.",
+    )
+
+    class Meta:
+        ordering = ["category__name", "name"]
+        indexes = [
+            models.Index(fields=["category", "is_active"]),
+            models.Index(fields=["crop", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.category.name} | {self.name}"
 
 
 # ==========================================================
@@ -147,7 +205,15 @@ class Farmer(BaseMaster):
         blank=True,
     )
     name = models.CharField(max_length=255)
-    phone = models.CharField(max_length=15)
+    phone = models.CharField(max_length=15, blank=True, default="")
+    state = models.CharField(max_length=100, blank=True, default="")
+    source_file = models.CharField(max_length=255, blank=True, default="")
+    source_quarter = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="One or more quarter keys, e.g. quarter1,quarter3",
+    )
     district = models.ForeignKey(
         District,
         on_delete=models.SET_NULL,

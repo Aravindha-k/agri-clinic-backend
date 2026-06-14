@@ -9,12 +9,20 @@ from masters.models import (
     Crop,
     CropIssue,
     Recommendation,
+    ProblemCategory,
+    ProblemMaster,
+)
+from masters.problem_serializers import (
+    ProblemCategorySerializer,
+    ProblemMasterSerializer,
 )
 from visits.models import Visit, VisitMedia
 from visits.attachment_serializers import VisitAttachmentSerializer
 from visits.api_fields import strip_visit_status_from_representation
 from visits.field_notes import observation_response_block
 from visits.visit_response import (
+    build_field_visit_problem_block,
+    build_field_visit_snapshot,
     build_visit_employee_block,
     build_visit_farmer_block,
     crop_display_name,
@@ -339,6 +347,11 @@ class AdminVisitSerializer(serializers.ModelSerializer):
         data.update(observation_response_block(instance))
         if data.get("crop_info"):
             data["crop"] = data["crop_info"]
+        data["field_visit_snapshot"] = build_field_visit_snapshot(instance)
+        problem = build_field_visit_problem_block(instance)
+        if problem:
+            data["field_visit"] = problem
+            data.update(problem)
         return data
 
     @extend_schema_field(OpenApiTypes.OBJECT)

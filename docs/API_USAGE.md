@@ -99,6 +99,25 @@ POST /api/v1/visits/start/
 ```
 > Visit stores `farmer_name` as a CharField — there is NO FK to the Farmer model.
 
+### Add Visit (field visit form — admin or mobile)
+```http
+POST /api/v1/admin/visits/
+POST /api/v1/mobile/visits/
+```
+```json
+{
+  "farmer_name": "Ravi Kumar",
+  "phone_number": "9876543210",
+  "village_id": 3,
+  "crop_id": 1,
+  "acreage": 2.5,
+  "problem_category_id": 2,
+  "problem_master_id": 5,
+  "problem_description": "Stem borer damage on lower nodes."
+}
+```
+Required: `farmer_name`, `phone_number` (or `phone` / `farmer_phone`), `village_id`, `crop_id`, `acreage`, `problem_category_id`, `problem_description`. For Pest, Disease, or Nutrient Deficiency categories, `problem_master_id` (subcategory) is also required. `age` is optional; when sent it is stored on the visit as `farmer_age`.
+
 ### Upload Visit Media
 ```http
 POST /api/v1/visits/{id}/upload-media/

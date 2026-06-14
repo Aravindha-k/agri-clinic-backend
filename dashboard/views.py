@@ -11,6 +11,7 @@ from visits.models import Visit
 from masters.models import Farmer
 from tracking.models import LocationLog, WorkDay
 from accounts.models import EmployeeProfile
+from utils.query_params import parse_bounded_int
 from utils.response import success_response
 from utils.schema import SIMPLE_SUCCESS
 
@@ -71,8 +72,9 @@ class VisitTrendsAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        days = int(request.query_params.get("days", 30))
-        days = max(1, min(days, 365))
+        days = parse_bounded_int(
+            request.query_params.get("days"), default=30, minimum=1, maximum=365
+        )
         data = dashboard_services.get_visit_trends(days=days)
         return success_response(data=data)
 
@@ -90,8 +92,9 @@ class EmployeePerformanceAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        days = int(request.query_params.get("days", 30))
-        days = max(1, min(days, 365))
+        days = parse_bounded_int(
+            request.query_params.get("days"), default=30, minimum=1, maximum=365
+        )
         data = dashboard_services.get_employee_performance(days=days)
         return success_response(data=data)
 
@@ -115,7 +118,8 @@ class VillageHeatmapAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        top_n = int(request.query_params.get("top", 20))
-        top_n = max(1, min(top_n, 100))
+        top_n = parse_bounded_int(
+            request.query_params.get("top"), default=20, minimum=1, maximum=100
+        )
         data = dashboard_services.get_village_heatmap(top_n=top_n)
         return success_response(data=data)

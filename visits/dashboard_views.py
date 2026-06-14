@@ -71,32 +71,32 @@ class MapFarmersAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        from farmers.helpers import parse_gps_location
 
         qs = Farmer.objects.exclude(
             Q(gps_location="") | Q(gps_location__isnull=True)
         ).select_related("village")
 
-        markers = []
-        for farmer in qs:
-            parts = farmer.gps_location.split(",")
-            if len(parts) != 2:
-                continue
-            try:
-                lat, lng = float(parts[0].strip()), float(parts[1].strip())
-            except (ValueError, IndexError):
-                continue
+        farmers = list(qs)
+        farmer_ids = [f.id for f in farmers]
 
-            # Latest crop from the most recent visit
-            last_visit = (
-                Visit.objects.filter(farmer_name__iexact=farmer.name)
+        crop_by_farmer_id: dict[int, str | None] = {}
+        if farmer_ids:
+            for visit in (
+                Visit.objects.filter(farmer_id__in=farmer_ids, crop__isnull=False)
                 .select_related("crop")
-                .order_by("-visit_date")
-                .first()
-            )
-            crop_name = (
-                last_visit.crop.name_en if last_visit and last_visit.crop else None
-            )
+                .order_by("farmer_id", "-visit_date", "-id")
+            ):
+                if visit.farmer_id not in crop_by_farmer_id:
+                    crop_by_farmer_id[visit.farmer_id] = (
+                        visit.crop.name_en if visit.crop else None
+                    )
+
+        markers = []
+        for farmer in farmers:
+            lat, lng = parse_gps_location(farmer.gps_location)
+            if lat is None or lng is None:
+                continue
 
             markers.append(
                 {
@@ -104,7 +104,7 @@ class MapFarmersAPI(APIView):
                     "name": farmer.name,
                     "latitude": lat,
                     "longitude": lng,
-                    "crop": crop_name,
+                    "crop": crop_by_farmer_id.get(farmer.id),
                 }
             )
 

@@ -38,6 +38,11 @@ from masters.models import (
     FarmerActivity,
 )
 from visits.models import Visit, VisitMedia
+from visits.farmer_visit_summary import (
+    build_farmer_revisit_summary,
+    build_farmer_visit_history,
+)
+from visits.submitted import submitted_visits_qs
 from visits.access import get_visit_for_user, is_privileged_user
 from visits.serializers import (
     VisitMediaSerializer,
@@ -159,6 +164,9 @@ class FarmerListCreateAPI(APIView):
     def get(self, request):
         farmers = _farmers_queryset_with_visit_counts(request.user).order_by("name")
         search = (request.query_params.get("search") or "").strip()
+        village = (request.query_params.get("village") or "").strip()
+        if village:
+            farmers = farmers.filter(village__name__icontains=village)
         if search:
             farmers = farmers.filter(
                 Q(name__icontains=search)
@@ -272,7 +280,15 @@ class FarmerDetailAPI(APIView):
         self.request = request
         farmer = self._get_farmer(pk)
         serializer = FarmerDetailSerializer(farmer, context={"request": request})
-        return success_response(data=serializer.data)
+        data = serializer.data
+        employee = None if _is_admin_user(request.user) else request.user
+        data["visit_summary"] = build_farmer_revisit_summary(
+            farmer, employee=employee
+        )
+        data["visit_history"] = build_farmer_visit_history(
+            farmer, employee=employee, limit=20
+        )
+        return success_response(data=data)
 
     def put(self, request, pk):
         if request.user.is_staff:
@@ -495,7 +511,8 @@ class FarmerVisitListAPI(APIView):
     def get(self, request, farmer_id):
         farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
         visits = (
-            Visit.objects.filter(
+            submitted_visits_qs()
+            .filter(
                 Q(farmer=farmer)
                 | Q(farmer_phone=farmer.phone)
                 | Q(farmer_name__iexact=farmer.name)
@@ -508,6 +525,8 @@ class FarmerVisitListAPI(APIView):
                 "crop",
                 "farmer",
                 "field",
+                "problem_category",
+                "problem_master",
             )
             .prefetch_related(
                 "media_files",

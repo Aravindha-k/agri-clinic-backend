@@ -3,18 +3,22 @@ import logging
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.types import OpenApiTypes
 from .device_session import MobileEmployeeAPIView
 from .permissions import IsEmployeeUser
 from utils.pagination import StandardPagination
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 from visits.serializers import VisitSerializer, VisitMediaSerializer, VisitMediaUploadSerializer
+from visits.field_visit_serializers import FieldVisitSubmitSerializer
 from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, submitted_visits_qs
 from visits.visit_response import build_visit_farmer_block, reload_visit
 from visits.querysets import submitted_visits_with_relations
 from visits.access import get_visit_for_user
 from visits.models import Visit, VisitMedia
+from visits.date_filters import apply_visit_date_filter
+from visits.visit_media import attach_visit_media_files
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +27,14 @@ def _visit_timeline(visit: Visit) -> list[dict]:
     """Other submitted visits for the same farmer by this employee (newest first)."""
     if not visit.farmer_id:
         return []
+    from visits.field_notes import resolved_recommendation, stored_observation
+    from visits.visit_response import build_field_visit_problem_block, crop_display_name
+
     rows = (
         submitted_visits_qs()
         .filter(employee=visit.employee_id, farmer_id=visit.farmer_id)
         .exclude(pk=visit.pk)
+        .select_related("crop", "problem_category", "problem_master")
         .order_by("-visit_date", "-created_at")[:20]
     )
     return [
@@ -34,6 +42,12 @@ def _visit_timeline(visit: Visit) -> list[dict]:
             "id": row.id,
             "visit_date": str(row.visit_date) if row.visit_date else None,
             "crop_id": row.crop_id,
+            "crop_name": crop_display_name(row),
+            "problem_category_id": row.problem_category_id,
+            "problem_item_id": row.problem_master_id,
+            "recommendation": resolved_recommendation(row) or None,
+            "observation": stored_observation(row) or None,
+            "action_taken": row.action_taken or None,
             "latitude": row.latitude,
             "longitude": row.longitude,
             "notes": row.notes,
@@ -48,10 +62,17 @@ def _visit_timeline(visit: Visit) -> list[dict]:
     summary="Mobile visits list/create",
     description=(
         "GET: employee's submitted visits. POST: one-shot visit submit "
-        "(farmer, crop, GPS required). Optional multipart `media` files. "
+        "(field visit form or legacy farmer+crop+GPS). Optional multipart `media` files. "
         "Optional `local_sync_id` for offline deduplication."
     ),
-    request=VisitSerializer,
+    parameters=[
+        OpenApiParameter(
+            "date_filter",
+            OpenApiTypes.STR,
+            description="Filter by visit date: `today`, `week` (Mon–today), `month` (1st–today).",
+        ),
+    ],
+    request=FieldVisitSubmitSerializer,
     responses={
         200: VisitSerializer(many=True),
         201: VisitSerializer,
@@ -69,6 +90,8 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
             .filter(employee=user)
             .order_by("-created_at", "-id")
         )
+        date_filter = request.query_params.get("date_filter")
+        visits = apply_visit_date_filter(visits, date_filter)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(visits, request)
         serializer = VisitSerializer(page, many=True, context={"request": request})
@@ -94,7 +117,7 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
                     message="Visit already synced",
                 )
 
-        visit_serializer = VisitSerializer(
+        visit_serializer = FieldVisitSubmitSerializer(
             data=request.data, context={"request": request}
         )
         if not visit_serializer.is_valid():
@@ -102,7 +125,10 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
                 errors=visit_serializer.errors,
                 message=SUBMIT_VISIT_REQUIRED_MESSAGE,
             )
-        visit = visit_serializer.save(employee=request.user)
+        visit = visit_serializer.save()
+        media_error = attach_visit_media_files(request, visit)
+        if media_error:
+            return media_error
         visit = reload_visit(visit.pk)
 
         logger.info(
@@ -119,22 +145,6 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
             invalidate_dashboard_caches()
         except Exception:
             logger.debug("Dashboard cache invalidation skipped", exc_info=True)
-
-        media_files = request.FILES.getlist("media")
-        media_errors = []
-        for file in media_files:
-            media_type = request.data.get("media_type", "image")
-            media_serializer = VisitMediaUploadSerializer(
-                data={"file": file, "media_type": media_type}
-            )
-            if media_serializer.is_valid():
-                media_serializer.save(visit=visit)
-            else:
-                media_errors.append(media_serializer.errors)
-        if media_errors:
-            return error_response(
-                errors={"media": media_errors}, message="Media upload error"
-            )
 
         visit_data = VisitSerializer(visit, context={"request": request}).data
         farmer_block = build_visit_farmer_block(visit)
@@ -219,6 +229,14 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
         if media_type not in valid_types:
             return error_response(
                 message=f"media_type must be one of: {', '.join(sorted(valid_types))}",
+                status_code=400,
+            )
+
+        media_errors = validate_visit_media_file(file_obj=file, media_type=media_type)
+        if media_errors:
+            return error_response(
+                message=media_errors.get("file")
+                or media_errors.get("media_type", "Invalid media file."),
                 status_code=400,
             )
 

@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from masters.models import Village, Crop
+from masters.models import Village, Crop, ProblemCategory, ProblemMaster
 from django.contrib.auth.models import User
 
 from visits.attachments import ATTACHMENT_TYPE_CHOICES
@@ -46,6 +46,11 @@ class Visit(models.Model):
     )
     farmer_name = models.CharField(max_length=255, null=True, blank=True)
     farmer_phone = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    farmer_age = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Farmer age at time of visit (field visit form).",
+    )
 
     # Land Details (manual)
     field = models.ForeignKey(
@@ -57,7 +62,32 @@ class Visit(models.Model):
         db_index=True,
     )
     land_name = models.CharField(max_length=255, null=True, blank=True)
-    land_area = models.FloatField(null=True, blank=True)
+    land_area = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Acreage for this visit (canonical field visit acreage).",
+    )
+
+    # Field visit — problem (canonical)
+    problem_category = models.ForeignKey(
+        ProblemCategory,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="visits",
+    )
+    problem_master = models.ForeignKey(
+        ProblemMaster,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="visits",
+    )
+    problem_description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Required narrative for field visit submit.",
+    )
 
     # Crop Details
     crop = models.ForeignKey(
@@ -75,6 +105,7 @@ class Visit(models.Model):
     # Observations / field notes (mobile + admin)
     observation = models.TextField(blank=True, null=True)
     field_notes = models.TextField(blank=True, null=True)
+    recommendation = models.TextField(blank=True, null=True)
     problem_seen = models.TextField(blank=True, null=True)
     action_taken = models.TextField(blank=True, null=True)
 

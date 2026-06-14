@@ -9,10 +9,15 @@ from .views import (
     CropViewSet,
     FieldCropViewSet,
     RecommendationViewSet,
+    ProblemCategoryViewSet,
+    ProblemMasterViewSet,
     DashboardStatsAPI,
     DashboardOverviewAPI,
     FarmerVisitAuditAPI,
 )
+from masters.problem_views import VisitFormOptionsAPI
+from masters.problem_item_views import ProblemItemViewSet, ProblemItemImportAPI
+from .dev_reset import DevResetTestBusinessDataAPI
 from visits.attachment_views import AdminVisitAttachmentListAPI
 from accounts.profile_photos import AdminEmployeePhotoAPI
 from farmers.photo_views import AdminFarmerPhotoAPI
@@ -26,6 +31,17 @@ router.register(r"crops", FieldCropViewSet, basename="admin-crop")
 router.register(r"crop-catalog", CropViewSet, basename="admin-crop-catalog")
 router.register(
     r"recommendations", RecommendationViewSet, basename="admin-recommendation"
+)
+router.register(
+    r"problem-categories",
+    ProblemCategoryViewSet,
+    basename="admin-problem-category",
+)
+router.register(
+    r"problem-masters", ProblemMasterViewSet, basename="admin-problem-master"
+)
+router.register(
+    r"problem-items", ProblemItemViewSet, basename="admin-problem-item"
 )
 
 urlpatterns = [
@@ -59,6 +75,21 @@ urlpatterns = [
         "farmers/<int:pk>/photo/",
         AdminFarmerPhotoAPI.as_view(),
         name="admin-farmer-photo",
+    ),
+    path(
+        "visit-form-options/",
+        VisitFormOptionsAPI.as_view(),
+        name="admin-visit-form-options",
+    ),
+    path(
+        "problem-items/import/",
+        ProblemItemImportAPI.as_view(),
+        name="admin-problem-items-import",
+    ),
+    path(
+        "dev/reset-test-data/",
+        DevResetTestBusinessDataAPI.as_view(),
+        name="admin-dev-reset-test-data",
     ),
     path("", include(router.urls)),
 ]

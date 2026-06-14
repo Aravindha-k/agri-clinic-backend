@@ -5,6 +5,10 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 
+from visits.farmer_visit_summary import (
+    build_farmer_revisit_summary,
+    build_farmer_visit_history,
+)
 from farmers.serializers import FarmerFieldSerializer, FarmerListSerializer
 from farmers.views import StandardPagination, _farmers_queryset_with_visit_counts
 from utils.response import success_response
@@ -71,4 +75,10 @@ class MobileFarmerDetailAPI(MobileEmployeeAPIView):
             many=True,
             context={"request": request},
         ).data
+        data["visit_summary"] = build_farmer_revisit_summary(
+            farmer, employee=request.user
+        )
+        data["visit_history"] = build_farmer_visit_history(
+            farmer, employee=request.user, limit=20
+        )
         return success_response(data=data, message="Farmer fetched")

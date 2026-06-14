@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    DashboardView,
     DashboardSummaryAPI,
     VisitTrendsAPI,
     EmployeePerformanceAPI,
@@ -7,6 +8,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path("", DashboardView.as_view(), name="dashboard"),
     path("summary/", DashboardSummaryAPI.as_view(), name="dashboard-summary"),
     path("visit-trends/", VisitTrendsAPI.as_view(), name="dashboard-visit-trends"),
     path(

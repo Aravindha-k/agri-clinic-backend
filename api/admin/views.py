@@ -4,6 +4,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.mixins import (
+    CreateModelMixin,
     ListModelMixin,
     RetrieveModelMixin,
 )
@@ -21,10 +22,20 @@ from masters.models import (
     CropIssue,
     Crop,
     Recommendation,
+    ProblemCategory,
+    ProblemMaster,
 )
+from masters.problem_serializers import (
+    ProblemCategorySerializer,
+    ProblemMasterSerializer,
+)
+from masters.problem_item_utils import db_category_code
 from visits.models import Visit
 from visits.querysets import submitted_visits_with_relations
 from visits.submitted import get_visit_cleanup_counts, submitted_visits_qs
+from visits.field_visit_serializers import FieldVisitSubmitSerializer
+from visits.visit_media import attach_visit_media_files
+from visits.visit_response import reload_visit
 from accounts.models import EmployeeProfile
 
 from farmers.audit import build_farmer_visit_audit
@@ -136,10 +147,9 @@ class FarmerFieldViewSet(ReadOnlyViewSet):
     )
 
 
-class VisitViewSet(ReadOnlyViewSet):
+class VisitViewSet(CreateModelMixin, ReadOnlyViewSet):
     """
-    Global admin list: all submitted visits (farmer + crop + GPS on file).
-    Not scoped to the logged-in user; optional ?employee= filter only.
+    Admin visit list/detail plus field-visit create (same payload as mobile).
     """
 
     serializer_class = AdminVisitSerializer
@@ -168,6 +178,26 @@ class VisitViewSet(ReadOnlyViewSet):
     ]
     filterset_fields = ["employee", "farmer", "field", "district", "village", "crop"]
     ordering_fields = ["created_at", "visit_date", "visit_time"]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return FieldVisitSubmitSerializer
+        return AdminVisitSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        visit = serializer.save()
+        media_error = attach_visit_media_files(request, visit)
+        if media_error:
+            return media_error
+        visit = reload_visit(visit.pk)
+        data = AdminVisitSerializer(visit, context={"request": request}).data
+        return success_response(
+            data=data,
+            message="Visit created",
+            status_code=http_status.HTTP_201_CREATED,
+        )
 
 
 class CropIssueViewSet(ReadOnlyViewSet):
@@ -235,6 +265,65 @@ class RecommendationViewSet(AdminModelViewSet):
     filterset_fields = ["issue", "given_by"]
     ordering_fields = ["created_at"]
     queryset = RECOMMENDATION_QS.select_related("issue")
+
+
+class ProblemCategoryViewSet(AdminModelViewSet):
+    serializer_class = ProblemCategorySerializer
+    queryset = ProblemCategory.objects.all().order_by("name")
+    search_fields = ["name", "code", "description"]
+    filterset_fields = ["is_active", "requires_problem_master"]
+    ordering_fields = ["name", "created_at"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.action == "list":
+            from masters.problem_item_utils import problem_categories_with_active_items
+
+            return problem_categories_with_active_items()
+        return qs
+
+
+class ProblemMasterViewSet(AdminModelViewSet):
+    serializer_class = ProblemMasterSerializer
+    queryset = ProblemMaster.objects.select_related("category", "crop").order_by(
+        "category__name", "name"
+    )
+    search_fields = ["name", "tamil_name", "category__name", "crop__name_en"]
+    filterset_fields = ["crop", "is_active"]
+    ordering_fields = ["name", "created_at"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        category = self.request.query_params.get("category")
+        if category:
+            if str(category).isdigit():
+                qs = qs.filter(category_id=int(category))
+            else:
+                try:
+                    qs = qs.filter(category__code=db_category_code(category.strip().lower()))
+                except ValueError:
+                    return qs.none()
+        crop_id = self.request.query_params.get("crop_id")
+        if crop_id:
+            from masters.problem_views import models_Q_crop_filter
+
+            qs = qs.filter(models_Q_crop_filter(crop_id))
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        import logging
+
+        logger = logging.getLogger(__name__)
+        queryset = self.filter_queryset(self.get_queryset())
+        logger.info(
+            "ProblemMasterViewSet.list user_id=%s staff=%s query_params=%s queryset_count=%s",
+            getattr(request.user, "id", None),
+            getattr(request.user, "is_staff", None),
+            dict(request.query_params),
+            queryset.count(),
+        )
+        serializer = self.get_serializer(queryset, many=True)
+        return success_response(data=serializer.data)
 
 
 # ══════════════════════════════════════════════

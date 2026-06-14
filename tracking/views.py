@@ -76,7 +76,11 @@ class BulkLocationUploadAPI(DeviceSessionRequiredMixin, APIView):
         if isinstance(request.data, list):
             locations_data = request.data
         elif isinstance(request.data, dict):
-            locations_data = request.data.get("locations", [])
+            locations_data = (
+                request.data.get("points")
+                or request.data.get("locations")
+                or []
+            )
         else:
             return api_response(
                 success=False,
@@ -104,19 +108,31 @@ class BulkLocationUploadAPI(DeviceSessionRequiredMixin, APIView):
 
         created = []
         errors = []
-        for ldata in locations_data:
+        for index, ldata in enumerate(locations_data):
             serializer = LocationLogCreateSerializer(
-                data=ldata, context={"request": request}
+                data=ldata,
+                context={"request": request, "location_source": "bulk_upload"},
             )
             if serializer.is_valid():
                 loc = serializer.save()
                 created.append(loc.id)
             else:
-                errors.append(serializer.errors)
+                errors.append({"index": index, "errors": serializer.errors})
+        logger.info(
+            "BulkLocationUpload employee_id=%s saved=%s failed=%s",
+            request.user.pk,
+            len(created),
+            len(errors),
+        )
         return api_response(
             success=len(errors) == 0,
             message="Bulk locations upload complete",
-            data={"created": created, "errors": errors},
+            data={
+                "created": created,
+                "saved_count": len(created),
+                "failed_count": len(errors),
+                "errors": errors,
+            },
             status=(
                 status.HTTP_201_CREATED
                 if len(errors) == 0
@@ -352,7 +368,8 @@ class PushLocationAPI(DeviceSessionRequiredMixin, APIView):
         expire_overlong_workdays_for_user(user)
 
         serializer = LocationLogCreateSerializer(
-            data=request.data, context={"request": request}
+            data=request.data,
+            context={"request": request, "location_source": "location_push"},
         )
         serializer.is_valid(raise_exception=True)
 
@@ -400,12 +417,23 @@ class PushLocationAPI(DeviceSessionRequiredMixin, APIView):
             location.is_suspicious = True
             location.save(update_fields=["is_suspicious"])
 
+        from tracking.location_helpers import workday_distance_km
+
+        total_points = LocationLog.objects.filter(workday=workday).count()
+        route_distance_km = workday_distance_km(workday.pk)
         logger.info(
-            "LocationPush employee_id=%s workday_id=%s lat=%s lng=%s heartbeat_updated=1",
+            "LocationPush employee_id=%s workday_id=%s lat=%s lng=%s "
+            "timestamp=%s location_log_id=%s total_points=%s "
+            "distance_km=%s suspicious=%s",
             user.pk,
             workday.pk,
             lat,
             lng,
+            location.recorded_at,
+            location.pk,
+            total_points,
+            route_distance_km,
+            is_suspicious,
         )
         try:
             from dashboard.services import invalidate_stats_cache_only
@@ -466,7 +494,12 @@ class BulkPushLocationAPI(DeviceSessionRequiredMixin, APIView):
         app_version = serializer.validated_data.get("app_version")
 
         def _point_time(pt):
-            return pt.get("captured_at") or pt.get("recorded_at") or timezone.now()
+            return (
+                pt.get("captured_at")
+                or pt.get("recorded_at")
+                or pt.get("timestamp")
+                or timezone.now()
+            )
 
         # Sort by device timestamp so jump detection is sequential
         points.sort(key=_point_time)
@@ -535,8 +568,10 @@ class BulkPushLocationAPI(DeviceSessionRequiredMixin, APIView):
                 longitude=float(latest["longitude"]),
                 accuracy=float(latest["accuracy"]) if latest.get("accuracy") is not None else None,
                 battery_level=latest.get("battery_level"),
-                recorded_at=latest["recorded_at"],
+                recorded_at=_point_time(latest),
             )
+            workday.last_heartbeat = timezone.now()
+            workday.save(update_fields=["last_heartbeat"])
             logger.info(
                 "BulkLocationPush employee_id=%s workday_id=%s lat=%s lng=%s heartbeat_updated=1 saved=%s",
                 user.pk,
@@ -639,6 +674,8 @@ class AdminTrackingStatusAPI(APIView):
             is_active_employee=True
         ).select_related("user", "village", "village__district")
 
+        today = now.date()
+
         # 2. Active workdays keyed by user_id (single query)
         active_workdays = {
             wd.user_id: wd
@@ -647,18 +684,54 @@ class AdminTrackingStatusAPI(APIView):
         }
         working_user_ids = list(active_workdays.keys())
 
-        # 3. Latest LocationLog per working user (single subquery)
+        # Today's workdays (active or ended) for workday_status display
+        today_workdays = {}
+        for wd in WorkDay.objects.filter(date=today).select_related("user"):
+            prev = today_workdays.get(wd.user_id)
+            if not prev or wd.start_time > prev.start_time:
+                today_workdays[wd.user_id] = wd
+
+        # GPS point counts today (batch)
+        from django.db.models import Count
+
+        today_point_counts = dict(
+            LocationLog.objects.filter(recorded_at__date=today)
+            .values("user_id")
+            .annotate(c=Count("id"))
+            .values_list("user_id", "c")
+        )
+
+        users_with_points = [uid for uid, c in today_point_counts.items() if c > 0]
+        today_distance_map = {}
+        for uid in users_with_points:
+            try:
+                today_distance_map[uid] = _compute_distance_km(uid, today)
+            except Exception:
+                today_distance_map[uid] = 0.0
+
+        # 3. Latest LocationLog per user with activity today (single subquery)
         last_locations = {}
-        if working_user_ids:
+        location_user_ids = list(
+            set(working_user_ids) | set(today_workdays.keys()) | set(users_with_points)
+        )
+        if location_user_ids:
             latest_loc_subq = (
                 LocationLog.objects.filter(user_id=OuterRef("user_id"))
                 .order_by("-recorded_at")
                 .values("id")[:1]
             )
             latest_locs_qs = LocationLog.objects.filter(
-                user_id__in=working_user_ids,
+                user_id__in=location_user_ids,
                 id=Subquery(latest_loc_subq),
-            ).values("user_id", "latitude", "longitude", "recorded_at")
+            ).values(
+                "user_id",
+                "latitude",
+                "longitude",
+                "recorded_at",
+                "speed",
+                "accuracy",
+                "battery_level",
+            )
             last_locations = {loc["user_id"]: loc for loc in latest_locs_qs}
 
         # 4. Active GPS_OFF events -> set of user_ids (single query)
@@ -679,8 +752,9 @@ class AdminTrackingStatusAPI(APIView):
         data = []
         for emp in employees:
             uid = emp.user_id
-            workday = active_workdays.get(uid)
+            workday = active_workdays.get(uid) or today_workdays.get(uid)
             loc = last_locations.get(uid)
+            points_today = int(today_point_counts.get(uid, 0))
             try:
                 row = build_admin_tracking_row(
                     emp=emp,
@@ -692,6 +766,8 @@ class AdminTrackingStatusAPI(APIView):
                     request=request,
                     movement_status=movement_map.get(uid, "stopped"),
                     device_status=device_status_map.get(uid),
+                    points_today=points_today,
+                    distance_km_today=today_distance_map.get(uid, 0.0 if points_today else None),
                 )
             except Exception:
                 logger.exception("Failed to build tracking row user_id=%s", uid)
@@ -1110,6 +1186,7 @@ class AdminEmployeeRouteAPI(APIView):
             user_id=user_id,
             target_date=target_date,
             route=display_route,
+            raw_route=raw_route,
             workdays=workdays,
             display_meta=display_meta,
         )
@@ -1169,7 +1246,14 @@ class AdminEmployeeSummaryAPI(APIView):
         last_location = (
             LocationLog.objects.filter(user=user)
             .order_by("-recorded_at")
-            .values("latitude", "longitude", "accuracy", "recorded_at")
+            .values(
+                "latitude",
+                "longitude",
+                "accuracy",
+                "speed",
+                "battery_level",
+                "recorded_at",
+            )
             .first()
         )
 
@@ -1182,6 +1266,16 @@ class AdminEmployeeSummaryAPI(APIView):
                 end_time__isnull=True,
             ).exists()
 
+        points_today = LocationLog.objects.filter(
+            user=user, recorded_at__date=today
+        ).count()
+        today_distance_km = 0.0
+        try:
+            if points_today:
+                today_distance_km = _compute_distance_km(user.id, today)
+        except Exception:
+            logger.debug("Distance calc skipped user_id=%s", user_id, exc_info=True)
+
         try:
             row = build_admin_tracking_row(
                 emp=emp,
@@ -1191,6 +1285,8 @@ class AdminEmployeeSummaryAPI(APIView):
                 gps_off=gps_off,
                 now=now,
                 request=request,
+                points_today=points_today,
+                distance_km_today=today_distance_km if points_today else None,
             )
         except Exception:
             logger.exception("Employee summary tracking failed user_id=%s", user_id)
@@ -1205,16 +1301,164 @@ class AdminEmployeeSummaryAPI(APIView):
                 "active_workday": False,
             }
 
-        today_distance_km = 0.0
-        try:
-            today_distance_km = _compute_distance_km(user.id, today)
-        except Exception:
-            logger.debug("Distance calc skipped user_id=%s", user_id, exc_info=True)
-
-        row["today_distance_km"] = today_distance_km
-        row["accuracy"] = last_location["accuracy"] if last_location else None
         row["is_on_field"] = row.get("active_workday", False)
         return Response(row)
+
+
+# ──────────────────────────────────────────────
+# ADMIN: EMPLOYEE TRACKING DIAGNOSTICS
+# GET /api/tracking/admin/employee/<id>/diagnostics/
+# ──────────────────────────────────────────────
+@extend_schema(
+    tags=["Tracking"],
+    summary="Admin: employee tracking diagnostics",
+    description="Last location logs, workday, device session, and tracking health for admin debug panel.",
+    responses={200: SIMPLE_SUCCESS, 404: error_schema("EmployeeNotFound")},
+)
+class AdminEmployeeTrackingDiagnosticsAPI(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, user_id):
+        expire_old_workdays()
+        now = timezone.now()
+        today = now.date()
+
+        emp = get_object_or_404(
+            EmployeeProfile.objects.select_related(
+                "user", "village", "village__district"
+            ),
+            user_id=user_id,
+        )
+        user = emp.user
+
+        active_workday = (
+            WorkDay.objects.filter(user=user, is_active=True)
+            .order_by("-start_time")
+            .first()
+        )
+        if active_workday and not is_workday_within_duration(active_workday, now):
+            active_workday = None
+
+        display_workday = (
+            active_workday
+            or WorkDay.objects.filter(user=user, date=today)
+            .order_by("-start_time")
+            .first()
+        )
+
+        last_logs = list(
+            LocationLog.objects.filter(user=user)
+            .order_by("-recorded_at")[:10]
+            .values(
+                "id",
+                "latitude",
+                "longitude",
+                "accuracy",
+                "speed",
+                "heading",
+                "battery_level",
+                "recorded_at",
+                "created_at",
+                "workday_id",
+                "is_suspicious",
+            )
+        )
+        for row in last_logs:
+            for key in ("recorded_at", "created_at"):
+                if row.get(key) and hasattr(row[key], "isoformat"):
+                    row[key] = row[key].isoformat()
+
+        points_today = LocationLog.objects.filter(
+            user=user, recorded_at__date=today
+        ).count()
+        distance_km = 0.0
+        if points_today:
+            try:
+                distance_km = _compute_distance_km(user.id, today)
+            except Exception:
+                logger.debug("Diagnostics distance skipped user_id=%s", user_id)
+
+        gps_off = False
+        if active_workday:
+            gps_off = AvailabilityEvent.objects.filter(
+                user=user,
+                workday=active_workday,
+                event_type="GPS_OFF",
+                end_time__isnull=True,
+            ).exists()
+
+        last_location = (
+            LocationLog.objects.filter(user=user)
+            .order_by("-recorded_at")
+            .values(
+                "latitude",
+                "longitude",
+                "accuracy",
+                "speed",
+                "battery_level",
+                "recorded_at",
+            )
+            .first()
+        )
+
+        try:
+            status_row = build_admin_tracking_row(
+                emp=emp,
+                user=user,
+                workday=display_workday,
+                last_location=last_location,
+                gps_off=gps_off,
+                now=now,
+                request=request,
+                points_today=points_today,
+                distance_km_today=distance_km if points_today else None,
+            )
+        except Exception:
+            logger.exception("Diagnostics status row failed user_id=%s", user_id)
+            status_row = {"user_id": user.id, "tracking_health": "STOPPED"}
+
+        from accounts.device_sessions import device_status_payload
+
+        device_status = device_status_payload(user)
+
+        return Response(
+            {
+                "user_id": user.id,
+                "employee_id": emp.employee_id,
+                "employee_name": user.username or emp.employee_id,
+                "date": today.isoformat(),
+                "active_workday_id": active_workday.id if active_workday else None,
+                "workday_id": display_workday.id if display_workday else None,
+                "workday_started_at": (
+                    display_workday.start_time.isoformat() if display_workday else None
+                ),
+                "workday_ended_at": (
+                    display_workday.end_time.isoformat()
+                    if display_workday and display_workday.end_time
+                    else None
+                ),
+                "workday_status": status_row.get("workday_status"),
+                "tracking_status": status_row.get("tracking_status"),
+                "tracking_task_status": status_row.get("tracking_task_status"),
+                "gps_data_status": status_row.get("gps_data_status"),
+                "gps_status": status_row.get("gps_status"),
+                "permission_status": status_row.get("permission_status"),
+                "movement_status": status_row.get("movement_status"),
+                "tracking_health": status_row.get("tracking_health"),
+                "last_location_at": status_row.get("last_location_at"),
+                "last_location_age_minutes": status_row.get("last_location_age_minutes"),
+                "last_api_received_at": last_logs[0]["created_at"] if last_logs else None,
+                "total_points": points_today,
+                "total_points_all_time": LocationLog.objects.filter(user=user).count(),
+                "distance_km": distance_km,
+                "speed": status_row.get("speed"),
+                "accuracy": status_row.get("accuracy"),
+                "battery_level": status_row.get("battery_level"),
+                "device_status": device_status,
+                "device_session_id": device_status.get("active_device_id"),
+                "last_location_logs": last_logs,
+            }
+        )
 
 
 # ──────────────────────────────────────────────

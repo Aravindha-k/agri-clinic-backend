@@ -24,7 +24,9 @@ from .access import get_visit_for_user, is_privileged_user
 from .querysets import submitted_visits_with_relations
 from .models import Visit, VisitAttachment, VisitMedia
 from .serializers import VisitSerializer, VisitMediaSerializer
+from .field_visit_serializers import FieldVisitSubmitSerializer
 from .submitted import SUBMIT_VISIT_REQUIRED_MESSAGE
+from .visit_media import attach_visit_media_files
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,7 @@ def _invalidate_visit_caches():
     methods=["POST"],
     summary="Create visit",
     description="Create a new field visit. Media files can be attached as multipart `media_files[]`.",
-    request=VisitSerializer,
+    request=FieldVisitSubmitSerializer,
     responses={201: SIMPLE_SUCCESS, 400: error_schema("VisitCreateError")},
 )
 class VisitListCreateAPI(APIView):
@@ -92,20 +94,15 @@ class VisitListCreateAPI(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
-        serializer = VisitSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        visit = serializer.save(employee=request.user)
-        _invalidate_visit_caches()
-        files = (
-            request.FILES.getlist("media_files") if hasattr(request, "FILES") else []
+        serializer = FieldVisitSubmitSerializer(
+            data=request.data, context={"request": request}
         )
-        for file in files:
-            media_type = (
-                "image"
-                if file.content_type.startswith("image")
-                else "video" if file.content_type.startswith("video") else "other"
-            )
-            VisitMedia.objects.create(visit=visit, file=file, media_type=media_type)
+        serializer.is_valid(raise_exception=True)
+        visit = serializer.save()
+        media_error = attach_visit_media_files(request, visit)
+        if media_error:
+            return media_error
+        _invalidate_visit_caches()
         return api_response(
             success=True,
             message="Visit created successfully",
@@ -338,6 +335,14 @@ class VisitMediaUploadAPIView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        media_errors = validate_visit_media_file(file_obj=file, media_type=media_type)
+        if media_errors:
+            return error_response(
+                message=media_errors.get("file")
+                or media_errors.get("media_type", "Invalid media file."),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
         media = VisitMedia.objects.create(
             visit=visit,
             file=file,
@@ -457,6 +462,14 @@ class VisitPhotoUploadAPI(APIView):
             return api_response(
                 success=False,
                 message="image file is required",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        media_errors = validate_visit_media_file(file_obj=image, media_type="image")
+        if media_errors:
+            return api_response(
+                success=False,
+                message=media_errors.get("file", "Invalid image file."),
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

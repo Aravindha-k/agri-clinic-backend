@@ -31,13 +31,16 @@ def log_visit_activity(sender, instance, created, raw=False, **kwargs):
 
     label = instance.farmer_name or farmer.name
     if created:
-        FarmerActivity.objects.create(
-            farmer=farmer,
-            activity_type="FOLLOWUP_VISIT",
-            reference_id=instance.pk,
-            created_by=instance.employee,
-            notes=instance.notes or f"Visit logged for {label}",
-        )
+        from visits.submitted import visit_has_submitted_details
+
+        if visit_has_submitted_details(instance):
+            FarmerActivity.objects.create(
+                farmer=farmer,
+                activity_type="VISIT_COMPLETED",
+                reference_id=instance.pk,
+                created_by=instance.employee,
+                notes=instance.notes or f"Field visit recorded for {label}",
+            )
     else:
         from visits.submitted import visit_has_submitted_details
 

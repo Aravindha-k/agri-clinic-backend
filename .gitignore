@@ -5,9 +5,17 @@ render.production.env
 __pycache__/
 *.py[cod]
 .venv/
+venv/
 staticfiles/
 media/
 db.sqlite3
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+backups/
 agri_local_data.json
 agri_local_data_*.json
 *.log

@@ -177,6 +177,76 @@ def resolve_movement_status(
     return "idle"
 
 
+def resolve_workday_status(workday: WorkDay | None, *, now=None) -> str:
+    """not_started | working | ended"""
+    if not workday:
+        return "not_started"
+    now = now or timezone.now()
+    if workday.is_active and is_workday_within_duration(workday, now):
+        return "working"
+    if workday.end_time or workday.auto_ended or not workday.is_active:
+        return "ended"
+    return "not_started"
+
+
+def resolve_gps_data_status(
+    *,
+    workday: WorkDay | None,
+    last_location_at,
+    points_today: int,
+    now=None,
+) -> str:
+    """online | offline | never_sent"""
+    now = now or timezone.now()
+    active = workday is not None and is_workday_within_duration(workday, now)
+    if not active:
+        if points_today > 0:
+            return "offline"
+        return "never_sent"
+    if points_today <= 0:
+        return "never_sent"
+    if not last_location_at:
+        return "never_sent"
+    heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+    if last_location_at >= heartbeat_threshold:
+        return "online"
+    return "offline"
+
+
+def resolve_tracking_task_status(
+    *,
+    workday: WorkDay | None,
+    gps_off: bool,
+    tracking_status: str,
+    points_today: int,
+    now=None,
+) -> str:
+    """tracking | stopped | permission_issue | unknown"""
+    now = now or timezone.now()
+    active = workday is not None and is_workday_within_duration(workday, now)
+    if not active:
+        return "stopped"
+    if gps_off:
+        return "permission_issue"
+    if tracking_status == "tracking":
+        return "tracking"
+    if points_today <= 0:
+        return "stopped"
+    if tracking_status in ("online", "offline"):
+        return "tracking" if tracking_status == "online" else "stopped"
+    return "unknown"
+
+
+def _location_age_minutes(last_location_at, *, now=None) -> int | None:
+    if not last_location_at:
+        return None
+    now = now or timezone.now()
+    try:
+        return max(int((now - last_location_at).total_seconds() // 60), 0)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_admin_tracking_row(
     *,
     emp,
@@ -188,6 +258,8 @@ def build_admin_tracking_row(
     request=None,
     movement_status: str | None = None,
     device_status: dict | None = None,
+    points_today: int = 0,
+    distance_km_today: float | None = None,
 ) -> dict[str, Any]:
     """Standard admin tracking row; safe when workday/location is missing."""
     from utils.photo_urls import build_profile_photo_url
@@ -206,6 +278,9 @@ def build_admin_tracking_row(
     last_lat = None
     last_lng = None
     last_loc_at = None
+    last_speed = None
+    last_accuracy = None
+    last_battery = None
     if last_location:
         last_lat = float(last_location["latitude"])
         last_lng = float(last_location["longitude"])
@@ -215,6 +290,9 @@ def build_admin_tracking_row(
             if hasattr(last_loc_at, "isoformat")
             else str(last_loc_at)
         )
+        last_speed = last_location.get("speed")
+        last_accuracy = last_location.get("accuracy")
+        last_battery = last_location.get("battery_level")
 
     online = is_recently_online(
         workday,
@@ -228,13 +306,24 @@ def build_admin_tracking_row(
     work_status = _work_status_api(workday, now=now)
 
     active = workday is not None and is_workday_within_duration(workday, now)
+    recent_location = bool(last_loc_at and last_loc_at >= heartbeat_threshold)
+
+    if not active or work_status_internal == "stopped":
+        tracking_status = "stopped"
+    elif recent_location and active:
+        tracking_status = "tracking"
+    elif online:
+        tracking_status = "online"
+    else:
+        tracking_status = "offline"
+
     if not active:
         gps_api, connection = "GPS_OFF", "OFFLINE"
         gps_conn = "offline"
     elif gps_off:
         gps_api, connection = "GPS_OFF", "OFFLINE"
         gps_conn = "offline"
-    elif online:
+    elif tracking_status in ("tracking", "online"):
         gps_api, connection = "GPS_ON", "ONLINE"
         gps_conn = "online"
     else:
@@ -263,6 +352,23 @@ def build_admin_tracking_row(
 
         device_status = device_status_payload(user)
 
+    workday_status = resolve_workday_status(workday, now=now)
+    gps_data_status = resolve_gps_data_status(
+        workday=workday,
+        last_location_at=last_loc_at,
+        points_today=points_today,
+        now=now,
+    )
+    tracking_task_status = resolve_tracking_task_status(
+        workday=workday,
+        gps_off=gps_off,
+        tracking_status=tracking_status,
+        points_today=points_today,
+        now=now,
+    )
+    last_location_age_minutes = _location_age_minutes(last_loc_at, now=now)
+    last_location_at_iso = last_seen
+
     return {
         "user_id": uid,
         "employee_id": emp.employee_id,
@@ -283,6 +389,7 @@ def build_admin_tracking_row(
         "gps_status": gps_api,
         "gps_connection": gps_conn,
         "movement_status": movement_status,
+        "tracking_status": tracking_status,
         "tracking_health": tracking_health,
         "last_seen": last_seen,
         "today_duration": today_duration,
@@ -300,6 +407,18 @@ def build_admin_tracking_row(
         "auto_ended": bool(workday.auto_ended) if workday else False,
         "is_online": online,
         "is_working": work_status == "WORKING",
+        "workday_status": workday_status,
+        "gps_data_status": gps_data_status,
+        "tracking_task_status": tracking_task_status,
+        "permission_status": "gps_off" if gps_off else "ok",
+        "last_location_at": last_location_at_iso,
+        "last_location_age_minutes": last_location_age_minutes,
+        "total_points": points_today,
+        "distance_km": distance_km_today,
+        "today_distance_km": distance_km_today,
+        "speed": last_speed,
+        "accuracy": last_accuracy,
+        "battery_level": last_battery,
     }
 
 

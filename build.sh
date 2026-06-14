@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Render build script — install deps and collect static assets.
+# Database migrations run in render.yaml preDeployCommand (migrate --noinput).
 set -o errexit
 
 pip install --upgrade pip

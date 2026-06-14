@@ -19,6 +19,9 @@ VISIT_LIST_SELECT_RELATED = (
     "farmer__village",
     "farmer__district",
     "field",
+    "problem_category",
+    "problem_master",
+    "problem_master__category",
 )
 
 
@@ -68,13 +71,55 @@ def build_visit_farmer_block(
         "name": name or "",
         "mobile": mobile or "",
         "phone": mobile or "",
+        "age": visit.farmer_age,
         "village": village or "",
+        "village_id": visit.village_id,
         "profile_photo_url": profile_photo_url,
         "crop_name": crop_display_name(visit),
         "acreage": acreage,
         "land_area": acreage,
         "latitude": visit.latitude,
         "longitude": visit.longitude,
+    }
+
+
+def build_field_visit_problem_block(visit: Visit) -> dict | None:
+    if not visit.problem_category_id and not (visit.problem_description or visit.problem_seen):
+        return None
+    block = {
+        "problem_category_id": visit.problem_category_id,
+        "problem_master_id": visit.problem_master_id,
+        "problem_subcategory_id": visit.problem_master_id,
+        "problem_description": visit.problem_description or visit.problem_seen or "",
+    }
+    if visit.problem_category_id:
+        cat = visit.problem_category
+        block["problem_category"] = {
+            "id": cat.id,
+            "code": cat.code,
+            "name": cat.name,
+        }
+    if visit.problem_master_id:
+        master = visit.problem_master
+        sub = {"id": master.id, "name": master.name}
+        block["problem_master"] = sub
+        block["problem_subcategory"] = sub
+    return block
+
+
+def build_field_visit_snapshot(visit: Visit) -> dict:
+    """Canonical farmer/crop/problem snapshot stored on the visit row."""
+    farmer_block = build_visit_farmer_block(visit) or {}
+    return {
+        "farmer_name": visit.farmer_name or farmer_block.get("name", ""),
+        "age": visit.farmer_age,
+        "phone_number": visit.farmer_phone or farmer_block.get("phone", ""),
+        "village_id": visit.village_id,
+        "village_name": farmer_block.get("village") or "",
+        "crop_id": visit.crop_id,
+        "crop_name": crop_display_name(visit),
+        "acreage": visit.land_area,
+        **(build_field_visit_problem_block(visit) or {}),
     }
 
 

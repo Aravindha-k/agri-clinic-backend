@@ -45,7 +45,7 @@ Copy the full connection string from your Render Postgres instance (`agri_clinic
 2. **Clear build cache** (Render → Manual Deploy → Clear build cache & deploy).
 3. Push to `main` or trigger deploy.
 4. Check deploy logs for `DATABASE_URL host:` and `verify_production_db` success.
-5. Confirm `GET https://agri-clinic-backend.onrender.com/healthz/` returns `{"status":"ok"}`.
+5. Confirm `GET https://agri-clinic-backend.onrender.com/healthz/` returns `{"status":"ok","database":"ok"}`.
 
 ## Troubleshooting
 
