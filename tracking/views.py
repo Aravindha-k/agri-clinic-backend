@@ -47,6 +47,7 @@ from .route_utils import (
     build_route_points,
     get_route_queryset,
 )
+from .daily_summary import DailySummaryService, build_visit_stops
 from mobile_api.device_session import DeviceSessionRequiredMixin
 
 
@@ -1189,6 +1190,7 @@ class AdminEmployeeRouteAPI(APIView):
             raw_route=raw_route,
             workdays=workdays,
             display_meta=display_meta,
+            stops=build_visit_stops(user_id, target_date),
         )
 
         logger.info(
@@ -1204,6 +1206,58 @@ class AdminEmployeeRouteAPI(APIView):
             data=data,
             message="Route loaded" if data["total_points"] else "No route points for date",
         )
+
+
+# ──────────────────────────────────────────────
+# ADMIN: EMPLOYEE DAILY SUMMARY
+# GET /api/tracking/admin/employee/<id>/daily-summary/?date=YYYY-MM-DD
+# ──────────────────────────────────────────────
+@extend_schema(
+    tags=["Tracking"],
+    summary="Admin: employee daily summary",
+    description=(
+        "Returns daily rollup for one employee: work hours, distance travelled, "
+        "visits completed, farmers covered, villages covered, and idle minutes."
+    ),
+    parameters=[
+        OpenApiParameter("date", OpenApiTypes.DATE, description="Date (YYYY-MM-DD)")
+    ],
+    responses={200: SIMPLE_SUCCESS, 404: error_schema("EmployeeNotFound")},
+)
+class AdminEmployeeDailySummaryAPI(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, user_id):
+        expire_old_workdays()
+        try:
+            emp = EmployeeProfile.objects.get(
+                user_id=user_id,
+                is_active_employee=True,
+            )
+        except EmployeeProfile.DoesNotExist:
+            logger.info(
+                "AdminDailySummary employee not found or inactive user_id=%s", user_id
+            )
+            return not_found_response("Employee not found")
+
+        date_str = request.GET.get("date")
+        if date_str:
+            target_date = parse_date(date_str)
+            if not target_date:
+                return error_response(
+                    message="Invalid date. Use YYYY-MM-DD.",
+                    code="INVALID_DATE",
+                    status_code=400,
+                )
+        else:
+            target_date = timezone.now().date()
+
+        data = DailySummaryService.for_employee(
+            emp.user,
+            employee_id=emp.employee_id,
+            target_date=target_date,
+        )
+        return success_response(data=data, message="Daily summary loaded")
 
 
 # ──────────────────────────────────────────────

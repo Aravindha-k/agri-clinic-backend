@@ -225,6 +225,7 @@ def build_admin_route_data(
     workdays: list | None = None,
     display_meta: dict[str, Any] | None = None,
     raw_route: list[dict[str, Any]] | None = None,
+    stops: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Payload for admin route API (includes legacy keys + polyline)."""
     meta = display_meta or {}
@@ -280,4 +281,5 @@ def build_admin_route_data(
         "points": route,
         "locations": route,
         "polyline": build_route_polyline(route),
+        "stops": stops if stops is not None else [],
     }
