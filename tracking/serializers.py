@@ -220,7 +220,16 @@ class LocationLogSerializer(serializers.ModelSerializer):
 
 
 class HeartbeatSerializer(serializers.Serializer):
-    gps_enabled = serializers.BooleanField()
+    gps_enabled = serializers.BooleanField(required=False, allow_null=True)
+    location_permission_status = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=32
+    )
+    background_tracking_enabled = serializers.BooleanField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if "gps_enabled" not in attrs and not attrs.get("location_permission_status"):
+            attrs["gps_enabled"] = True
+        return attrs
 
     def save(self, **kwargs):
         user = self.context["request"].user
@@ -237,12 +246,15 @@ class HeartbeatSerializer(serializers.Serializer):
 
         now = timezone.now()
 
-        # ✅ UPDATE LAST HEARTBEAT (THIS WAS MISSING)
         workday.last_heartbeat = now
         workday.save(update_fields=["last_heartbeat"])
 
-        # 🔹 GPS OFF
-        if not self.validated_data["gps_enabled"]:
+        from tracking.gps_state import upsert_employee_gps_state
+
+        upsert_employee_gps_state(user, self.validated_data, reported_at=now)
+
+        gps_enabled = self.validated_data.get("gps_enabled")
+        if gps_enabled is False:
             AvailabilityEvent.objects.get_or_create(
                 user=user,
                 workday=workday,
@@ -250,9 +262,7 @@ class HeartbeatSerializer(serializers.Serializer):
                 end_time__isnull=True,
                 defaults={"start_time": now},
             )
-
-        # 🔹 GPS ON
-        else:
+        elif gps_enabled is True:
             AvailabilityEvent.objects.filter(
                 user=user,
                 workday=workday,

@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
-from tracking.models import LocationLog, WorkDay
+from tracking.models import DutySession, EmployeeRoutePoint, LocationLog, WorkDay
 
 
 class RouteTrackingAPITest(APITestCase):
@@ -87,7 +87,11 @@ class RouteTrackingAPITest(APITestCase):
         self.assertIsNotNone(wd.last_heartbeat)
 
     def test_bulk_location_push_creates_multiple_rows(self):
-        self._start_workday()
+        self.emp_client.post(
+            "/api/v1/tracking/duty/start/",
+            {"latitude": 12.9716, "longitude": 77.5946},
+            format="json",
+        )
         t0 = timezone.now()
         t1 = t0 + timedelta(minutes=1)
         r = self.emp_client.post(
@@ -109,7 +113,13 @@ class RouteTrackingAPITest(APITestCase):
             format="json",
         )
         self.assertIn(r.status_code, (status.HTTP_201_CREATED, status.HTTP_207_MULTI_STATUS))
-        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 2)
+        self.assertEqual(r.data["data"]["success_count"], 2)
+        self.assertGreaterEqual(r.data["data"]["route_points_saved"], 1)
+        self.assertGreaterEqual(
+            EmployeeRoutePoint.objects.filter(user=self.employee).count(),
+            1,
+        )
+        self.assertGreaterEqual(LocationLog.objects.filter(user=self.employee).count(), 1)
 
     def test_admin_route_returns_chronological_points(self):
         self._start_workday()

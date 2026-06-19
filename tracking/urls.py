@@ -1,4 +1,10 @@
 from django.urls import path
+from .duty_views import BulkLocationSyncAPI, DutyEndAPI, DutyStartAPI, LocationUpdateAPI
+from .admin_duty_views import (
+    AdminEmployeeRouteByDateAPI,
+    AdminEmployeeTodayRouteAPI,
+    AdminTrackingLiveAPI,
+)
 from .views import (
     StartWorkDayAPI,
     EndWorkDayAPI,
@@ -30,16 +36,20 @@ from .worklog_views import (
 )
 
 urlpatterns = [
-    # Employee APIs
+    # Duty tracking (also under /api/v1/tracking/)
+    path("duty/start/", DutyStartAPI.as_view()),
+    path("duty/end/", DutyEndAPI.as_view()),
+    path("location/update/", LocationUpdateAPI.as_view()),
+    path("location/bulk/", BulkLocationSyncAPI.as_view()),
+    path("locations/bulk/", BulkLocationUploadAPI.as_view()),
+    path("location/bulk-push/", BulkPushLocationAPI.as_view()),
+    path("locations/bulk-push/", BulkPushLocationAPI.as_view()),
+    # Employee APIs (legacy workday)
     path("workday/start/", StartWorkDayAPI.as_view()),
     path("workday/end/", EndWorkDayAPI.as_view()),
     path("heartbeat/", HeartbeatAPI.as_view()),
     path("location/push/", PushLocationAPI.as_view()),
     path("locations/push/", PushLocationAPI.as_view()),
-    path("location/bulk/", BulkLocationUploadAPI.as_view()),
-    path("locations/bulk/", BulkLocationUploadAPI.as_view()),
-    path("location/bulk-push/", BulkPushLocationAPI.as_view()),
-    path("locations/bulk-push/", BulkPushLocationAPI.as_view()),
     # WorkLog endpoints
     path("work/start/", WorkLogStartAPI.as_view()),
     path("work/end/", WorkLogEndAPI.as_view()),
@@ -48,6 +58,15 @@ urlpatterns = [
     # Admin: dashboard
     path("admin/dashboard-stats/", AdminTrackingDashboardStatsAPI.as_view()),
     path("admin/status/", AdminTrackingStatusAPI.as_view()),
+    path("admin/live/", AdminTrackingLiveAPI.as_view()),
+    path(
+        "admin/employee/<int:user_id>/today-route/",
+        AdminEmployeeTodayRouteAPI.as_view(),
+    ),
+    path(
+        "admin/employee/<int:user_id>/route-by-date/",
+        AdminEmployeeRouteByDateAPI.as_view(),
+    ),
     # Admin: per-employee
     path("admin/employee/<int:user_id>/summary/", AdminEmployeeSummaryAPI.as_view()),
     path(

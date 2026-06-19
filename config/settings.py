@@ -14,14 +14,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 def _is_production_env():
     app_env = os.getenv("APP_ENV", "local").strip().lower()
-    if app_env in {"prod", "production", "render", "staging"}:
+    if app_env in {"prod", "production", "render", "staging", "aws"}:
         return True
     return os.getenv("RENDER", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-# Production (Render) must use platform env vars only — never a local .env file.
-if not _is_production_env():
-    load_dotenv(override=False)
+# Load .env when present; existing shell/platform env vars take precedence.
+load_dotenv(override=False)
 
 
 def env_bool(name, default=False):
@@ -80,7 +79,7 @@ def normalize_database_url(raw_url):
 # SECURITY
 # --------------------------------------------------
 APP_ENV = os.getenv("APP_ENV", "local").strip().lower()
-IS_PRODUCTION = APP_ENV in {"prod", "production", "render", "staging"}
+IS_PRODUCTION = APP_ENV in {"prod", "production", "render", "staging", "aws"}
 
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret")
 DEBUG = env_bool("DEBUG", not IS_PRODUCTION)
@@ -284,54 +283,91 @@ _BLOCKED_RENDER_DB_HOSTS = frozenset(
     }
 )
 
-DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
 
-if DATABASE_URL:
-    db_host = (urlsplit(DATABASE_URL).hostname or "").strip().lower()
-    default_ssl_require = bool(db_host) and not (
-        db_host == "localhost"
-        or db_host.startswith("127.")
-        or db_host.startswith("dpg-")
-    )
-
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=env_bool("DB_SSL_REQUIRE", default_ssl_require),
-        )
+def _database_from_components() -> dict | None:
+    """Build PostgreSQL config from DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT."""
+    name = os.getenv("DB_NAME", "").strip()
+    user = os.getenv("DB_USER", "").strip()
+    host = os.getenv("DB_HOST", "").strip()
+    if not (name and user and host):
+        return None
+    port = os.getenv("DB_PORT", "5432").strip() or "5432"
+    options = {"connect_timeout": 10}
+    if env_bool("DB_SSL_REQUIRE", False):
+        options["sslmode"] = "require"
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": name,
+        "USER": user,
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
+        "HOST": host,
+        "PORT": port,
+        "CONN_MAX_AGE": 600,
+        "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": options,
     }
-    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
-    DATABASES["default"].setdefault("OPTIONS", {})
-    DATABASES["default"]["OPTIONS"].setdefault("connect_timeout", 10)
+
+
+def _configure_databases() -> dict:
+    database_url = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
+    if database_url:
+        db_host = (urlsplit(database_url).hostname or "").strip().lower()
+        default_ssl_require = bool(db_host) and not (
+            db_host == "localhost"
+            or db_host.startswith("127.")
+            or db_host.startswith("dpg-")
+        )
+        databases = {
+            "default": dj_database_url.parse(
+                database_url,
+                conn_max_age=600,
+                ssl_require=env_bool("DB_SSL_REQUIRE", default_ssl_require),
+            )
+        }
+        databases["default"]["CONN_HEALTH_CHECKS"] = True
+        databases["default"].setdefault("OPTIONS", {})
+        databases["default"]["OPTIONS"].setdefault("connect_timeout", 10)
+
+        if IS_PRODUCTION:
+            resolved_host = (urlsplit(database_url).hostname or "").strip().lower()
+            short_host = resolved_host.split(".")[0] if resolved_host else ""
+            if resolved_host in _BLOCKED_RENDER_DB_HOSTS or short_host in _BLOCKED_RENDER_DB_HOSTS:
+                raise RuntimeError(
+                    "DATABASE_URL points to a retired Render Postgres instance "
+                    f"({short_host or resolved_host}). Update Render Dashboard → "
+                    "agri-clinic-backend → Environment: set DATABASE_URL to the "
+                    "agri_clinic_db instance (dpg-d84t75d7vvec73fhlpfg-a) and "
+                    "RENDER_POSTGRES_HOST_SUFFIX=singapore-postgres.render.com, "
+                    "then clear build cache and redeploy."
+                )
+        return databases
+
+    component_db = _database_from_components()
+    if component_db:
+        return {"default": component_db}
 
     if IS_PRODUCTION:
-        resolved_host = (urlsplit(DATABASE_URL).hostname or "").strip().lower()
-        short_host = resolved_host.split(".")[0] if resolved_host else ""
-        if resolved_host in _BLOCKED_RENDER_DB_HOSTS or short_host in _BLOCKED_RENDER_DB_HOSTS:
-            raise RuntimeError(
-                "DATABASE_URL points to a retired Render Postgres instance "
-                f"({short_host or resolved_host}). Update Render Dashboard → "
-                "agri-clinic-backend → Environment: set DATABASE_URL to the "
-                "agri_clinic_db instance (dpg-d84t75d7vvec73fhlpfg-a) and "
-                "RENDER_POSTGRES_HOST_SUFFIX=singapore-postgres.render.com, "
-                "then clear build cache and redeploy."
-            )
-elif IS_PRODUCTION:
-    raise RuntimeError("DATABASE_URL is required when APP_ENV is production-like")
-else:
-    DATABASES = {
+        raise RuntimeError(
+            "Production requires DATABASE_URL or DB_NAME, DB_USER, DB_HOST "
+            "(and DB_PASSWORD, DB_PORT) in the environment."
+        )
+
+    return {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
 
+
+DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
+DATABASES = _configure_databases()
+
 # --------------------------------------------------
 # STATIC FILES
 # --------------------------------------------------
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_URL = os.getenv("STATIC_URL", "/static/")
+STATIC_ROOT = Path(os.getenv("STATIC_ROOT", str(BASE_DIR / "staticfiles")))
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # --------------------------------------------------
@@ -339,8 +375,8 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # --------------------------------------------------
 USE_S3 = os.getenv("USE_S3", "false").lower() == "true"
 
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
 # Profile photos: employee_photos/ and farmer_photos/ under MEDIA_ROOT.
 # On Render without S3, files live on ephemeral disk — use a persistent disk or S3 for production.
 
@@ -525,6 +561,14 @@ SPECTACULAR_SETTINGS = {
     "POSTPROCESSING_HOOKS": ["drf_spectacular.hooks.postprocess_schema_enums"],
 }
 
-if IS_PRODUCTION and DATABASE_URL:
-    _resolved_db_host = urlsplit(DATABASE_URL).hostname or "(unknown)"
-    print(f"[agri-clinic] DATABASE_URL host={_resolved_db_host}", flush=True)
+if IS_PRODUCTION:
+    if DATABASE_URL:
+        _resolved_db_host = urlsplit(DATABASE_URL).hostname or "(unknown)"
+        print(f"[agri-clinic] DATABASE_URL host={_resolved_db_host}", flush=True)
+    else:
+        _db = DATABASES.get("default", {})
+        print(
+            f"[agri-clinic] DB host={_db.get('HOST', '(unknown)')} "
+            f"name={_db.get('NAME', '(unknown)')}",
+            flush=True,
+        )

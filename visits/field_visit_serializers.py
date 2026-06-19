@@ -11,6 +11,7 @@ from visits.farmer_inline import get_or_create_farmer_for_field_visit
 from visits.field_notes import apply_observation_write
 from visits.field_visit import merge_field_visit_request_aliases, validate_visit_submit_data
 from visits.models import Visit
+from tracking.employee_report import attach_visit_duty_links
 from utils.gps import validate_latitude_longitude
 
 
@@ -174,7 +175,10 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
                 return existing
         else:
             validated_data.pop("local_sync_id", None)
-        return Visit.objects.create(**validated_data, employee=employee)
+        visit = Visit.objects.create(**validated_data, employee=employee)
+        attach_visit_duty_links(visit)
+        visit.refresh_from_db()
+        return visit
 
     def update(self, instance, validated_data):
         validated_data.pop("age", None)

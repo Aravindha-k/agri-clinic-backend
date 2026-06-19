@@ -134,17 +134,27 @@ class BulkVisitUploadAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Expecting a list of visit dicts in request.data["visits"]
         visits_data = request.data.get("visits", [])
         created = []
         errors = []
-        for vdata in visits_data:
+        for index, vdata in enumerate(visits_data):
+            sync_id = (vdata.get("local_sync_id") or "").strip()
+            if sync_id:
+                existing = Visit.objects.filter(
+                    employee=request.user, local_sync_id=sync_id
+                ).first()
+                if existing:
+                    created.append(existing.id)
+                    continue
             serializer = VisitSerializer(data=vdata, context={"request": request})
             if serializer.is_valid():
                 visit = serializer.save(employee=request.user)
+                from tracking.employee_report import attach_visit_duty_links
+
+                attach_visit_duty_links(visit)
                 created.append(visit.id)
             else:
-                errors.append(serializer.errors)
+                errors.append({"index": index, "errors": serializer.errors})
         # Ensure errors is always a list
         if errors is None:
             errors = []

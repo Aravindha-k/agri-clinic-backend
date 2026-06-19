@@ -129,6 +129,22 @@ class Visit(models.Model):
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="completed", null=True, blank=True
     )
+    duty_session = models.ForeignKey(
+        "tracking.DutySession",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="visits",
+        db_index=True,
+    )
+    workday = models.ForeignKey(
+        "tracking.WorkDay",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="visits",
+        db_index=True,
+    )
     local_sync_id = models.CharField(
         max_length=64,
         null=True,

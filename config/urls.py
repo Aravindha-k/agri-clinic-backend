@@ -46,6 +46,11 @@ urlpatterns = [
     # Work session endpoints
     path("api/v1/work/start/", StartWorkDayAPI.as_view(), name="work-start"),
     path("api/v1/work/stop/", EndWorkDayAPI.as_view(), name="work-stop"),
+    # Duty tracking (canonical paths without v1 prefix)
+    path("api/tracking/", include("tracking.duty_urls")),
+    path("api/admin/tracking/", include("tracking.admin_tracking_urls")),
+    path("api/admin/visits/", include("tracking.admin_report_urls")),
+    path("api/admin/employees/", include("tracking.admin_employee_report_urls")),
     # Dashboard + Map (root alias + nested routes share one mount)
     path("api/v1/dashboard/", include("dashboard.urls")),
     path("api/v1/map/farmers/", MapFarmersAPI.as_view(), name="map-farmers"),

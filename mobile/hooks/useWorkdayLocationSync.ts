@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { pingTracking } from '@/lib/api';
-import { captureSilentLocation } from '@/lib/geo';
+import { captureSilentLocation, hasLocationPermission } from '@/lib/geo';
 import { setLastLocationSyncAt } from '@/lib/authStorage';
 import { LOCATION_SYNC_INTERVAL_MS } from '@/lib/config';
 
@@ -16,6 +16,7 @@ export function useWorkdayLocationSync(
 
   const runPing = useCallback(async () => {
     if (!token || !enabled) return;
+    if (!(await hasLocationPermission())) return;
     const loc = await captureSilentLocation();
     if (!loc) return;
     try {

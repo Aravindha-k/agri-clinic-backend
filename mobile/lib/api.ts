@@ -232,9 +232,16 @@ export async function fetchVisitStats(token: string | null) {
   }>(raw);
 }
 
-export async function fetchMyVisits(token: string | null) {
-  const raw = await apiRequest<unknown>('/mobile/visits/', { token });
-  return unwrapData<VisitDto[]>(raw);
+export async function fetchMyVisits(
+  token: string | null,
+  dateFilter?: 'today' | 'week' | 'month' | 'all',
+) {
+  const qs =
+    dateFilter && dateFilter !== 'all' ? `?date_filter=${encodeURIComponent(dateFilter)}` : '';
+  const raw = await apiRequest<unknown>(`/mobile/visits/${qs}`, { token });
+  const data = unwrapData<{ results?: VisitDto[] } | VisitDto[]>(raw);
+  if (Array.isArray(data)) return data;
+  return data.results ?? [];
 }
 
 export async function createVisit(

@@ -14,7 +14,12 @@ import {
   fetchVillages,
 } from '@/lib/api';
 import { useMasters } from '@/hooks/useMasters';
-import { captureSilentLocation } from '@/lib/geo';
+import {
+  captureLocation,
+  locationFailureMessage,
+  locationFailureTitle,
+  openLocationSettings,
+} from '@/lib/geo';
 import { palette, space, typography } from '@/constants/theme';
 
 type Step = 0 | 1 | 2 | 3;

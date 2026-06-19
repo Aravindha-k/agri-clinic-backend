@@ -52,6 +52,13 @@ def _expire_workday_row(workday: WorkDay, *, now=None) -> None:
     workday.is_active = False
     workday.auto_ended = True
     workday.save(update_fields=["end_time", "is_active", "auto_ended"])
+    from tracking.models import DutySession
+
+    DutySession.objects.filter(workday=workday, is_active=True).update(
+        end_time=workday.end_time,
+        is_active=False,
+        auto_ended=True,
+    )
     cache.delete(_live_cache_key(workday.user_id))
     try:
         from dashboard.services import invalidate_dashboard_caches

@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from tracking.duty_service import get_route_points_for_date, serialize_route_point_model
 from tracking.models import WorkDay
 from tracking.route_utils import (
     build_route_points,
@@ -164,8 +165,15 @@ def build_employee_daily_summary(
         WorkDay.objects.filter(user_id=user_id, date=target_date).order_by("start_time")
     )
 
-    route_qs = get_route_queryset(user_id=user_id, target_date=target_date)
-    route = build_route_points(route_qs)
+    duty_route = [
+        serialize_route_point_model(p)
+        for p in get_route_points_for_date(user_id, target_date)
+    ]
+    if duty_route:
+        route = duty_route
+    else:
+        route_qs = get_route_queryset(user_id=user_id, target_date=target_date)
+        route = build_route_points(route_qs)
 
     work_seconds = compute_work_hours_seconds(workdays, target_date, now=now)
     distance_km = compute_route_distance_km(route)
