@@ -30,12 +30,110 @@ def env_bool(name, default=False):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+# Placeholder tokens from *.example files — never treat as real hosts/origins.
+_ENV_PLACEHOLDERS = {
+    "YOUR_LAN_IP",
+    "YOUR_EC2_PUBLIC_IP",
+    "YOUR_DOMAIN.COM",
+    "YOUR-DOMAIN.COM",
+    "YOUR_STAGING_HOST",
+}
+
+
+def normalize_allowed_host(raw: str) -> str:
+    """Return a Django ALLOWED_HOSTS entry (hostname only, no scheme/port)."""
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    if value.upper() in _ENV_PLACEHOLDERS or value.upper().startswith("YOUR_"):
+        return ""
+    if "://" in value:
+        parsed = urlsplit(value)
+        value = parsed.hostname or ""
+    elif value.startswith("[") and "]" in value:
+        # [IPv6]:port → keep bracketed host without port
+        end = value.find("]")
+        host = value[: end + 1]
+        rest = value[end + 1 :]
+        value = host if rest.startswith(":") or rest == "" else value
+    elif value.count(":") == 1:
+        # hostname:port (not IPv6)
+        host, maybe_port = value.rsplit(":", 1)
+        if maybe_port.isdigit():
+            value = host
+    return value.strip()
+
+
+def normalize_csrf_origin(raw: str) -> str:
+    """Return a CSRF trusted origin (scheme://host[:port])."""
+    value = (raw or "").strip().rstrip("/")
+    if not value:
+        return ""
+    upper = value.upper()
+    if any(token in upper for token in _ENV_PLACEHOLDERS) or "YOUR_" in upper:
+        return ""
+    if "://" not in value:
+        # Allow bare host in env by assuming http for local-style hosts.
+        value = f"http://{value}"
+    parsed = urlsplit(value)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def env_list(name, default=None):
     value = os.getenv(name)
     if value is None:
         return list(default or [])
     cleaned = [item.strip() for item in value.split(",") if item.strip()]
     return cleaned or list(default or [])
+
+
+def env_host_list(name, default=None):
+    """Comma-separated hosts for ALLOWED_HOSTS (ports/schemes stripped)."""
+    raw_items = env_list(name, default)
+    hosts = []
+    seen = set()
+    for item in raw_items:
+        host = normalize_allowed_host(item)
+        if host and host not in seen:
+            seen.add(host)
+            hosts.append(host)
+    if hosts:
+        return hosts
+    # Re-normalize defaults if env was only placeholders.
+    fallback = []
+    for item in list(default or []):
+        host = normalize_allowed_host(item)
+        if host and host not in seen:
+            seen.add(host)
+            fallback.append(host)
+    return fallback
+
+
+def env_origin_list(name, default=None, *, csrf=False):
+    """Comma-separated origins for CSRF_TRUSTED_ORIGINS or CORS_ALLOWED_ORIGINS."""
+    raw_items = env_list(name, default)
+    origins = []
+    seen = set()
+    for item in raw_items:
+        origin = normalize_csrf_origin(item) if csrf else item.strip().rstrip("/")
+        if not csrf and (
+            origin.upper() in _ENV_PLACEHOLDERS or "YOUR_" in origin.upper()
+        ):
+            origin = ""
+        if origin and origin not in seen:
+            seen.add(origin)
+            origins.append(origin)
+    if origins:
+        return origins
+    fallback = []
+    for item in list(default or []):
+        origin = normalize_csrf_origin(item) if csrf else item.strip().rstrip("/")
+        if origin and origin not in seen:
+            seen.add(origin)
+            fallback.append(origin)
+    return fallback
 
 
 def normalize_database_url(raw_url):
@@ -94,19 +192,31 @@ if IS_PRODUCTION and SECRET_KEY in _INSECURE_SECRET_KEYS:
         "SECRET_KEY must be set to a long random value when APP_ENV is production-like."
     )
 
+# Hosts are env-driven. Local LAN IPs belong in `.env` (see LOCAL_NETWORK_CONFIGURATION.md).
+# EXTRA_ALLOWED_HOSTS is merged so developers can append a LAN IP without rewriting the full list.
 DEFAULT_ALLOWED_HOSTS = (
     ["agri-clinic-backend.onrender.com", ".onrender.com"]
     if IS_PRODUCTION
-    else ["localhost", "127.0.0.1", "192.168.29.18"]
+    else ["localhost", "127.0.0.1"]
 )
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS)
+ALLOWED_HOSTS = env_host_list("ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS)
+_extra_hosts = env_host_list("EXTRA_ALLOWED_HOSTS", [])
+for _host in _extra_hosts:
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
 
 DEFAULT_CSRF_TRUSTED_ORIGINS = (
     ["https://agri-clinic-backend.onrender.com"]
     if IS_PRODUCTION
-    else ["http://localhost:8000", "http://127.0.0.1:8000", "http://192.168.29.18:8000"]
+    else ["http://localhost:8000", "http://127.0.0.1:8000"]
 )
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", DEFAULT_CSRF_TRUSTED_ORIGINS)
+CSRF_TRUSTED_ORIGINS = env_origin_list(
+    "CSRF_TRUSTED_ORIGINS", DEFAULT_CSRF_TRUSTED_ORIGINS, csrf=True
+)
+_extra_csrf = env_origin_list("EXTRA_CSRF_TRUSTED_ORIGINS", [], csrf=True)
+for _origin in _extra_csrf:
+    if _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
 
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -204,7 +314,9 @@ DEFAULT_CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://agri-clinic-frontend.onrender.com",
 ]
-CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ALLOWED_ORIGINS)
+CORS_ALLOWED_ORIGINS = env_origin_list(
+    "CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ALLOWED_ORIGINS, csrf=False
+)
 # --------------------------------------------------
 # DRF + JWT
 # --------------------------------------------------
@@ -482,6 +594,16 @@ LOGGING = {
         "agri_clinic": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
 }
+
+# Safe boot summary (no secrets). Runs after LOGGING is defined.
+import logging as _logging
+
+_logging.getLogger("agri_clinic").info(
+    "Django boot APP_ENV=%s DEBUG=%s ALLOWED_HOSTS=%s",
+    APP_ENV,
+    DEBUG,
+    ALLOWED_HOSTS,
+)
 
 # --------------------------------------------------
 # DRF SPECTACULAR (OpenAPI / Swagger)

@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+!.env.local.example
+!.env.production.example
+!mobile/.env.example
 render.production.env
 __pycache__/
 *.py[cod]
