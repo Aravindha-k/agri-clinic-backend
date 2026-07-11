@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from utils.response import api_response, success_response, error_response
 from utils.schema import PAGINATION_PARAMS, SIMPLE_SUCCESS, error_schema
 
@@ -66,7 +67,14 @@ def _invalidate_visit_caches():
     request=FieldVisitSubmitSerializer,
     responses={201: SIMPLE_SUCCESS, 400: error_schema("VisitCreateError")},
 )
-class VisitListCreateAPI(APIView):
+class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
+    """
+    Legacy visit list/create.
+
+    Field employees must send X-Device-Session (same policy as /mobile/).
+    Staff/admin JWTs are exempt from device-session checks.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

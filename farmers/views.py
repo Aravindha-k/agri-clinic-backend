@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from utils.response import (
     success_response,
     error_response,
@@ -158,7 +159,13 @@ def _get_scoped_farmer_or_404(user, **kwargs):
     request=FarmerCreateSerializer,
     responses={201: FarmerListSerializer, 403: error_schema("FarmerForbidden")},
 )
-class FarmerListCreateAPI(APIView):
+class FarmerListCreateAPI(DeviceSessionRequiredMixin, APIView):
+    """
+    Legacy farmer list/create.
+
+    Field employees must send X-Device-Session. Staff/admin JWTs are exempt.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
