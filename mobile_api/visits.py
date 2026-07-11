@@ -232,6 +232,18 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
                 status_code=400,
             )
 
+        client_upload_id = (request.data.get("client_upload_id") or "").strip()
+        if client_upload_id:
+            existing = VisitMedia.objects.filter(
+                visit=visit, client_upload_id=client_upload_id
+            ).first()
+            if existing:
+                return success_response(
+                    data=VisitMediaSerializer(existing, context={"request": request}).data,
+                    message="Media already uploaded",
+                    status_code=200,
+                )
+
         media_errors = validate_visit_media_file(file_obj=file, media_type=media_type)
         if media_errors:
             return error_response(
@@ -245,6 +257,7 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
             file=file,
             media_type=media_type,
             caption=request.data.get("caption", ""),
+            client_upload_id=client_upload_id,
         )
         return success_response(
             data=VisitMediaSerializer(media, context={"request": request}).data,

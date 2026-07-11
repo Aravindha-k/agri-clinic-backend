@@ -185,6 +185,7 @@ class VisitMedia(models.Model):
     visit = models.ForeignKey(
         Visit, on_delete=models.CASCADE, related_name="media_files"
     )
+    client_upload_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     file = models.FileField(upload_to="visit_media/")
     media_type = models.CharField(max_length=20, choices=MEDIA_TYPE_CHOICES)
     caption = models.CharField(max_length=255, blank=True)
@@ -192,6 +193,13 @@ class VisitMedia(models.Model):
 
     class Meta:
         ordering = ["-uploaded_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["visit", "client_upload_id"],
+                condition=~models.Q(client_upload_id=""),
+                name="uniq_visit_media_client_upload_id",
+            )
+        ]
 
     def __str__(self):
         return f"{self.media_type} | Visit {self.visit_id}"
