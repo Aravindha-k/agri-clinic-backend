@@ -2,39 +2,154 @@ import { API_BASE_URL } from '@/lib/config';
 import {
   getAccessToken,
   getRefreshToken,
+  getDeviceSessionId,
   saveTokens,
+  saveAuthSession,
   clearTokens,
 } from '@/lib/authStorage';
+import { notifySessionInvalidated } from '@/lib/authEvents';
+import { appLog } from '@/lib/logger';
+
+const DEVICE_SESSION_HEADER = 'X-Device-Session';
+
+const SESSION_INVALID_MESSAGE =
+  'Your login session is no longer valid on this device. Please sign in again.';
+
+export type ApiErrorOptions = {
+  code?: string;
+  requiresReauth?: boolean;
+  retryable?: boolean;
+  validationErrors?: unknown;
+  diagnosticMessage?: string;
+};
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public body?: unknown,
-  ) {
+  status: number;
+  body?: unknown;
+  code?: string;
+  requiresReauth: boolean;
+  retryable: boolean;
+  validationErrors?: unknown;
+  diagnosticMessage?: string;
+
+  constructor(message: string, status: number, body?: unknown, options: ApiErrorOptions = {}) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+    this.code = options.code;
+    this.requiresReauth = options.requiresReauth ?? false;
+    this.retryable = options.retryable ?? (status >= 500 || status === 408 || status === 429);
+    this.validationErrors = options.validationErrors;
+    this.diagnosticMessage = options.diagnosticMessage;
   }
+}
+
+export type PaginatedResult<T> = {
+  results: T[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function extractErrorEnvelope(parsed: unknown): {
+  message?: string;
+  code?: string;
+  errors?: unknown;
+} {
+  if (!isRecord(parsed)) return {};
+  const message =
+    typeof parsed.message === 'string'
+      ? parsed.message
+      : typeof parsed.detail === 'string'
+        ? parsed.detail
+        : undefined;
+  const code = typeof parsed.code === 'string' ? parsed.code : undefined;
+  const errors = parsed.errors ?? parsed.error;
+  return { message, code, errors };
+}
+
+function userMessageForStatus(
+  status: number,
+  code: string | undefined,
+  backendMessage: string | undefined,
+): { message: string; requiresReauth: boolean } {
+  if (
+    status === 409 ||
+    code === 'SESSION_REPLACED' ||
+    (backendMessage || '').toLowerCase().includes('another device')
+  ) {
+    return { message: SESSION_INVALID_MESSAGE, requiresReauth: true };
+  }
+  if (status === 401) {
+    return {
+      message: 'Your session expired. Please sign in again.',
+      requiresReauth: true,
+    };
+  }
+  if (status === 403) {
+    return {
+      message: 'You do not have permission to do that.',
+      requiresReauth: false,
+    };
+  }
+  if (status === 400) {
+    return {
+      message: backendMessage || 'Please check the form and try again.',
+      requiresReauth: false,
+    };
+  }
+  if (status >= 500) {
+    return {
+      message: 'Server is temporarily unavailable. Please try again shortly.',
+      requiresReauth: false,
+    };
+  }
+  if (!backendMessage || backendMessage.length > 180) {
+    return { message: 'Something went wrong. Please try again.', requiresReauth: false };
+  }
+  return { message: backendMessage, requiresReauth: false };
 }
 
 async function refreshAccess(): Promise<string | null> {
   const refresh = await getRefreshToken();
   if (!refresh) return null;
+  // Backend MobileTokenRefreshView does not require X-Device-Session.
   const res = await fetch(`${API_BASE_URL}/mobile/auth/refresh/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
   });
   if (!res.ok) {
+    appLog.warn('auth.refresh_failed', { status: res.status });
     await clearTokens();
+    notifySessionInvalidated('unauthorized');
     return null;
   }
-  const data = (await res.json()) as { access?: string };
+  const data = (await res.json()) as { access?: string; device_session_id?: string };
   if (!data.access) {
     await clearTokens();
+    notifySessionInvalidated('unauthorized');
     return null;
   }
-  await saveTokens(data.access, refresh);
+  const sessionId = await getDeviceSessionId();
+  if (data.device_session_id) {
+    await saveAuthSession({
+      access: data.access,
+      refresh,
+      deviceSessionId: String(data.device_session_id),
+    });
+  } else {
+    await saveTokens(data.access, refresh);
+    if (sessionId) {
+      // keep existing device session
+    }
+  }
+  appLog.info('auth.refresh_ok');
   return data.access;
 }
 
@@ -51,12 +166,17 @@ export async function apiRequest<T = unknown>(
 ): Promise<T> {
   const { token: tokenOverride, json, formData, skipAuth, headers, ...rest } = options;
   let token = tokenOverride ?? (skipAuth ? null : await getAccessToken());
+  const deviceSessionId = skipAuth ? null : await getDeviceSessionId();
 
-  const url = path.startsWith('http') ? path : `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const url = path.startsWith('http')
+    ? path
+    : `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const pathForLog = path.startsWith('http') ? path.replace(API_BASE_URL, '') : path;
 
   const exec = async (bearer: string | null): Promise<Response> => {
     const h = new Headers(headers);
     if (bearer) h.set('Authorization', `Bearer ${bearer}`);
+    if (deviceSessionId) h.set(DEVICE_SESSION_HEADER, deviceSessionId);
     const body: BodyInit | undefined = formData
       ? formData
       : json !== undefined
@@ -90,35 +210,142 @@ export async function apiRequest<T = unknown>(
   }
 
   if (!res.ok) {
-    const msg =
-      typeof parsed === 'object' && parsed && 'message' in parsed
-        ? String((parsed as { message: unknown }).message)
-        : res.statusText;
-    throw new ApiError(msg || 'Request failed', res.status, parsed);
+    const envelope = extractErrorEnvelope(parsed);
+    const mapped = userMessageForStatus(res.status, envelope.code, envelope.message);
+    appLog.error('api.request_failed', {
+      path: pathForLog,
+      status: res.status,
+      code: envelope.code ?? null,
+      method: String(rest.method || 'GET'),
+    });
+
+    if (mapped.requiresReauth && !skipAuth) {
+      // Do not retry 409; clear auth so the next UI frame returns to login.
+      if (res.status === 409 || envelope.code === 'SESSION_REPLACED') {
+        await clearTokens();
+        notifySessionInvalidated('session_conflict');
+      } else if (res.status === 401) {
+        await clearTokens();
+        notifySessionInvalidated('unauthorized');
+      }
+    }
+
+    throw new ApiError(mapped.message, res.status, parsed, {
+      code: envelope.code,
+      requiresReauth: mapped.requiresReauth,
+      retryable: res.status >= 500 || res.status === 408 || res.status === 429,
+      validationErrors: envelope.errors,
+      diagnosticMessage: envelope.message,
+    });
   }
 
   return parsed as T;
 }
 
+/** Unwrap `{ success, data }` envelopes used by most agri APIs. */
 export function unwrapData<T>(body: unknown): T {
   if (
-    body &&
-    typeof body === 'object' &&
-    'success' in body &&
-    (body as { success: boolean }).success === true &&
+    isRecord(body) &&
+    body.success === true &&
     'data' in body
   ) {
-    return (body as { data: T }).data;
+    return body.data as T;
   }
   return body as T;
 }
 
-/** Login — response is `{ access, refresh, user }` at top level */
-export async function mobileLogin(body: { employee_id: string; password: string }) {
-  return apiRequest<{ access: string; refresh: string; user: Record<string, unknown> }>(
-    '/mobile/auth/login/',
-    { method: 'POST', json: body, skipAuth: true },
-  );
+/**
+ * Normalize paginated farmer/visit-style responses into one shape.
+ * Accepts confirmed backend variants:
+ * - `{ success, data: { count, next, previous, results } }`
+ * - `{ count, next, previous, results }`
+ * - bare array (masters without pagination)
+ */
+export function normalizePaginated<T>(body: unknown): PaginatedResult<T> {
+  const empty: PaginatedResult<T> = {
+    results: [],
+    count: 0,
+    next: null,
+    previous: null,
+  };
+
+  const candidate = unwrapData<unknown>(body);
+
+  if (Array.isArray(candidate)) {
+    return {
+      results: candidate as T[],
+      count: candidate.length,
+      next: null,
+      previous: null,
+    };
+  }
+
+  if (isRecord(candidate) && Array.isArray(candidate.results)) {
+    const results = candidate.results as T[];
+    return {
+      results,
+      count: typeof candidate.count === 'number' ? candidate.count : results.length,
+      next: typeof candidate.next === 'string' ? candidate.next : null,
+      previous: typeof candidate.previous === 'string' ? candidate.previous : null,
+    };
+  }
+
+  // Rare: results nested under data without success flag already unwrapped above
+  if (isRecord(body) && isRecord(body.data) && Array.isArray(body.data.results)) {
+    const results = body.data.results as T[];
+    return {
+      results,
+      count: typeof body.data.count === 'number' ? body.data.count : results.length,
+      next: typeof body.data.next === 'string' ? body.data.next : null,
+      previous: typeof body.data.previous === 'string' ? body.data.previous : null,
+    };
+  }
+
+  return empty;
+}
+
+function normalizeList<T extends { id: number }>(body: unknown): T[] {
+  const page = normalizePaginated<T>(body);
+  if (page.results.length) return page.results;
+  const data = unwrapData<unknown>(body);
+  if (Array.isArray(data)) return data as T[];
+  return [];
+}
+
+export type MobileLoginResponse = {
+  access: string;
+  refresh: string;
+  device_session_id: string;
+  active_device_id?: string;
+  session_version?: number;
+  user: Record<string, unknown>;
+};
+
+/** Login — top-level JWT payload including device_session_id (not success-wrapped). */
+export async function mobileLogin(body: {
+  employee_id: string;
+  password: string;
+  platform?: string;
+  device_name?: string;
+}) {
+  appLog.info('auth.login_start');
+  const res = await apiRequest<MobileLoginResponse>('/mobile/auth/login/', {
+    method: 'POST',
+    json: body,
+    skipAuth: true,
+  });
+  if (!res.access || !res.refresh || !res.device_session_id) {
+    appLog.error('auth.login_incomplete_response', {
+      hasAccess: Boolean(res.access),
+      hasRefresh: Boolean(res.refresh),
+      hasSession: Boolean(res.device_session_id),
+    });
+    throw new ApiError('Login response was incomplete. Please try again.', 500, res);
+  }
+  appLog.info('auth.login_ok', {
+    userId: typeof res.user?.id === 'number' ? res.user.id : undefined,
+  });
+  return res;
 }
 
 export type DashboardData = {
@@ -126,6 +353,9 @@ export type DashboardData = {
   completed_visits: number;
   pending_visits: number;
   active_visit: VisitDto | null;
+  visits_today?: number;
+  farmers_covered?: number;
+  work_status?: string;
 };
 
 export type VisitDto = {
@@ -180,6 +410,17 @@ export type VisitDetailDto = {
   longitude?: number | null;
 };
 
+export type CreateVisitPayload = {
+  farmer_id: number;
+  crop: number;
+  latitude: number;
+  longitude: number;
+  notes?: string;
+  pest_issue?: boolean;
+  disease_issue?: boolean;
+  field?: number;
+};
+
 export async function fetchDashboard(token: string | null) {
   const raw = await apiRequest<unknown>('/mobile/dashboard/', { token });
   return unwrapData<DashboardData>(raw);
@@ -187,7 +428,7 @@ export async function fetchDashboard(token: string | null) {
 
 export async function fetchWorkStatus(token: string | null) {
   const raw = await apiRequest<unknown>('/mobile/work/status/', { token });
-  return unwrapData<{ work_status: 'started' | 'not_started' }>(raw);
+  return unwrapData<{ work_status: 'started' | 'not_started' | 'stopped' | 'expired' }>(raw);
 }
 
 export async function startWork(
@@ -239,29 +480,36 @@ export async function fetchMyVisits(
   const qs =
     dateFilter && dateFilter !== 'all' ? `?date_filter=${encodeURIComponent(dateFilter)}` : '';
   const raw = await apiRequest<unknown>(`/mobile/visits/${qs}`, { token });
-  const data = unwrapData<{ results?: VisitDto[] } | VisitDto[]>(raw);
-  if (Array.isArray(data)) return data;
-  return data.results ?? [];
+  return normalizePaginated<VisitDto>(raw).results;
 }
 
-export async function createVisit(
-  token: string | null,
-  body: Record<string, unknown>,
-) {
+export async function createVisit(token: string | null, body: CreateVisitPayload) {
+  appLog.info('visit.create_start', {
+    farmerId: body.farmer_id,
+    cropId: body.crop,
+    hasGps: body.latitude != null && body.longitude != null,
+  });
   const raw = await apiRequest<unknown>('/mobile/visits/', {
     method: 'POST',
     token,
     json: body,
   });
-  return unwrapData<{ visit_id?: number }>(raw);
+  const data = unwrapData<{ visit_id?: number; duplicate?: boolean }>(raw);
+  appLog.info('visit.create_ok', {
+    visitId: data.visit_id ?? null,
+    duplicate: data.duplicate ?? false,
+  });
+  return data;
 }
 
 export async function fetchVisitDetail(token: string | null, id: number) {
   const raw = await apiRequest<unknown>(`/visits/${id}/`, { token });
-  if (raw && typeof raw === 'object' && 'success' in raw && !(raw as { success: boolean }).success) {
+  if (isRecord(raw) && raw.success === false) {
     throw new ApiError('Visit not found', 404, raw);
   }
-  return raw as VisitDetailDto;
+  // VisitDetailUpdateAPI returns a raw object (not success-wrapped).
+  const data = unwrapData<VisitDetailDto>(raw);
+  return data;
 }
 
 export async function patchVisit(
@@ -301,11 +549,11 @@ export type FarmerListItem = {
 export async function fetchFarmersPage(token: string | null, page: number, search: string) {
   const q = new URLSearchParams({ page: String(page) });
   if (search.trim()) q.set('search', search.trim());
-  const raw = await apiRequest<{ count: number; next: string | null; results: FarmerListItem[] }>(
-    `/farmers/?${q.toString()}`,
-    { token },
-  );
-  return raw;
+  appLog.info('farmers.list_start', { page, hasSearch: Boolean(search.trim()) });
+  const raw = await apiRequest<unknown>(`/farmers/?${q.toString()}`, { token });
+  const normalized = normalizePaginated<FarmerListItem>(raw);
+  appLog.info('farmers.list_ok', { count: normalized.count, pageSize: normalized.results.length });
+  return normalized;
 }
 
 export async function fetchFarmerDetail(token: string | null, id: number) {
@@ -314,19 +562,19 @@ export async function fetchFarmerDetail(token: string | null, id: number) {
 }
 
 export async function fetchFarmerVisitsPage(token: string | null, farmerId: number, page: number) {
-  const raw = await apiRequest<{ count: number; next: string | null; results: VisitDto[] }>(
-    `/farmers/${farmerId}/visits/?page=${page}`,
-    { token },
-  );
-  return raw;
+  const raw = await apiRequest<unknown>(`/farmers/${farmerId}/visits/?page=${page}`, { token });
+  return normalizePaginated<VisitDto>(raw);
 }
 
-export async function fetchFarmerActivityPage(token: string | null, farmerId: number, page: number) {
-  const raw = await apiRequest<{ count: number; next: string | null; results: Record<string, unknown>[] }>(
-    `/farmers/${farmerId}/activity/?page=${page}`,
-    { token },
-  );
-  return raw;
+export async function fetchFarmerActivityPage(
+  token: string | null,
+  farmerId: number,
+  page: number,
+) {
+  const raw = await apiRequest<unknown>(`/farmers/${farmerId}/activity/?page=${page}`, {
+    token,
+  });
+  return normalizePaginated<Record<string, unknown>>(raw);
 }
 
 export async function createFarmer(
@@ -348,26 +596,21 @@ export type MasterVillage = { id: number; name: string; district?: number };
 export type MasterCrop = { id: number; name_en?: string; name_ta?: string };
 
 export async function fetchDistricts(token: string | null) {
-  const raw = await apiRequest<{ results?: MasterDistrict[] } | MasterDistrict[]>(
-    '/masters/districts/?page_size=500',
-    { token },
-  );
-  if (Array.isArray(raw)) return raw;
-  return raw.results ?? [];
+  const raw = await apiRequest<unknown>('/masters/districts/?page_size=500', { token });
+  return normalizeList<MasterDistrict>(raw);
 }
 
 export async function fetchVillages(token: string | null, districtId: number) {
-  const raw = await apiRequest<{ results?: MasterVillage[] } | MasterVillage[]>(
+  const raw = await apiRequest<unknown>(
     `/masters/villages/?district=${districtId}&page_size=500`,
     { token },
   );
-  if (Array.isArray(raw)) return raw;
-  return raw.results ?? [];
+  return normalizeList<MasterVillage>(raw);
 }
 
 export async function fetchCropsCatalog(token: string | null) {
-  const raw = await apiRequest<MasterCrop[]>('/masters/crops/', { token });
-  return Array.isArray(raw) ? raw : [];
+  const raw = await apiRequest<unknown>('/masters/crops/', { token });
+  return normalizeList<MasterCrop>(raw);
 }
 
 export type ProfileData = {

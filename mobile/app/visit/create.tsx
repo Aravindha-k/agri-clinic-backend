@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { BackHeader } from '@/components/ui/AppHeader';
@@ -20,12 +20,13 @@ import {
   locationFailureTitle,
   openLocationSettings,
 } from '@/lib/geo';
+import { appLog } from '@/lib/logger';
 import { palette, space, typography } from '@/constants/theme';
 
 type Step = 0 | 1 | 2 | 3;
 
 export default function CreateVisitWizard() {
-  const { token } = useAuth();
+  const { token, ready } = useAuth();
   const { districts, crops, reload: reloadMasters } = useMasters(token);
   const [step, setStep] = useState<Step>(0);
   const [farmers, setFarmers] = useState<FarmerListItem[]>([]);
@@ -43,12 +44,29 @@ export default function CreateVisitWizard() {
   const [disease, setDisease] = useState(false);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const loadFarmers = useCallback(async () => {
-    if (!token) return;
-    const page = await fetchFarmersPage(token, 1, farmerSearch);
-    setFarmers(page.results);
-  }, [token, farmerSearch]);
+    if (!token || !ready) return;
+    try {
+      const page = await fetchFarmersPage(token, 1, farmerSearch);
+      if (mountedRef.current) setFarmers(page.results);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      Alert.alert(
+        'Could not load farmers',
+        e instanceof ApiError ? e.message : 'Please try again.',
+      );
+    }
+  }, [token, ready, farmerSearch]);
 
   const loadVillages = useCallback(async () => {
     if (!token || !qcDistrict) {
@@ -56,7 +74,9 @@ export default function CreateVisitWizard() {
       return;
     }
     const v = await fetchVillages(token, qcDistrict);
-    setVillages(v.map((x) => ({ id: x.id, name: x.name })));
+    if (mountedRef.current) {
+      setVillages(v.map((x) => ({ id: x.id, name: x.name })));
+    }
   }, [token, qcDistrict]);
 
   useEffect(() => {
@@ -66,7 +86,7 @@ export default function CreateVisitWizard() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   async function quickCreateFarmer() {
-    if (!token) return;
+    if (!token || busy) return;
     if (!qcName.trim() || !qcPhone.trim()) {
       Alert.alert('Missing', 'Name and phone are required.');
       return;
@@ -79,53 +99,77 @@ export default function CreateVisitWizard() {
         district: qcDistrict,
         village: qcVillage,
       });
+      if (!mountedRef.current) return;
       setSelectedFarmer(f);
       setQcOpen(false);
       setStep(1);
       await loadFarmers();
     } catch (e) {
+      if (!mountedRef.current) return;
       Alert.alert('Could not create farmer', e instanceof ApiError ? e.message : 'Error');
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
   async function submit() {
-    if (!token || !selectedFarmer) return;
+    if (!token || !selectedFarmer || submittingRef.current || busy) return;
     if (!selectedCropId) {
       Alert.alert('Crop required', 'Pick a crop for this visit.');
       return;
     }
+
+    submittingRef.current = true;
     setBusy(true);
-    const loc = await captureSilentLocation();
-    if (!loc) {
-      Alert.alert(
-        'Location needed',
-        'Enable location permission so we can attach a visit fix (coordinates are not shown in the form).',
-      );
-      setBusy(false);
-      return;
-    }
+    appLog.info('visit.submit_tap', { farmerId: selectedFarmer.id, cropId: selectedCropId });
+
     try {
-      const body: Record<string, unknown> = {
-        farmer: selectedFarmer.id,
+      const locResult = await captureLocation();
+      if (!mountedRef.current) return;
+
+      if (!locResult.ok) {
+        const buttons: { text: string; onPress?: () => void }[] = [{ text: 'OK' }];
+        if (locResult.reason === 'denied' || locResult.reason === 'services_off') {
+          buttons.unshift({
+            text: 'Open settings',
+            onPress: () => {
+              void openLocationSettings();
+            },
+          });
+        }
+        Alert.alert(
+          locationFailureTitle(locResult.reason),
+          locationFailureMessage(locResult.reason),
+          buttons,
+        );
+        return;
+      }
+
+      const loc = locResult.point;
+      // Canonical backend FieldVisitSubmitSerializer keys (one-shot submit).
+      const body = {
+        farmer_id: selectedFarmer.id,
         crop: selectedCropId,
-        visit_date: today,
         notes: notes.trim() || undefined,
         pest_issue: pest,
         disease_issue: disease,
         latitude: loc.latitude,
         longitude: loc.longitude,
+        ...(selectedFieldId ? { field: selectedFieldId } : {}),
       };
-      if (selectedFieldId) body.field = selectedFieldId;
+
       await createVisit(token, body);
+      if (!mountedRef.current) return;
       Alert.alert('Visit saved', 'Field visit recorded successfully.', [
         { text: 'OK', onPress: () => router.replace('/(tabs)/visits') },
       ]);
     } catch (e) {
-      Alert.alert('Could not save visit', e instanceof ApiError ? e.message : 'Error');
+      if (!mountedRef.current) return;
+      const msg = e instanceof ApiError ? e.message : 'Could not save visit. Please try again.';
+      Alert.alert('Could not save visit', msg);
     } finally {
-      setBusy(false);
+      submittingRef.current = false;
+      if (mountedRef.current) setBusy(false);
     }
   }
 
@@ -145,12 +189,12 @@ export default function CreateVisitWizard() {
             <TextInput
               value={farmerSearch}
               onChangeText={setFarmerSearch}
-              onSubmitEditing={() => loadFarmers()}
+              onSubmitEditing={() => void loadFarmers()}
               placeholder="Search then load list"
               placeholderTextColor={palette.textMuted}
               style={styles.input}
             />
-            <Button title="Load farmers" variant="secondary" onPress={() => loadFarmers()} />
+            <Button title="Load farmers" variant="secondary" onPress={() => void loadFarmers()} />
             <View style={{ maxHeight: 240, marginTop: space.sm }}>
               {farmers.slice(0, 50).map((item) => (
                 <Pressable
@@ -206,13 +250,13 @@ export default function CreateVisitWizard() {
                     ))}
                   </>
                 ) : null}
-                <Button title="Save farmer" onPress={quickCreateFarmer} loading={busy} />
+                <Button title="Save farmer" onPress={() => void quickCreateFarmer()} loading={busy} />
               </View>
             ) : null}
             <Button
               title="Next"
               style={{ marginTop: space.md }}
-              disabled={!selectedFarmer}
+              disabled={!selectedFarmer || busy}
               onPress={() => setStep(1)}
             />
           </Card>
@@ -233,8 +277,8 @@ export default function CreateVisitWizard() {
               </Pressable>
             ))}
             <View style={styles.row}>
-              <Button title="Back" variant="secondary" onPress={() => setStep(0)} />
-              <Button title="Next" onPress={() => setStep(2)} />
+              <Button title="Back" variant="secondary" onPress={() => setStep(0)} disabled={busy} />
+              <Button title="Next" onPress={() => setStep(2)} disabled={busy} />
             </View>
           </Card>
         ) : null}
@@ -267,8 +311,8 @@ export default function CreateVisitWizard() {
               style={[styles.input, { minHeight: 80 }]}
             />
             <View style={styles.row}>
-              <Button title="Back" variant="secondary" onPress={() => setStep(1)} />
-              <Button title="Next" onPress={() => setStep(3)} />
+              <Button title="Back" variant="secondary" onPress={() => setStep(1)} disabled={busy} />
+              <Button title="Next" onPress={() => setStep(3)} disabled={busy} />
             </View>
           </Card>
         ) : null}
@@ -279,11 +323,12 @@ export default function CreateVisitWizard() {
             <Text style={typography.body}>Farmer: {selectedFarmer?.name}</Text>
             <Text style={typography.caption}>Date: {today}</Text>
             <Text style={[typography.caption, { marginTop: space.sm }]}>
-              GPS is captured when you submit. The visit is saved as a completed field record.
+              GPS is captured when you submit. The visit is saved as a completed field record
+              (one-shot submit — not a separate start/complete lifecycle).
             </Text>
             <View style={[styles.row, { marginTop: space.md }]}>
-              <Button title="Back" variant="secondary" onPress={() => setStep(2)} />
-              <Button title="Submit visit" onPress={submit} loading={busy} />
+              <Button title="Back" variant="secondary" onPress={() => setStep(2)} disabled={busy} />
+              <Button title="Submit visit" onPress={() => void submit()} loading={busy} disabled={busy} />
             </View>
           </Card>
         ) : null}
@@ -293,6 +338,7 @@ export default function CreateVisitWizard() {
           variant="secondary"
           style={{ marginTop: space.lg }}
           onPress={() => reloadMasters()}
+          disabled={busy}
         />
       </ScrollView>
     </View>

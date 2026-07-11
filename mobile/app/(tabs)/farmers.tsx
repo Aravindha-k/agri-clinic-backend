@@ -18,14 +18,14 @@ import { ApiError, FarmerListItem, fetchFarmersPage } from '@/lib/api';
 import { palette, radius, space, typography } from '@/constants/theme';
 
 export default function FarmersScreen() {
-  const { token } = useAuth();
+  const { token, ready } = useAuth();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<FarmerListItem[]>([]);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!ready || !token) return;
     setErr(null);
     setLoading(true);
     try {
@@ -36,7 +36,7 @@ export default function FarmersScreen() {
     } finally {
       setLoading(false);
     }
-  }, [token, search]);
+  }, [ready, token, search]);
 
   useFocusEffect(
     useCallback(() => {

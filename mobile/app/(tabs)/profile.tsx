@@ -57,7 +57,12 @@ export default function ProfileScreen() {
         <Pressable style={styles.link} onPress={() => router.push('/(tabs)/visits')}>
           <Text style={styles.linkText}>View my visits</Text>
         </Pressable>
-        <Pressable style={[styles.link, { marginTop: space.sm }]} onPress={() => signOut()}>
+        <Pressable
+          style={[styles.link, { marginTop: space.sm }]}
+          onPress={async () => {
+            await signOut();
+            router.replace('/login');
+          }}>
           <Text style={[styles.linkText, { color: palette.danger }]}>Sign out</Text>
         </Pressable>
       </ScrollView>

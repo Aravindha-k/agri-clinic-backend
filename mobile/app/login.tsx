@@ -14,11 +14,13 @@ import { Button } from '@/components/ui/Button';
 import { ApiError } from '@/lib/api';
 
 export default function LoginScreen() {
-  const { signIn, token } = useAuth();
+  const { signIn, token, ready } = useAuth();
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (!ready) return null;
 
   if (token) {
     router.replace('/(tabs)');

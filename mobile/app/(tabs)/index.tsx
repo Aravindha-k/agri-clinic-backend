@@ -72,11 +72,15 @@ export default function HomeScreen() {
 
   async function startDayQuick() {
     if (!token) return;
-    const loc = await captureSilentLocation();
-    const { startWork } = await import('@/lib/api');
-    await startWork(token, loc ?? undefined);
-    await setWorkdayStartedAt(new Date().toISOString());
-    await load();
+    try {
+      const loc = await captureSilentLocation();
+      const { startWork } = await import('@/lib/api');
+      await startWork(token, loc ?? undefined);
+      await setWorkdayStartedAt(new Date().toISOString());
+      await load();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'Could not start the workday.');
+    }
   }
 
   if (loading && !dash) return <LoadingBlock />;

@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { Linking } from 'react-native';
+import { appLog } from '@/lib/logger';
 
 export type GeoPoint = { latitude: number; longitude: number; accuracy: number | null };
 
@@ -15,14 +16,20 @@ let cachedPermission: Location.PermissionStatus | null = null;
 let permissionRequest: Promise<Location.PermissionStatus> | null = null;
 
 async function ensureForegroundPermission(): Promise<Location.PermissionStatus> {
-  if (cachedPermission === 'granted') return 'granted';
+  if (cachedPermission === Location.PermissionStatus.GRANTED) {
+    return Location.PermissionStatus.GRANTED;
+  }
 
   const current = await Location.getForegroundPermissionsAsync();
   cachedPermission = current.status;
-  if (current.status === 'granted') return 'granted';
+  if (current.status === Location.PermissionStatus.GRANTED) {
+    return Location.PermissionStatus.GRANTED;
+  }
 
   // Do not re-prompt after the user has denied — avoids repeated system dialogs.
-  if (current.status === 'denied') return 'denied';
+  if (current.status === Location.PermissionStatus.DENIED) {
+    return Location.PermissionStatus.DENIED;
+  }
 
   if (!permissionRequest) {
     permissionRequest = Location.requestForegroundPermissionsAsync()
@@ -55,12 +62,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export async function captureLocation(): Promise<LocationCaptureResult> {
   try {
     const status = await ensureForegroundPermission();
-    if (status !== 'granted') {
+    if (status !== Location.PermissionStatus.GRANTED) {
+      appLog.warn('geo.permission_denied');
       return { ok: false, reason: 'denied' };
     }
 
     const servicesOn = await Location.hasServicesEnabledAsync();
     if (!servicesOn) {
+      appLog.warn('geo.services_off');
       return { ok: false, reason: 'services_off' };
     }
 
@@ -71,33 +80,40 @@ export async function captureLocation(): Promise<LocationCaptureResult> {
       POSITION_TIMEOUT_MS,
     );
 
+    const accuracy = pos.coords.accuracy ?? null;
+    appLog.info('geo.capture_ok', {
+      accuracy: accuracy != null ? Math.round(accuracy) : null,
+    });
+
     return {
       ok: true,
       point: {
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
-        accuracy: pos.coords.accuracy ?? null,
+        accuracy,
       },
     };
   } catch (err) {
     if (err instanceof Error && err.message === 'timeout') {
+      appLog.warn('geo.capture_timeout');
       return { ok: false, reason: 'timeout' };
     }
+    appLog.warn('geo.capture_unavailable');
     return { ok: false, reason: 'unavailable' };
   }
 }
 
-/** Backward-compatible helper — returns a point or null without prompting again when denied. */
+/** Returns a point or null without throwing when permission/GPS fails. */
 export async function captureSilentLocation(): Promise<GeoPoint | null> {
   const result = await captureLocation();
   return result.ok ? result.point : null;
 }
 
 export async function hasLocationPermission(): Promise<boolean> {
-  if (cachedPermission === 'granted') return true;
+  if (cachedPermission === Location.PermissionStatus.GRANTED) return true;
   const { status } = await Location.getForegroundPermissionsAsync();
   cachedPermission = status;
-  return status === 'granted';
+  return status === Location.PermissionStatus.GRANTED;
 }
 
 export function locationFailureTitle(reason: LocationCaptureFailure): string {

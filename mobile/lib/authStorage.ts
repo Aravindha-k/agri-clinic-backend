@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ACCESS = 'agri_access';
 const REFRESH = 'agri_refresh';
+const DEVICE_SESSION = 'agri_device_session';
 const WORKDAY_START = 'agri_workday_started_at';
 const LAST_SYNC = 'agri_last_location_sync_at';
 
@@ -12,6 +13,10 @@ export async function saveTokens(access: string, refresh: string) {
   ]);
 }
 
+export async function saveDeviceSessionId(sessionId: string) {
+  await AsyncStorage.setItem(DEVICE_SESSION, sessionId);
+}
+
 export async function getAccessToken() {
   return AsyncStorage.getItem(ACCESS);
 }
@@ -20,8 +25,45 @@ export async function getRefreshToken() {
   return AsyncStorage.getItem(REFRESH);
 }
 
+export async function getDeviceSessionId() {
+  return AsyncStorage.getItem(DEVICE_SESSION);
+}
+
+/** Persist login credentials used for authenticated mobile APIs. */
+export async function saveAuthSession(params: {
+  access: string;
+  refresh: string;
+  deviceSessionId: string;
+}) {
+  await AsyncStorage.multiSet([
+    [ACCESS, params.access],
+    [REFRESH, params.refresh],
+    [DEVICE_SESSION, params.deviceSessionId],
+  ]);
+}
+
+export async function getStoredAuth() {
+  const [[, access], [, refresh], [, deviceSessionId]] = await AsyncStorage.multiGet([
+    ACCESS,
+    REFRESH,
+    DEVICE_SESSION,
+  ]);
+  return {
+    access,
+    refresh,
+    deviceSessionId,
+  };
+}
+
+/** Clears tokens, device session, and workday sync metadata. */
 export async function clearTokens() {
-  await AsyncStorage.multiRemove([ACCESS, REFRESH, WORKDAY_START, LAST_SYNC]);
+  await AsyncStorage.multiRemove([
+    ACCESS,
+    REFRESH,
+    DEVICE_SESSION,
+    WORKDAY_START,
+    LAST_SYNC,
+  ]);
 }
 
 export async function setWorkdayStartedAt(iso: string | null) {
