@@ -40,6 +40,7 @@ class DeviceSessionRequiredMixin:
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
+        self._enforce_employee_account_active(request)
         if self.require_device_session and self._should_enforce_device_session(request):
             session_id = request.headers.get(DEVICE_SESSION_HEADER) or request.META.get(
                 "HTTP_X_DEVICE_SESSION"
@@ -66,6 +67,24 @@ class DeviceSessionRequiredMixin:
         if user.is_staff or user.is_superuser:
             return False
         return hasattr(user, "employee_profile")
+
+    @staticmethod
+    def _enforce_employee_account_active(request) -> None:
+        """Block disabled field employees even if their JWT has not expired yet."""
+        from rest_framework.exceptions import PermissionDenied
+
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return
+        if user.is_staff or user.is_superuser:
+            return
+        profile = getattr(user, "employee_profile", None)
+        if profile is None:
+            return
+        if not profile.can_login or not profile.is_active_employee:
+            raise PermissionDenied(
+                detail="Your account is currently disabled. Please contact your administrator."
+            )
 
 
 class MobileEmployeeAPIView(DeviceSessionRequiredMixin, APIView):

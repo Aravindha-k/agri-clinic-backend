@@ -72,9 +72,16 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
             logging.warning("LOGIN FAILED: No employee profile for %s", user.username)
             raise AuthenticationFailed("Invalid username or password")
         profile = user.employee_profile
-        if not profile.is_active_employee:
-            logging.warning("LOGIN FAILED: Disabled employee %s", user.username)
-            raise AuthenticationFailed("Invalid username or password")
+        if not profile.is_active_employee or not profile.can_login:
+            logging.warning(
+                "LOGIN FAILED: Disabled employee %s (active=%s, can_login=%s)",
+                user.username,
+                profile.is_active_employee,
+                profile.can_login,
+            )
+            raise AuthenticationFailed(
+                "Your account is currently disabled. Please contact your administrator."
+            )
         if user.is_staff:
             logging.warning(
                 "LOGIN FAILED: Admin user %s tried mobile login", user.username
@@ -120,13 +127,37 @@ class MobileTokenObtainPairView(TokenObtainPairView):
 class MobileTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
         try:
+            from django.contrib.auth.models import User
+            from rest_framework_simplejwt.tokens import RefreshToken
+
+            raw_refresh = request.data.get("refresh")
+            if raw_refresh:
+                try:
+                    token = RefreshToken(raw_refresh)
+                    user = User.objects.filter(id=token.get("user_id")).select_related(
+                        "employee_profile"
+                    ).first()
+                except Exception:
+                    user = None
+                if user is not None:
+                    profile = getattr(user, "employee_profile", None)
+                    if not user.is_active or (
+                        profile is not None
+                        and (
+                            not profile.is_active_employee or not profile.can_login
+                        )
+                    ):
+                        return error_response(
+                            message="Your account is currently disabled. Please contact your administrator.",
+                            code="ACCOUNT_DISABLED",
+                            status_code=403,
+                        )
+
             response = super().post(request, *args, **kwargs)
             if response.status_code == 200:
                 return Response(response.data, status=status.HTTP_200_OK)
             # If refresh fails, return 401 so mobile can logout
             return error_response(message="Token refresh failed", status_code=401)
-        except Exception as e:
+        except Exception:
             # Always return 401 for any error in refresh
-            from utils.response import error_response
-
             return error_response(message="Token refresh failed", status_code=401)

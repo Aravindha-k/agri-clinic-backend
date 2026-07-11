@@ -227,6 +227,29 @@ class LoginAPI(APIView):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
 
+            # Username login path: enforce employee can_login / active flags
+            if not user.is_staff:
+                login_profile = employee_profile
+                if login_profile is None and hasattr(user, "employee_profile"):
+                    try:
+                        login_profile = user.employee_profile
+                    except EmployeeProfile.DoesNotExist:
+                        login_profile = None
+                if login_profile is not None and (
+                    not login_profile.is_active_employee or not login_profile.can_login
+                ):
+                    logger.warning(
+                        "Login denied for username=%s (active=%s, can_login=%s)",
+                        username,
+                        login_profile.is_active_employee,
+                        login_profile.can_login,
+                    )
+                    return error_response(
+                        message="Your account is currently disabled. Please contact your administrator.",
+                        code="ACCOUNT_DISABLED",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
+
             # ── Issue JWT tokens ──
             if not HAS_SJWT:
                 logger.error(
