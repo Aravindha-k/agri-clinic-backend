@@ -116,6 +116,14 @@ def end_duty(user: User) -> DutySession:
 
     duty = get_active_duty(user)
     if not duty:
+        last = (
+            DutySession.objects.filter(user=user)
+            .order_by("-start_time")
+            .first()
+        )
+        if last and not last.is_active:
+            logger.info("DutyEnd idempotent user_id=%s duty_id=%s", user.pk, last.pk)
+            return last
         raise DutyTrackingError("No active duty session", "NO_ACTIVE_DUTY")
 
     now = timezone.now()
@@ -311,10 +319,15 @@ def bulk_update_locations(
     success_count = 0
     failed_count = 0
     failed_items: list[dict[str, Any]] = []
+    accepted_ids: list[str] = []
     route_points_saved = 0
 
     for original_index, point in sorted_points:
         merged_point = {**request_meta, **point}
+        client_point_id = (
+            str(merged_point.get("client_point_id") or merged_point.get("local_point_id") or "")
+            .strip()
+        )
         try:
             with transaction.atomic():
                 result = _apply_location_point(
@@ -325,6 +338,8 @@ def bulk_update_locations(
                     app_version=app_version,
                 )
             success_count += 1
+            if client_point_id:
+                accepted_ids.append(client_point_id)
             if result.get("route_point_saved"):
                 route_points_saved += 1
         except (ValueError, TypeError) as exc:
@@ -332,8 +347,11 @@ def bulk_update_locations(
             failed_items.append(
                 {
                     "index": original_index,
+                    "client_point_id": client_point_id or None,
+                    "local_point_id": client_point_id or None,
                     "code": "INVALID_POINT",
                     "message": str(exc),
+                    "retryable": False,
                 }
             )
         except Exception as exc:
@@ -341,8 +359,11 @@ def bulk_update_locations(
             failed_items.append(
                 {
                     "index": original_index,
+                    "client_point_id": client_point_id or None,
+                    "local_point_id": client_point_id or None,
                     "code": "POINT_ERROR",
                     "message": str(exc),
+                    "retryable": True,
                 }
             )
 
@@ -358,6 +379,7 @@ def bulk_update_locations(
     return {
         "success_count": success_count,
         "failed_count": failed_count,
+        "accepted_ids": accepted_ids,
         "failed_items": failed_items,
         "route_points_saved": route_points_saved,
         "duty_session_id": duty.pk,
