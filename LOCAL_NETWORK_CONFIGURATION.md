@@ -72,9 +72,10 @@ Replace every `YOUR_LAN_IP` in `.env` with that address, then **restart** `runse
 
 ```powershell
 cd d:\agri_clinic
-.\.venv\Scripts\Activate.ps1
-python manage.py runserver 0.0.0.0:8000
+.\scripts\run_dev_server.ps1
 ```
+
+This binds to `0.0.0.0:8000` with `--noreload` (recommended on Windows). If you need autoreload, use `python manage.py runserver 0.0.0.0:8000` instead — restart manually if you hit `WinError 1450`.
 
 On startup the log should include something like:
 
@@ -104,6 +105,8 @@ Allow inbound **TCP 8000** on Private networks (Windows Defender Firewall → In
 | Still only localhost works | Confirm `.env` is in repo root and restart; check boot log `ALLOWED_HOSTS=` |
 | `YOUR_LAN_IP` in boot log | You left the placeholder — replace with a real IPv4 |
 | Staging/production | Do not add home LAN IPs; use HTTPS hostnames only |
+| `WinError 1450` / server crash | Stop extra `python runserver` processes; use `scripts/run_dev_server.ps1` (`--noreload`) |
+| Farmers API hammered (many `/mobile/farmers/` in logs) | Reload mobile app after pull; farmers list loads one page at a time — avoid paginating all 1800+ rows on device |
 
 ## Related files
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -20,29 +20,59 @@ import { palette, radius, space, typography } from '@/constants/theme';
 export default function FarmersScreen() {
   const { token, ready } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [query, setQuery] = useState('');
   const [rows, setRows] = useState<FarmerListItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const inFlightRef = useRef(false);
+  const queryRef = useRef(query);
+  queryRef.current = query;
 
-  const load = useCallback(async () => {
-    if (!ready || !token) return;
-    setErr(null);
-    setLoading(true);
-    try {
-      const page = await fetchFarmersPage(token, 1, search);
-      setRows(page.results);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : 'Could not load farmers.');
-    } finally {
-      setLoading(false);
-    }
-  }, [ready, token, search]);
+  const loadPage = useCallback(
+    async (pageNum: number, search: string, append: boolean) => {
+      if (!ready || !token || inFlightRef.current) return;
+      inFlightRef.current = true;
+      setErr(null);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      try {
+        const result = await fetchFarmersPage(token, pageNum, search);
+        setTotalCount(result.count);
+        setPage(pageNum);
+        setRows((prev) => (append ? [...prev, ...result.results] : result.results));
+      } catch (e) {
+        if (!append) {
+          setRows([]);
+        }
+        setErr(e instanceof ApiError ? e.message : 'Could not load farmers.');
+      } finally {
+        inFlightRef.current = false;
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [ready, token],
+  );
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      void loadPage(1, queryRef.current, false);
+    }, [loadPage]),
   );
+
+  const submitSearch = useCallback(() => {
+    const next = searchInput.trim();
+    setQuery(next);
+    void loadPage(1, next, false);
+  }, [loadPage, searchInput]);
+
+  const hasMore = rows.length < totalCount;
 
   if (loading && !rows.length) return <LoadingBlock />;
 
@@ -53,31 +83,52 @@ export default function FarmersScreen() {
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={palette.textMuted} />
           <TextInput
-            value={search}
-            onChangeText={setSearch}
-            onSubmitEditing={() => load()}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            onSubmitEditing={submitSearch}
             returnKeyType="search"
             placeholder="Search name or phone…"
             placeholderTextColor={palette.textMuted}
             style={styles.search}
           />
-          <Pressable onPress={() => load()} hitSlop={8}>
+          <Pressable onPress={submitSearch} hitSlop={8}>
             <Text style={{ color: palette.primary, fontWeight: '700' }}>Go</Text>
           </Pressable>
         </View>
       </View>
       {err && !rows.length ? (
-        <ErrorState message={err} onRetry={load} />
+        <ErrorState message={err} onRetry={() => void loadPage(1, query, false)} />
       ) : (
         <FlatList
           data={rows}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={{ paddingHorizontal: space.md, paddingBottom: 32, gap: space.sm }}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={load} colors={[palette.primary]} />
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={() => void loadPage(1, query, false)}
+              colors={[palette.primary]}
+            />
           }
+          onEndReached={() => {
+            if (!hasMore || loading || loadingMore) return;
+            void loadPage(page + 1, query, true);
+          }}
+          onEndReachedThreshold={0.4}
           ListEmptyComponent={
-            <EmptyState title="No farmers yet" detail="Pull to refresh or adjust search." onAction={load} actionLabel="Retry" />
+            <EmptyState
+              title="No farmers yet"
+              detail="Pull to refresh or adjust search."
+              onAction={() => void loadPage(1, query, false)}
+              actionLabel="Retry"
+            />
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <Text style={[typography.caption, { textAlign: 'center', paddingVertical: space.md }]}>
+                Loading more…
+              </Text>
+            ) : null
           }
           renderItem={({ item }) => (
             <Pressable onPress={() => router.push(`/farmer/${item.id}`)}>

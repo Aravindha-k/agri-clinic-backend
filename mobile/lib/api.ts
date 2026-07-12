@@ -546,18 +546,23 @@ export type FarmerListItem = {
   address?: string;
 };
 
-export async function fetchFarmersPage(token: string | null, page: number, search: string) {
-  const q = new URLSearchParams({ page: String(page) });
+export async function fetchFarmersPage(
+  token: string | null,
+  page: number,
+  search: string,
+  pageSize = 50,
+) {
+  const q = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (search.trim()) q.set('search', search.trim());
-  appLog.info('farmers.list_start', { page, hasSearch: Boolean(search.trim()) });
-  const raw = await apiRequest<unknown>(`/farmers/?${q.toString()}`, { token });
+  appLog.info('farmers.list_start', { page, hasSearch: Boolean(search.trim()), pageSize });
+  const raw = await apiRequest<unknown>(`/mobile/farmers/?${q.toString()}`, { token });
   const normalized = normalizePaginated<FarmerListItem>(raw);
   appLog.info('farmers.list_ok', { count: normalized.count, pageSize: normalized.results.length });
   return normalized;
 }
 
 export async function fetchFarmerDetail(token: string | null, id: number) {
-  const raw = await apiRequest<unknown>(`/farmers/${id}/`, { token });
+  const raw = await apiRequest<unknown>(`/mobile/farmers/${id}/`, { token });
   return unwrapData<Record<string, unknown>>(raw);
 }
 

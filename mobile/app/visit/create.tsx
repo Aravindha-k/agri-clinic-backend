@@ -57,7 +57,7 @@ export default function CreateVisitWizard() {
   const loadFarmers = useCallback(async () => {
     if (!token || !ready) return;
     try {
-      const page = await fetchFarmersPage(token, 1, farmerSearch);
+      const page = await fetchFarmersPage(token, 1, farmerSearch, 50);
       if (mountedRef.current) setFarmers(page.results);
     } catch (e) {
       if (!mountedRef.current) return;

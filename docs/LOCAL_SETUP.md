@@ -30,10 +30,12 @@ For physical Android / LAN setup, follow [LOCAL_NETWORK_CONFIGURATION.md](../LOC
 
 ```powershell
 python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
+.\scripts\run_dev_server.ps1
 ```
 
 Use `0.0.0.0` so devices on your Wi-Fi can reach the API.
+
+On **Windows**, prefer `scripts/run_dev_server.ps1` (runs with `--noreload`). The default autoreloader can crash with `WinError 1450` after heavy dev sessions because it scans the entire `.venv` tree. Restart the script after backend code changes.
 ## 5. Optional local production check
 
 ```powershell
