@@ -82,6 +82,7 @@ jobs:
           : "${HEALTH_URL:?BACKEND_HEALTH_URL secret is required}"
 
           PORT="${EC2_PORT:-22}"
+          if [ -z "$PORT" ]; then PORT=22; fi
           BRANCH="${DEPLOY_BRANCH:-main}"
 
           ssh -i ~/.ssh/deploy_key \

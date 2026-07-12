@@ -64,7 +64,7 @@ check_worktree() {
     path="${line:3}"
 
     case "$path" in
-      .env|.env.*|media/*|staticfiles/*|backups/*|db.sqlite3|*.log|*.pyc)
+      .env|.env.*|media/*|staticfiles/*|backups/*|db.sqlite3|*.log|*.pyc|*.sql|*.dump)
         continue
         ;;
     esac
