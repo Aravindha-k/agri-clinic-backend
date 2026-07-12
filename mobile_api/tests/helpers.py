@@ -1,4 +1,4 @@
-"""Helpers for API tests that call mobile employee endpoints."""
+"""Helpers for mobile API tests that call employee endpoints."""
 
 from rest_framework.test import APIClient
 

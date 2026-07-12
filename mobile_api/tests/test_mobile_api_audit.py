@@ -3,7 +3,8 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile
-from masters.models import Crop, District, Farmer, Village
+from masters.models import Crop, District, Farmer, ProblemCategory, ProblemMaster, Village
+from mobile_api.tests.helpers import login_mobile_client
 from visits.models import Visit
 from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE
 
@@ -20,8 +21,7 @@ class MobileAPIAuditTest(TestCase):
         self.admin = User.objects.create_user(
             username="admin_audit", password="x", is_staff=True, is_superuser=True
         )
-        self.client = APIClient()
-        self.client.force_authenticate(user=self.employee)
+        self.client = login_mobile_client(employee_id="EMP-AUDIT", password="x")
 
         district = District.objects.create(name="Audit D")
         village = Village.objects.create(name="Audit V", district=district)
@@ -32,11 +32,34 @@ class MobileAPIAuditTest(TestCase):
             village=village,
         )
         self.crop = Crop.objects.create(name_en="Rice", name_ta="Rice", is_active=True)
+        self.category, _ = ProblemCategory.objects.get_or_create(
+            code="pest_audit_test",
+            defaults={
+                "name": "Pest Audit",
+                "is_active": True,
+                "requires_problem_master": True,
+            },
+        )
+        self.problem = ProblemMaster.objects.create(
+            category=self.category,
+            name="Aphids",
+            crop=self.crop,
+            is_active=True,
+        )
         self.payload = {
             "farmer": self.farmer.id,
             "crop": self.crop.id,
+            "village": village.id,
             "latitude": 12.97,
             "longitude": 77.59,
+            "farmer_name": self.farmer.name,
+            "farmer_phone": self.farmer.phone,
+            "land_area": 1.0,
+            "problem_category": self.category.id,
+            "problem_master": self.problem.id,
+            "problem_description": "Test issue",
+            "recommendation": "Test advice",
+            "observation": "Test observation",
         }
 
     def test_incomplete_submit_no_db_row(self):
@@ -68,6 +91,7 @@ class MobileAPIAuditTest(TestCase):
 
     def test_visit_detail_and_map(self):
         create = self.client.post("/api/v1/mobile/visits/", self.payload, format="json")
+        self.assertEqual(create.status_code, 200, create.data)
         vid = create.data["data"]["visit_id"]
         detail = self.client.get(f"/api/v1/mobile/visits/{vid}/")
         self.assertEqual(detail.status_code, 200)

@@ -8,7 +8,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import EmployeeProfile
 from masters.models import Crop, District, Farmer, ProblemCategory, ProblemMaster, Village
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.tests.helpers import login_mobile_client
 from visits.models import Visit
 from visits.submitted import submitted_visits_qs
 
