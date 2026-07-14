@@ -90,8 +90,17 @@ class DutyTrackingAPITest(APITestCase):
         self.assertTrue(WorkDay.objects.filter(user=self.employee, is_active=True).exists())
 
         r2 = self._start_duty()
-        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(r2.data.get("code"), "DUTY_ALREADY_STARTED")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertEqual(r2.data["data"]["duty_session_id"], duty_id)
+        self.assertEqual(r2.data["data"]["status"], "in_progress")
+        self.assertEqual(DutySession.objects.filter(user=self.employee, is_active=True).count(), 1)
+
+        r_current = self.client.get("/api/tracking/duty/current/")
+        self.assertEqual(r_current.status_code, status.HTTP_200_OK)
+        self.assertEqual(r_current.data["data"]["duty_session_id"], duty_id)
+        self.assertEqual(r_current.data["data"]["status"], "in_progress")
+        self.assertIsNotNone(r_current.data["data"].get("started_at"))
+        self.assertIsNotNone(r_current.data["data"].get("server_time"))
 
         r3 = self.client.post("/api/tracking/duty/end/", {}, format="json")
         self.assertEqual(r3.status_code, status.HTTP_200_OK)

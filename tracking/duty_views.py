@@ -15,6 +15,8 @@ from tracking.duty_service import (
     DutyTrackingError,
     bulk_update_locations,
     end_duty,
+    get_active_duty,
+    serialize_duty_status,
     start_duty,
     update_location,
 )
@@ -32,7 +34,7 @@ def _duty_error(exc: DutyTrackingError):
 @extend_schema(
     tags=["Tracking"],
     summary="Start employee duty",
-    responses={201: SIMPLE_SUCCESS, 400: error_schema("DutyStartError")},
+    responses={200: SIMPLE_SUCCESS, 201: SIMPLE_SUCCESS, 400: error_schema("DutyStartError")},
 )
 class DutyStartAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
@@ -43,11 +45,13 @@ class DutyStartAPI(DeviceSessionRequiredMixin, APIView):
             lng = request.data.get("longitude")
             latitude = float(lat) if lat not in (None, "") else None
             longitude = float(lng) if lng not in (None, "") else None
+            existing = get_active_duty(request.user)
             duty = start_duty(
                 request.user,
                 latitude=latitude,
                 longitude=longitude,
             )
+            reused = existing is not None and existing.id == duty.id
         except DutyTrackingError as exc:
             return _duty_error(exc)
         except (TypeError, ValueError):
@@ -56,15 +60,28 @@ class DutyStartAPI(DeviceSessionRequiredMixin, APIView):
                 code="INVALID_COORDS",
                 status_code=400,
             )
+        payload = serialize_duty_status(request.user, duty)
         return success_response(
-            data={
-                "duty_session_id": duty.id,
-                "workday_id": duty.workday_id,
-                "started_at": duty.start_time.isoformat(),
-            },
-            message="Duty started",
-            status_code=201,
+            data=payload,
+            message="Duty already active" if reused else "Duty started",
+            status_code=200 if reused else 201,
         )
+
+
+@extend_schema(
+    tags=["Tracking"],
+    summary="Current employee duty",
+    responses={200: SIMPLE_SUCCESS, 400: error_schema("DutyCurrentError")},
+)
+class DutyCurrentAPI(DeviceSessionRequiredMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            data = serialize_duty_status(request.user)
+        except DutyTrackingError as exc:
+            return _duty_error(exc)
+        return success_response(data=data, message="Current duty")
 
 
 @extend_schema(
@@ -80,11 +97,9 @@ class DutyEndAPI(DeviceSessionRequiredMixin, APIView):
             duty = end_duty(request.user)
         except DutyTrackingError as exc:
             return _duty_error(exc)
+        payload = serialize_duty_status(request.user, duty)
         return success_response(
-            data={
-                "duty_session_id": duty.id,
-                "ended_at": duty.end_time.isoformat() if duty.end_time else None,
-            },
+            data=payload,
             message="Duty ended",
         )
 

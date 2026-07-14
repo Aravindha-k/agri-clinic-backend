@@ -999,14 +999,22 @@ class CurrentWorkdayAPI(APIView):
             .order_by("-recorded_at")
             .first()
         )
+        from tracking.duty_service import get_active_duty
+
+        duty = get_active_duty(request.user)
         data = {
             "workday_id": workday.id,
+            "duty_session_id": duty.id if duty else workday.id,
             "date": workday.date,
-            "start_time": workday.start_time,
+            "work_date": duty.date if duty else workday.date,
+            "start_time": (duty.start_time if duty else workday.start_time),
+            "started_at": (duty.start_time if duty else workday.start_time),
             "end_time": workday.end_time,
             "is_active": workday.is_active,
+            "status": "in_progress" if workday.is_active else "completed",
             "auto_ended": workday.auto_ended,
             "last_heartbeat": workday.last_heartbeat,
+            "server_time": timezone.now(),
             "last_location": (
                 LocationLogSerializer(last_loc, context={"request": request}).data
                 if last_loc

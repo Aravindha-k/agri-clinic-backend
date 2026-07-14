@@ -81,11 +81,30 @@ def start_duty(
     latitude: float | None = None,
     longitude: float | None = None,
 ) -> DutySession:
+    """
+    Start a duty session, or return the existing active session.
+
+    Guarantees one active DutySession per employee. Concurrent Start
+    requests reuse the same session and started_at (never create a second).
+    """
     _ensure_field_employee(user)
     expire_overlong_workdays_for_user(user)
 
-    if DutySession.objects.filter(user=user, is_active=True).exists():
-        raise DutyTrackingError("Duty already started", "DUTY_ALREADY_STARTED")
+    existing = (
+        DutySession.objects.select_for_update()
+        .filter(user=user, is_active=True)
+        .select_related("workday")
+        .order_by("-start_time")
+        .first()
+    )
+    if existing:
+        logger.info(
+            "DutyStart reuse user_id=%s duty_id=%s workday_id=%s",
+            user.pk,
+            existing.pk,
+            existing.workday_id,
+        )
+        return existing
 
     now = timezone.now()
     lat_dec = lng_dec = None
@@ -107,6 +126,84 @@ def start_duty(
     )
     logger.info("DutyStart user_id=%s duty_id=%s workday_id=%s", user.pk, duty.pk, workday.pk)
     return duty
+
+
+def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[str, Any]:
+    """Canonical current-duty payload for mobile multi-device restore."""
+    now = timezone.now()
+    active = duty if duty is not None and duty.is_active else get_active_duty(user)
+    if active and active.is_active:
+        workday = active.workday
+        started = active.start_time or (workday.start_time if workday else None)
+        work_date = active.date or (workday.date if workday else now.date())
+        return {
+            "status": "in_progress",
+            "is_active": True,
+            "user_id": user.pk,
+            "duty_session_id": active.id,
+            "workday_id": active.workday_id or (workday.id if workday else None),
+            "started_at": started.isoformat() if started else None,
+            "start_time": started.isoformat() if started else None,
+            "work_date": work_date.isoformat() if work_date else None,
+            "date": work_date.isoformat() if work_date else None,
+            "end_work_time": None,
+            "end_time": None,
+            "total_work_duration_ms": None,
+            "server_time": now.isoformat(),
+            "last_heartbeat": (
+                active.last_heartbeat.isoformat() if active.last_heartbeat else None
+            ),
+        }
+
+    today = now.date()
+    completed = None
+    if duty is not None and not duty.is_active:
+        completed = duty
+    if completed is None:
+        completed = (
+            DutySession.objects.filter(user=user, date=today, is_active=False)
+            .select_related("workday")
+            .order_by("-end_time", "-start_time")
+            .first()
+        )
+    if completed:
+        started = completed.start_time
+        ended = completed.end_time
+        duration_ms = None
+        if started and ended:
+            duration_ms = int(max(0, (ended - started).total_seconds() * 1000))
+        return {
+            "status": "completed",
+            "is_active": False,
+            "user_id": user.pk,
+            "duty_session_id": completed.id,
+            "workday_id": completed.workday_id,
+            "started_at": started.isoformat() if started else None,
+            "start_time": started.isoformat() if started else None,
+            "work_date": today.isoformat(),
+            "date": today.isoformat(),
+            "end_work_time": ended.isoformat() if ended else None,
+            "end_time": ended.isoformat() if ended else None,
+            "total_work_duration_ms": duration_ms,
+            "server_time": now.isoformat(),
+            "last_heartbeat": (
+                completed.last_heartbeat.isoformat() if completed.last_heartbeat else None
+            ),
+        }
+
+    return {
+        "status": "not_started",
+        "is_active": False,
+        "user_id": user.pk,
+        "duty_session_id": None,
+        "workday_id": None,
+        "started_at": None,
+        "work_date": today.isoformat(),
+        "date": today.isoformat(),
+        "end_work_time": None,
+        "total_work_duration_ms": None,
+        "server_time": now.isoformat(),
+    }
 
 
 @transaction.atomic
