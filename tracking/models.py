@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 class WorkDay(models.Model):
@@ -48,6 +49,13 @@ class WorkDay(models.Model):
             models.Index(fields=["is_active"]),
             models.Index(fields=["user", "is_active"]),
             models.Index(fields=["date", "is_active"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(is_active=True),
+                name="uniq_active_workday_per_user",
+            ),
         ]
 
     def __str__(self):
@@ -203,6 +211,13 @@ class DutySession(models.Model):
             models.Index(fields=["user", "date"]),
             models.Index(fields=["user", "is_active"]),
             models.Index(fields=["date", "is_active"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(is_active=True),
+                name="uniq_active_duty_per_user",
+            ),
         ]
 
     def __str__(self):

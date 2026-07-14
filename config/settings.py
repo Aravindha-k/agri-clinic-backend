@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+import sys
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import dj_database_url
@@ -437,8 +438,9 @@ def _configure_databases() -> dict:
             )
         }
         databases["default"]["CONN_HEALTH_CHECKS"] = True
-        databases["default"].setdefault("OPTIONS", {})
-        databases["default"]["OPTIONS"].setdefault("connect_timeout", 10)
+        if databases["default"].get("ENGINE") == "django.db.backends.postgresql":
+            databases["default"].setdefault("OPTIONS", {})
+            databases["default"]["OPTIONS"].setdefault("connect_timeout", 10)
 
         if IS_PRODUCTION:
             resolved_host = (urlsplit(database_url).hostname or "").strip().lower()
@@ -488,7 +490,8 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 USE_S3 = os.getenv("USE_S3", "false").lower() == "true"
 
 MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
-MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
+_default_media_root = BASE_DIR / (".test_media" if "test" in sys.argv else "media")
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(_default_media_root)))
 # Profile photos: employee_photos/ and farmer_photos/ under MEDIA_ROOT.
 # On Render without S3, files live on ephemeral disk — use a persistent disk or S3 for production.
 

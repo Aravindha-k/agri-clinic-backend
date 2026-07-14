@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -74,6 +74,24 @@ def _sync_workday_start(user: User, now, *, latitude=None, longitude=None) -> Wo
     return WorkDay.objects.create(**workday_kwargs)
 
 
+def _get_locked_active_duty(user: User) -> DutySession | None:
+    return (
+        DutySession.objects.select_for_update()
+        .filter(user=user, is_active=True)
+        .order_by("-start_time")
+        .first()
+    )
+
+
+def _get_locked_active_workday(user: User) -> WorkDay | None:
+    return (
+        WorkDay.objects.select_for_update()
+        .filter(user=user, is_active=True)
+        .order_by("-start_time")
+        .first()
+    )
+
+
 @transaction.atomic
 def start_duty(
     user: User,
@@ -90,13 +108,7 @@ def start_duty(
     _ensure_field_employee(user)
     expire_overlong_workdays_for_user(user)
 
-    existing = (
-        DutySession.objects.select_for_update()
-        .filter(user=user, is_active=True)
-        .select_related("workday")
-        .order_by("-start_time")
-        .first()
-    )
+    existing = _get_locked_active_duty(user)
     if existing:
         logger.info(
             "DutyStart reuse user_id=%s duty_id=%s workday_id=%s",
@@ -113,17 +125,38 @@ def start_duty(
         lat_dec = Decimal(str(latitude)).quantize(Decimal("0.000001"))
         lng_dec = Decimal(str(longitude)).quantize(Decimal("0.000001"))
 
-    workday = _sync_workday_start(user, now, latitude=lat_dec, longitude=lng_dec)
-    duty = DutySession.objects.create(
-        user=user,
-        workday=workday,
-        date=now.date(),
-        start_time=now,
-        is_active=True,
-        last_heartbeat=now,
-        latitude=lat_dec,
-        longitude=lng_dec,
-    )
+    try:
+        with transaction.atomic():
+            workday = _get_locked_active_workday(user)
+            if workday is None:
+                workday = _sync_workday_start(
+                    user,
+                    now,
+                    latitude=lat_dec,
+                    longitude=lng_dec,
+                )
+            duty = DutySession.objects.create(
+                user=user,
+                workday=workday,
+                date=workday.date,
+                start_time=workday.start_time,
+                is_active=True,
+                last_heartbeat=now,
+                latitude=lat_dec,
+                longitude=lng_dec,
+            )
+    except IntegrityError:
+        existing = _get_locked_active_duty(user)
+        if existing:
+            logger.info(
+                "DutyStart concurrent reuse user_id=%s duty_id=%s workday_id=%s",
+                user.pk,
+                existing.pk,
+                existing.workday_id,
+            )
+            return existing
+        raise
+
     logger.info("DutyStart user_id=%s duty_id=%s workday_id=%s", user.pk, duty.pk, workday.pk)
     return duty
 

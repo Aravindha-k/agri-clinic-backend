@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from accounts.models import EmployeeProfile
+from accounts.device_sessions import device_status_payload
 from tracking.daily_summary import (
     _visit_timestamp,
     build_visit_stops,
@@ -15,6 +16,7 @@ from tracking.daily_summary import (
     compute_work_hours_seconds,
 )
 from tracking.duty_service import get_route_points_for_date, serialize_route_point_model
+from tracking.employee_status import build_status_for_live_employee
 from tracking.models import DutySession, EmployeeLiveLocation, EmployeeRoutePoint, WorkDay
 from tracking.route_utils import build_route_polyline, compute_route_distance_km
 from utils.photo_urls import build_profile_photo_url
@@ -250,12 +252,15 @@ def _duty_block(duty: DutySession | None) -> dict:
     }
 
 
-def _live_location_block(user_id: int) -> dict | None:
-    live = (
+def _live_location_model(user_id: int) -> EmployeeLiveLocation | None:
+    return (
         EmployeeLiveLocation.objects.filter(user_id=user_id)
         .select_related("duty_session")
         .first()
     )
+
+
+def _live_location_block_from_model(live: EmployeeLiveLocation | None) -> dict | None:
     if not live:
         return None
     return {
@@ -267,6 +272,24 @@ def _live_location_block(user_id: int) -> dict | None:
         "recorded_at": live.recorded_at.isoformat() if live.recorded_at else None,
         "duty_session_id": live.duty_session_id,
     }
+
+
+def _employee_status_block(*, user: User, duty: DutySession | None, live, now) -> dict:
+    from tracking.employee_status import batch_gps_off_user_ids
+    from tracking.models import EmployeeGpsState
+
+    gps_state = EmployeeGpsState.objects.filter(user=user).first()
+    gps_off = user.pk in batch_gps_off_user_ids([user.pk])
+    return build_status_for_live_employee(
+        user_id=user.pk,
+        live_row=live,
+        gps_state_row=gps_state,
+        has_active_duty=bool(duty and duty.is_active),
+        device_status=device_status_payload(user),
+        gps_off=gps_off,
+        last_heartbeat_at=duty.last_heartbeat if duty else None,
+        now=now,
+    )
 
 
 def _location_endpoints(
@@ -339,12 +362,21 @@ def build_employee_day_summary(
         .order_by("-start_time")
         .first()
     )
+    live_model = _live_location_model(user_id)
+    status = _employee_status_block(
+        user=emp.user,
+        duty=duty,
+        live=live_model,
+        now=now or timezone.now(),
+    )
 
     return {
         "date": str(target_date),
         "employee": _employee_block(emp, request),
         "user_id": user_id,
         "employee_id": emp.employee_id,
+        **status,
+        "status": status,
         "duty": _duty_block(duty),
         "work_hours_seconds": work_seconds,
         "work_hours": work_hours,
@@ -382,7 +414,14 @@ def build_employee_day_report(
         .first()
     )
     route, polyline, distance_km = _build_route_for_date(user_id, target_date)
-    live = _live_location_block(user_id)
+    live_model = _live_location_model(user_id)
+    live = _live_location_block_from_model(live_model)
+    status = _employee_status_block(
+        user=emp.user,
+        duty=duty,
+        live=live_model,
+        now=now,
+    )
     visits_payload = build_employee_visits_for_date(
         user_id=user_id, target_date=target_date, request=request
     )
@@ -407,6 +446,8 @@ def build_employee_day_report(
     return {
         "date": str(target_date),
         "employee": _employee_block(emp, request),
+        **status,
+        "status": status,
         "duty": _duty_block(duty),
         "live_location": live,
         "route": {

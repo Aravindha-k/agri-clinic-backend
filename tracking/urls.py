@@ -28,6 +28,7 @@ from .views import (
     AdminEmployeeDailySummaryAPI,
     EmployeeStatsAPIView,
 )
+from .admin_report_views import AdminEmployeeDayReportAPI
 from .worklog_views import (
     WorkLogStartAPI,
     WorkLogEndAPI,
@@ -78,6 +79,10 @@ urlpatterns = [
     path(
         "admin/employee/<int:user_id>/daily-summary/",
         AdminEmployeeDailySummaryAPI.as_view(),
+    ),
+    path(
+        "admin/employees/<int:employee_id>/day-report/",
+        AdminEmployeeDayReportAPI.as_view(),
     ),
     path("admin/employee/<int:user_id>/activity/", AdminEmployeeActivityAPI.as_view()),
     # Admin: GeoJSON

@@ -105,7 +105,11 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
         serializer = FieldVisitSubmitSerializer(
             data=request.data, context={"request": request}
         )
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return error_response(
+                errors=serializer.errors,
+                message=SUBMIT_VISIT_REQUIRED_MESSAGE,
+            )
         visit = serializer.save()
         media_error = attach_visit_media_files(request, visit)
         if media_error:

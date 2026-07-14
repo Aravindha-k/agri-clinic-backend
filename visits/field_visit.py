@@ -78,6 +78,7 @@ def merge_field_visit_request_aliases(data: dict, raw: dict | None) -> None:
     """Map admin/mobile request keys into canonical validate/create keys."""
     raw = raw if isinstance(raw, dict) else {}
     id_map = (
+        ("farmer", "farmer"),
         ("farmer_id", "farmer"),
         ("crop_id", "crop"),
         ("village_id", "village"),

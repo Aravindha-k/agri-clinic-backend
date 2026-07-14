@@ -51,12 +51,10 @@ def resolve_work_status(workday: WorkDay | None, *, now=None) -> str:
 
 
 def _work_status_api(workday: WorkDay | None, *, now=None) -> str:
-    """Legacy admin values: WORKING | NOT_WORKING | AUTO_ENDED | STOPPED."""
+    """Legacy admin values: WORKING | NOT_WORKING | STOPPED."""
     status = resolve_work_status(workday, now=now)
     if status == "working":
         return "WORKING"
-    if status == "auto_ended":
-        return "AUTO_ENDED"
     return "NOT_WORKING"
 
 
