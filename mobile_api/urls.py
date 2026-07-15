@@ -1,11 +1,17 @@
 from django.urls import path
 from . import views
-from .auth import MobileTokenObtainPairView, MobileTokenRefreshView, MobileMeView
-from masters.problem_views import VisitFormOptionsAPI
+from .auth import (
+    MobileTokenObtainPairView,
+    MobileTokenRefreshView,
+    MobileMeView,
+    MobileLogoutAPI,
+)
+from .form_options import MobileVisitFormOptionsAPI
 
 urlpatterns = [
     path("auth/login/", MobileTokenObtainPairView.as_view(), name="mobile-login"),
     path("auth/refresh/", MobileTokenRefreshView.as_view(), name="mobile-refresh"),
+    path("auth/logout/", MobileLogoutAPI.as_view(), name="mobile-logout"),
     path("auth/me/", MobileMeView.as_view(), name="mobile-me"),
     path("dashboard/", views.MobileDashboardAPI.as_view(), name="mobile-dashboard"),
     path("work/start/", views.MobileWorkStartAPI.as_view(), name="mobile-work-start"),
@@ -58,7 +64,7 @@ urlpatterns = [
     path("map/visits/", views.MobileVisitMapAPI.as_view(), name="mobile-map-visits"),
     path(
         "visit-form-options/",
-        VisitFormOptionsAPI.as_view(),
+        MobileVisitFormOptionsAPI.as_view(),
         name="mobile-visit-form-options",
     ),
 ]

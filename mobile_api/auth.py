@@ -1,17 +1,25 @@
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework import serializers, status
+from rest_framework.throttling import ScopedRateThrottle
 from drf_spectacular.utils import extend_schema
 from accounts.models import EmployeeProfile
-from accounts.device_sessions import register_device_session
+from accounts.device_sessions import register_device_session, revoke_user_device_sessions
+from accounts.token_refresh import (
+    AgriTokenRefreshSerializer,
+    issue_rotated_tokens,
+)
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
 from .device_session import DeviceSessionRequiredMixin
 import logging
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema(
@@ -43,7 +51,7 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
         self.fields[self.username_field].required = False
 
     def validate(self, attrs):
-        # --- BUG FIX 1: resolve employee_id → username before parent validation ---
+        # Resolve employee_id → username before parent validation
         employee_id = attrs.pop("employee_id", None)
         if employee_id:
             try:
@@ -63,8 +71,6 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         user = self.user
 
-        # --- BUG FIX 2: raise proper exceptions, not Response objects ---
-        # Security: Only allow active, non-admin employees
         if not user.is_active:
             logging.warning("LOGIN FAILED: Disabled user %s", user.username)
             raise AuthenticationFailed("Invalid username or password")
@@ -94,9 +100,20 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
             request_data=request.data if request else None,
         )
         profile.refresh_from_db()
+
+        # Re-issue tokens with device_session_id claim (parent tokens lack it).
+        orphan_refresh = data.get("refresh")
+        tokens = issue_rotated_tokens(
+            user, device_session_id=str(device_session.session_key)
+        )
+        if orphan_refresh:
+            try:
+                RefreshToken(orphan_refresh).blacklist()
+            except Exception:
+                pass
         return {
-            "access": data["access"],
-            "refresh": data["refresh"],
+            "access": tokens["access"],
+            "refresh": tokens["refresh"],
             "device_session_id": str(device_session.session_key),
             "active_device_id": profile.active_device_id,
             "session_version": profile.mobile_session_version,
@@ -112,6 +129,9 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class MobileTokenObtainPairView(TokenObtainPairView):
     serializer_class = MobileTokenObtainPairSerializer
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -125,39 +145,85 @@ class MobileTokenObtainPairView(TokenObtainPairView):
 
 
 class MobileTokenRefreshView(TokenRefreshView):
+    """Mobile refresh: account checks + active device session required."""
+
+    permission_classes = [AllowAny]
+    serializer_class = AgriTokenRefreshSerializer
+    require_device_session = True
+
     def post(self, request, *args, **kwargs):
         try:
-            from django.contrib.auth.models import User
-            from rest_framework_simplejwt.tokens import RefreshToken
-
-            raw_refresh = request.data.get("refresh")
-            if raw_refresh:
-                try:
-                    token = RefreshToken(raw_refresh)
-                    user = User.objects.filter(id=token.get("user_id")).select_related(
-                        "employee_profile"
-                    ).first()
-                except Exception:
-                    user = None
-                if user is not None:
-                    profile = getattr(user, "employee_profile", None)
-                    if not user.is_active or (
-                        profile is not None
-                        and (
-                            not profile.is_active_employee or not profile.can_login
-                        )
-                    ):
-                        return error_response(
-                            message="Your account is currently disabled. Please contact your administrator.",
-                            code="ACCOUNT_DISABLED",
-                            status_code=403,
-                        )
-
-            response = super().post(request, *args, **kwargs)
-            if response.status_code == 200:
-                return Response(response.data, status=status.HTTP_200_OK)
-            # If refresh fails, return 401 so mobile can logout
-            return error_response(message="Token refresh failed", status_code=401)
+            serializer = self.get_serializer(data=request.data)
+            try:
+                serializer.is_valid(raise_exception=True)
+            except AuthenticationFailed as exc:
+                detail = getattr(exc, "detail", None)
+                code = None
+                if hasattr(detail, "code"):
+                    code = detail.code
+                elif isinstance(detail, dict):
+                    code = detail.get("code")
+                msg = str(detail) if detail is not None else "Authentication failed"
+                if code == "ACCOUNT_DISABLED":
+                    return error_response(
+                        message=msg,
+                        code="ACCOUNT_DISABLED",
+                        status_code=403,
+                    )
+                if code == "SESSION_REPLACED":
+                    return error_response(
+                        message=msg,
+                        code="SESSION_REPLACED",
+                        status_code=409,
+                    )
+                return error_response(
+                    message="Token refresh failed",
+                    code=code or "UNAUTHORIZED",
+                    status_code=401,
+                )
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
         except Exception:
-            # Always return 401 for any error in refresh
             return error_response(message="Token refresh failed", status_code=401)
+
+
+@extend_schema(
+    tags=["Mobile", "Auth"],
+    summary="Mobile logout",
+    description=(
+        "Blacklists the refresh token, deactivates EmployeeDeviceSession, "
+        "and clears server-side device session state. Does not end DutySession."
+    ),
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "refresh": {"type": "string"},
+            },
+            "required": ["refresh"],
+        }
+    },
+    responses={200: SIMPLE_SUCCESS},
+)
+class MobileLogoutAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception as exc:
+                logger.warning(
+                    "Mobile logout blacklist failed user_id=%s err=%s",
+                    request.user.pk,
+                    exc,
+                )
+
+        revoked = revoke_user_device_sessions(request.user, reason="mobile_logout")
+        logger.info(
+            "Mobile logout user_id=%s sessions_revoked=%s",
+            request.user.pk,
+            revoked,
+        )
+        return success_response(message="Logged out")

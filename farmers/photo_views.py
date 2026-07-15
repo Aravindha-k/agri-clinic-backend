@@ -76,7 +76,7 @@ class BaseFarmerPhotoAPI(APIView):
     summary="Upload farmer profile photo",
     responses={200: SIMPLE_SUCCESS, 403: error_schema("Forbidden")},
 )
-class FarmerPhotoAPI(BaseFarmerPhotoAPI):
+class FarmerPhotoAPI(DeviceSessionRequiredMixin, BaseFarmerPhotoAPI):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk):
@@ -90,6 +90,9 @@ class FarmerPhotoAPI(BaseFarmerPhotoAPI):
 )
 class MobileFarmerPhotoAPI(DeviceSessionRequiredMixin, BaseFarmerPhotoAPI):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
+
+    def patch(self, request, pk):
+        return self._upload(request, pk)
 
 
 class AdminFarmerPhotoAPI(BaseFarmerPhotoAPI):

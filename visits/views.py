@@ -142,7 +142,7 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
     },
     responses={201: SIMPLE_SUCCESS, 207: SIMPLE_SUCCESS},
 )
-class BulkVisitUploadAPI(APIView):
+class BulkVisitUploadAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -209,7 +209,7 @@ class VisitListPagination(PageNumberPagination):
     },
     responses={201: SIMPLE_SUCCESS, 403: error_schema("AttachmentForbidden")},
 )
-class VisitAttachmentUploadAPI(APIView):
+class VisitAttachmentUploadAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, visit_id):
@@ -322,7 +322,7 @@ class VisitStatsAPI(APIView):
     },
     responses={201: SIMPLE_SUCCESS, 400: error_schema("MediaUploadError")},
 )
-class VisitMediaUploadAPIView(APIView):
+class VisitMediaUploadAPIView(DeviceSessionRequiredMixin, APIView):
     """
     POST /api/v1/visits/<visit_id>/upload-media/
     Upload media (image, bill, audio, video) to a visit.
@@ -452,7 +452,7 @@ class CompleteVisitAPI(_DeprecatedVisitFlowAPI):
     },
     responses={201: SIMPLE_SUCCESS, 400: error_schema("PhotoUploadError")},
 )
-class VisitPhotoUploadAPI(APIView):
+class VisitPhotoUploadAPI(DeviceSessionRequiredMixin, APIView):
     """
     Upload a photo for a visit.
     Multipart: visit_id (int) + image (file).

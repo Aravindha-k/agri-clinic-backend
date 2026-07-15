@@ -30,41 +30,49 @@ def employee_photo_fields(request, profile: EmployeeProfile) -> dict:
 
 
 def _workday_status_for_user(user) -> dict:
-    from tracking.models import WorkDay
+    from tracking.duty_service import get_active_duty
+    from tracking.models import DutySession
     from tracking.workday_utils import (
         expire_overlong_workdays_for_user,
-        is_workday_within_duration,
         workday_scheduled_end,
     )
 
     expire_overlong_workdays_for_user(user)
-    workday = (
-        WorkDay.objects.filter(user=user, is_active=True)
-        .order_by("-start_time")
-        .first()
-    )
-    if workday and is_workday_within_duration(workday):
+    duty = get_active_duty(user)
+    if duty and duty.is_active:
         return {
             "status": "working",
             "is_active": True,
-            "workday_id": workday.id,
-            "started_at": workday.start_time.isoformat(),
-            "ends_at": workday_scheduled_end(workday.start_time).isoformat(),
+            "workday_id": duty.workday_id,
+            "duty_session_id": duty.id,
+            "started_at": duty.start_time.isoformat() if duty.start_time else None,
+            "ends_at": (
+                workday_scheduled_end(duty.start_time).isoformat()
+                if duty.start_time
+                else None
+            ),
             "auto_ended": False,
         }
-    if workday and workday.auto_ended:
+    auto = (
+        DutySession.objects.filter(user=user, auto_ended=True)
+        .order_by("-end_time", "-start_time")
+        .first()
+    )
+    if auto:
         return {
             "status": "auto_ended",
             "is_active": False,
-            "workday_id": workday.id,
-            "started_at": workday.start_time.isoformat() if workday.start_time else None,
-            "ends_at": workday.end_time.isoformat() if workday.end_time else None,
+            "workday_id": auto.workday_id,
+            "duty_session_id": auto.id,
+            "started_at": auto.start_time.isoformat() if auto.start_time else None,
+            "ends_at": auto.end_time.isoformat() if auto.end_time else None,
             "auto_ended": True,
         }
     return {
         "status": "stopped",
         "is_active": False,
         "workday_id": None,
+        "duty_session_id": None,
         "started_at": None,
         "ends_at": None,
         "auto_ended": False,

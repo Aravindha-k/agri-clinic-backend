@@ -13,6 +13,7 @@ from utils.schema import (
     error_schema,
     PAGINATION_PARAMS,
 )
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from .models import Notification
 from . import services as notification_services
 
@@ -83,7 +84,7 @@ class NotificationListAPI(APIView):
     request=None,
     responses={200: SIMPLE_SUCCESS, 404: error_schema("NotificationNotFound")},
 )
-class NotificationMarkReadAPI(APIView):
+class NotificationMarkReadAPI(DeviceSessionRequiredMixin, APIView):
     """POST /api/v1/notifications/{id}/read/"""
 
     permission_classes = [IsAuthenticated]
@@ -107,7 +108,7 @@ class NotificationMarkReadAPI(APIView):
     request=None,
     responses={200: SIMPLE_SUCCESS},
 )
-class NotificationMarkAllReadAPI(APIView):
+class NotificationMarkAllReadAPI(DeviceSessionRequiredMixin, APIView):
     """POST /api/v1/notifications/mark-all-read/"""
 
     permission_classes = [IsAuthenticated]

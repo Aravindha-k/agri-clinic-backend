@@ -32,10 +32,12 @@ import logging
 
 from django.contrib.auth import authenticate
 from rest_framework.permissions import AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers as drf_serializers
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from utils.schema import (
     success_schema,
     paginated_response_schema,
@@ -109,6 +111,8 @@ class LoginAPI(APIView):
 
     permission_classes = [AllowAny]
     parser_classes = [JSONParser, FormParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request):
         logger.info("LOGIN API HIT — path=%s method=%s", request.path, request.method)
@@ -263,7 +267,7 @@ class LoginAPI(APIView):
                 )
 
             try:
-                refresh = issue_tokens_for_user(user)
+                refresh, access = issue_tokens_for_user(user)
             except Exception as token_err:
                 logger.exception(
                     "Token generation failed for user=%s: %s", user.username, token_err
@@ -311,7 +315,7 @@ class LoginAPI(APIView):
             logger.info("Login successful for user=%s (id=%s)", user.username, user.id)
 
             response_data = {
-                "access": str(refresh.access_token),
+                "access": str(access),
                 "refresh": str(refresh),
                 "user": {
                     "id": user.id,
@@ -664,9 +668,9 @@ class CreateAdminAPI(APIView):
 )
 class LogoutAPI(APIView):
     """
-    Logout endpoint. If refresh token is provided and token blacklist
-    is enabled, the token will be blacklisted. Otherwise this endpoint
-    simply asks the client to remove stored tokens.
+    Logout endpoint. Blacklists the refresh token when provided and
+    token_blacklist is installed. Does not deactivate mobile device sessions
+    (web login does not own EmployeeDeviceSession — use mobile logout for that).
     """
 
     permission_classes = [IsAuthenticated]
@@ -678,9 +682,12 @@ class LogoutAPI(APIView):
             try:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-            except Exception:
-                # If blacklist not configured or token invalid, ignore
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Web logout blacklist failed user_id=%s err=%s",
+                    request.user.pk,
+                    exc,
+                )
 
         from accounts.admin_security import is_admin_user, record_admin_logout
 
@@ -945,7 +952,7 @@ class AdminEmployeeToggleStatusAPI(APIView):
     request=ChangePasswordSerializer,
     responses={200: SIMPLE_SUCCESS, 400: error_schema("ChangePasswordError")},
 )
-class ChangePasswordAPI(APIView):
+class ChangePasswordAPI(DeviceSessionRequiredMixin, APIView):
     """
     POST /api/v1/employees/change-password/
     Body: { employee_id, current_password, new_password }

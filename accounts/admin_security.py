@@ -197,14 +197,22 @@ def record_admin_logout(user: User, request) -> None:
 
 
 def issue_tokens_for_user(user: User):
+    """
+    Return (refresh, access) tokens.
+
+    For admins, both tokens use ADMIN_SESSION_TIMEOUT_MINUTES.
+    Access must be captured before stringifying — RefreshToken.access_token
+    is a property that builds a new AccessToken on each access.
+    """
     from rest_framework_simplejwt.tokens import RefreshToken
 
     refresh = RefreshToken.for_user(user)
+    access = refresh.access_token
     if is_admin_user(user):
         lifetime = _timeout_delta()
         refresh.set_exp(lifetime=lifetime)
-        refresh.access_token.set_exp(lifetime=lifetime)
-    return refresh
+        access.set_exp(lifetime=lifetime)
+    return refresh, access
 
 
 def build_admin_security_monitoring_payload() -> list[dict]:

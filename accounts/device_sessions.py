@@ -147,6 +147,32 @@ def get_active_device_session(user: User) -> EmployeeDeviceSession | None:
     )
 
 
+def revoke_user_device_sessions(
+    user: User, *, reason: str = "logout"
+) -> int:
+    """
+    Deactivate all active device sessions for a user.
+
+    Does NOT end DutySession / WorkDay — duty state is independent of device auth.
+    """
+    now = timezone.now()
+    updated = EmployeeDeviceSession.objects.filter(user=user, is_active=True).update(
+        is_active=False, updated_at=now
+    )
+    profile = EmployeeProfile.objects.filter(user=user).first()
+    if profile and (profile.active_device_id or updated):
+        profile.active_device_id = None
+        profile.save(update_fields=["active_device_id"])
+    if updated:
+        logger.info(
+            "DeviceSession revoked user_id=%s count=%s reason=%s",
+            user.pk,
+            updated,
+            reason,
+        )
+    return updated
+
+
 def _iso(dt) -> str | None:
     if not dt:
         return None

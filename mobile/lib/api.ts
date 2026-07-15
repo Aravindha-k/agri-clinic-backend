@@ -118,36 +118,48 @@ function userMessageForStatus(
 async function refreshAccess(): Promise<string | null> {
   const refresh = await getRefreshToken();
   if (!refresh) return null;
-  // Backend MobileTokenRefreshView does not require X-Device-Session.
+  const sessionId = await getDeviceSessionId();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (sessionId) {
+    headers[DEVICE_SESSION_HEADER] = sessionId;
+  }
+  const body: { refresh: string; device_session_id?: string } = { refresh };
+  if (sessionId) {
+    body.device_session_id = sessionId;
+  }
   const res = await fetch(`${API_BASE_URL}/mobile/auth/refresh/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh }),
+    headers,
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     appLog.warn('auth.refresh_failed', { status: res.status });
     await clearTokens();
-    notifySessionInvalidated('unauthorized');
+    notifySessionInvalidated(
+      res.status === 409 ? 'session_conflict' : 'unauthorized',
+    );
     return null;
   }
-  const data = (await res.json()) as { access?: string; device_session_id?: string };
+  const data = (await res.json()) as {
+    access?: string;
+    refresh?: string;
+    device_session_id?: string;
+  };
   if (!data.access) {
     await clearTokens();
     notifySessionInvalidated('unauthorized');
     return null;
   }
-  const sessionId = await getDeviceSessionId();
-  if (data.device_session_id) {
+  const nextRefresh = data.refresh || refresh;
+  const nextSession = data.device_session_id || sessionId;
+  if (nextSession) {
     await saveAuthSession({
       access: data.access,
-      refresh,
-      deviceSessionId: String(data.device_session_id),
+      refresh: nextRefresh,
+      deviceSessionId: String(nextSession),
     });
   } else {
-    await saveTokens(data.access, refresh);
-    if (sessionId) {
-      // keep existing device session
-    }
+    await saveTokens(data.access, nextRefresh);
   }
   appLog.info('auth.refresh_ok');
   return data.access;

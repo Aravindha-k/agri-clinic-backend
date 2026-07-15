@@ -13,6 +13,7 @@ from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, visit_has_submitted_
 from django.db.models import Q
 from utils.schema import SIMPLE_SUCCESS
 from masters.models import Farmer, FarmerField, Crop, Village
+from mobile_api.device_session import DeviceSessionRequiredMixin
 
 
 VISIT_STATUS_VALUES = {c[0] for c in Visit.STATUS_CHOICES}
@@ -25,7 +26,7 @@ VISIT_STATUS_VALUES = {c[0] for c in Visit.STATUS_CHOICES}
     request={"application/json": {"type": "object"}},
     responses={200: SIMPLE_SUCCESS},
 )
-class VisitDetailUpdateAPI(APIView):
+class VisitDetailUpdateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_scoped_visit(self, request, id):

@@ -15,16 +15,19 @@
 | Legacy `/api/v1/visits/` list+create (employees) | **Yes** (Phase 1) |
 | Legacy `/api/v1/farmers/` list+create (employees) | **Yes** (Phase 1) |
 | Admin (`is_staff`) on any of the above | **Exempt** |
-| Public auth endpoints (login/refresh) | **Exempt** |
+| Public auth endpoints (login) | **Exempt** |
+| Mobile token refresh | **Requires** valid device session (header, body, or JWT claim) |
+| Mobile logout | **Exempt** (revokes device session; JWT-only) |
+| Web logout | **Exempt** (does not clear device session) |
 | Admin-only `/api/v1/admin/*`, `/api/v1/dashboard/*`, tracking `admin/*` | **Exempt** (JWT + `IsAdminUser`) |
-| Masters read (any authenticated) | **Intentionally exempt** (shared reference data) |
-| Token refresh | **Exempt** from device session; **checks** `can_login` / active on mobile refresh |
+| Masters reference reads (non-mobile mount) | **Intentionally exempt** (shared reference data) |
+| All employee **write** surfaces used by mobile (visits update/bulk/media, farmers update/fields/crops/photo, WorkLog start/end, notifications mark-read, change-password, profile photo) | **Required** |
 
 ---
 
-## Classification of remaining legacy routes
+## Classification of remaining routes
 
-Routes under `/api/v1/visits/*` and `/api/v1/farmers/*` beyond list/create may still be JWT-only. Treat them as **legacy / migrate-to-mobile** — prefer `/api/v1/mobile/*` for field clients. Closing every legacy view is a follow-up; Phase 1 closed the highest-risk write/list bypasses for visits and farmers.
+Reads under legacy `/api/v1/visits/*` and `/api/v1/farmers/*` beyond mixin-covered views may still be JWT-only. Prefer `/api/v1/mobile/*` for field clients. Employee **writes** on those surfaces require `X-Device-Session`.
 
 ---
 
@@ -35,6 +38,8 @@ Routes under `/api/v1/visits/*` and `/api/v1/farmers/*` beyond list/create may s
 | Missing `X-Device-Session` | 409 `SESSION_REPLACED` / session required |
 | Invalid / revoked session | 409 |
 | Session for another user | 409 |
+| Revoked session on mobile refresh | 409 `SESSION_REPLACED` |
 | `can_login=false` or inactive employee | 403 permission denied |
+| Mobile logout | Blacklists refresh + deactivates device sessions; **does not** end DutySession |
 
-Admin JWTs must continue to work without the device header.
+Admin JWTs must continue to work without the device header. Web login does **not** replace or clear `EmployeeDeviceSession`.

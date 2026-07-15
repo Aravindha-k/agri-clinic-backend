@@ -243,6 +243,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # third party
     "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "storages",  # ✅ REQUIRED FOR S3
     "django_filters",
@@ -260,6 +262,14 @@ INSTALLED_APPS = [
     "django_extensions",
     "mobile_api",
 ]
+
+# --------------------------------------------------
+# INTERNATIONALIZATION / TIMEZONE
+# --------------------------------------------------
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Asia/Kolkata"
+USE_I18N = True
+USE_TZ = True
 
 # Add django_celery_results only when celery is installed
 try:
@@ -355,9 +365,18 @@ REST_FRAMEWORK = {
     },
 }
 
+# Relax login throttle under the test runner so suite logins are not 429'd.
+if "test" in sys.argv:
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["login"] = "1000/minute"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["anon"] = "1000/minute"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user"] = "1000/minute"
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",

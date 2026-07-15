@@ -6,10 +6,11 @@ from rest_framework.views import APIView
 
 from accounts.employee_photo import employee_me_payload, save_employee_profile_photo
 from accounts.serializers import MeSerializer
-from tracking.worklog import WorkLog
+from tracking.legacy_work_compat import is_on_duty
 from utils.profile_photos import validate_profile_photo
 from utils.response import error_response, success_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
+from mobile_api.device_session import DeviceSessionRequiredMixin
 
 
 @extend_schema(
@@ -17,7 +18,7 @@ from utils.schema import SIMPLE_SUCCESS, error_schema
     summary="Current employee profile",
     responses={200: SIMPLE_SUCCESS, 404: error_schema("ProfileNotFound")},
 )
-class EmployeeProfileAPI(APIView):
+class EmployeeProfileAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -26,9 +27,7 @@ class EmployeeProfileAPI(APIView):
         if not profile:
             return success_response(data=MeSerializer(request.user).data)
         data = employee_me_payload(request, profile)
-        data["work_status"] = WorkLog.objects.filter(
-            employee=request.user, is_active=True
-        ).exists()
+        data["work_status"] = is_on_duty(request.user)
         return success_response(data=data)
 
     def patch(self, request):
@@ -46,7 +45,5 @@ class EmployeeProfileAPI(APIView):
             profile = save_employee_profile_photo(profile, file_obj)
 
         data = employee_me_payload(request, profile)
-        data["work_status"] = WorkLog.objects.filter(
-            employee=request.user, is_active=True
-        ).exists()
+        data["work_status"] = is_on_duty(request.user)
         return success_response(data=data, message="Profile updated")

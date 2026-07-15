@@ -50,7 +50,7 @@ class AdminEmployeePhotoAPI(APIView):
         return _upload_employee_photo_response(request, profile)
 
 
-class EmployeeSelfPhotoAPI(APIView):
+class EmployeeSelfPhotoAPI(DeviceSessionRequiredMixin, APIView):
     """PATCH employee's own photo — used by mobile and employees/me/photo/ alias."""
 
     permission_classes = [IsAuthenticated]
@@ -82,7 +82,7 @@ class EmployeeSelfPhotoAPI(APIView):
     summary="Upload own profile photo (mobile)",
     responses={200: SIMPLE_SUCCESS, 404: error_schema("ProfileNotFound")},
 )
-class MobileEmployeePhotoAPI(DeviceSessionRequiredMixin, EmployeeSelfPhotoAPI):
+class MobileEmployeePhotoAPI(EmployeeSelfPhotoAPI):
     permission_classes = [IsAuthenticated, IsEmployeeUser]
 
 

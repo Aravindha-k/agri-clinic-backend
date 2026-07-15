@@ -270,7 +270,7 @@ class FarmerStatsAPI(APIView):
     request=FarmerUpdateSerializer,
     responses={200: FarmerDetailSerializer, 403: error_schema("FarmerUpdateForbidden")},
 )
-class FarmerDetailAPI(APIView):
+class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_farmer(self, pk):
@@ -335,7 +335,7 @@ class FarmerDetailAPI(APIView):
     request=FarmerFieldCreateSerializer,
     responses={201: FarmerFieldSerializer},
 )
-class FarmerFieldListCreateAPI(APIView):
+class FarmerFieldListCreateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, farmer_id):
@@ -377,7 +377,7 @@ class FarmerFieldListCreateAPI(APIView):
     request=FieldCropCreateSerializer,
     responses={201: FieldCropSerializer, 403: error_schema("FieldCropForbidden")},
 )
-class FieldCropCreateAPI(APIView):
+class FieldCropCreateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, field_id):
@@ -427,7 +427,7 @@ class FieldCropCreateAPI(APIView):
     ],
     responses={200: FarmerVisitSerializer(many=True), 201: FarmerVisitSerializer},
 )
-class VisitListCreateAPI(APIView):
+class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -567,7 +567,7 @@ class FarmerVisitListAPI(APIView):
     request=CropIssueCreateSerializer,
     responses={201: CropIssueSerializer, 403: error_schema("IssueForbidden")},
 )
-class VisitIssueCreateAPI(APIView):
+class VisitIssueCreateAPI(DeviceSessionRequiredMixin, APIView):
     """POST /api/v1/visits/{visit_id}/issues/"""
 
     permission_classes = [IsAuthenticated]
@@ -674,7 +674,7 @@ class CropIssueListAPI(APIView):
         403: error_schema("MediaForbidden"),
     },
 )
-class VisitMediaUploadAPI(APIView):
+class VisitMediaUploadAPI(DeviceSessionRequiredMixin, APIView):
     """POST /api/v1/visits/{visit_id}/media/"""
 
     permission_classes = [IsAuthenticated]

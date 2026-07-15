@@ -249,42 +249,13 @@ class StartWorkDayAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if request.user.is_staff:
-            return Response({"detail": "Admins cannot start workday"}, status=403)
+        from tracking.legacy_work_compat import legacy_start_via_duty
 
-        profile = EmployeeProfile.objects.filter(user=request.user).first()
-        if profile and not profile.is_active_employee:
-            return Response({"detail": "Inactive employee"}, status=403)
-
-        expire_overlong_workdays_for_user(request.user)
-
-        if WorkDay.objects.filter(user=request.user, is_active=True).exists():
-            return Response({"detail": "Workday already started"}, status=400)
-
-        now = timezone.now()
-        workday_kwargs = {
-            "user": request.user,
-            "date": now.date(),
-            "start_time": now,
-            "is_active": True,
-            "last_heartbeat": now,
-        }
-        lat = request.data.get("latitude")
-        lng = request.data.get("longitude")
-        if lat not in (None, "") and lng not in (None, ""):
-            try:
-                workday_kwargs["latitude"] = float(lat)
-                workday_kwargs["longitude"] = float(lng)
-            except (TypeError, ValueError):
-                pass
-        workday = WorkDay.objects.create(**workday_kwargs)
-        logger.info(
-            "WorkdayStart user_id=%s workday_id=%s start_time=%s",
-            request.user.pk,
-            workday.pk,
-            workday.start_time,
+        return legacy_start_via_duty(
+            request,
+            endpoint=request.path,
+            response_style="workday",
         )
-        return Response({"message": "Workday started", "workday_id": workday.id}, status=201)
 
 
 # ──────────────────────────────────────────────
@@ -301,22 +272,13 @@ class EndWorkDayAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if request.user.is_staff:
-            return Response({"detail": "Admins cannot end workday"}, status=403)
+        from tracking.legacy_work_compat import legacy_end_via_duty
 
-        expire_overlong_workdays_for_user(request.user)
-
-        workdays = WorkDay.objects.filter(user=request.user, is_active=True)
-        if not workdays.exists():
-            return Response({"detail": "No active workday"}, status=400)
-
-        from .workday_utils import clear_live_tracking_for_user
-
-        now = timezone.now()
-        count = workdays.count()
-        workdays.update(end_time=now, is_active=False, auto_ended=False)
-        clear_live_tracking_for_user(request.user.pk)
-        return Response({"message": "Workday ended", "ended_count": count}, status=200)
+        return legacy_end_via_duty(
+            request,
+            endpoint=request.path,
+            response_style="workday",
+        )
 
 
 # ──────────────────────────────────────────────
@@ -979,13 +941,19 @@ class AdminEmployeeLastLocationAPI(APIView):
     description="Returns the active workday details and last known location for the logged-in employee.",
     responses={200: SIMPLE_SUCCESS, 404: error_schema("NoActiveWorkday")},
 )
-class CurrentWorkdayAPI(APIView):
+class CurrentWorkdayAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from tracking.legacy_work_compat import log_deprecated_endpoint
+        from tracking.duty_service import get_active_duty, serialize_duty_status
+
+        log_deprecated_endpoint(
+            request=request, endpoint="/api/v1/tracking/workday/current/"
+        )
         expire_overlong_workdays_for_user(request.user)
-        workday = WorkDay.objects.filter(user=request.user, is_active=True).first()
-        if not workday:
+        duty = get_active_duty(request.user)
+        if not duty:
             return Response(
                 {
                     "detail": WORKDAY_EXPIRED_MESSAGE,
@@ -994,26 +962,27 @@ class CurrentWorkdayAPI(APIView):
                 status=404,
             )
 
-        last_loc = (
-            LocationLog.objects.filter(user=request.user, workday=workday)
-            .order_by("-recorded_at")
-            .first()
-        )
-        from tracking.duty_service import get_active_duty
-
-        duty = get_active_duty(request.user)
+        payload = serialize_duty_status(request.user, duty)
+        workday = duty.workday
+        last_loc = None
+        if workday:
+            last_loc = (
+                LocationLog.objects.filter(user=request.user, workday=workday)
+                .order_by("-recorded_at")
+                .first()
+            )
         data = {
-            "workday_id": workday.id,
-            "duty_session_id": duty.id if duty else workday.id,
-            "date": workday.date,
-            "work_date": duty.date if duty else workday.date,
-            "start_time": (duty.start_time if duty else workday.start_time),
-            "started_at": (duty.start_time if duty else workday.start_time),
-            "end_time": workday.end_time,
-            "is_active": workday.is_active,
-            "status": "in_progress" if workday.is_active else "completed",
-            "auto_ended": workday.auto_ended,
-            "last_heartbeat": workday.last_heartbeat,
+            "workday_id": duty.workday_id or (workday.id if workday else None),
+            "duty_session_id": duty.id,
+            "date": payload.get("date") or (duty.date.isoformat() if duty.date else None),
+            "work_date": payload.get("work_date"),
+            "start_time": duty.start_time,
+            "started_at": duty.start_time,
+            "end_time": duty.end_time,
+            "is_active": duty.is_active,
+            "status": payload.get("status"),
+            "auto_ended": duty.auto_ended,
+            "last_heartbeat": duty.last_heartbeat,
             "server_time": timezone.now(),
             "last_location": (
                 LocationLogSerializer(last_loc, context={"request": request}).data

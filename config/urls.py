@@ -4,8 +4,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
 
-from rest_framework_simplejwt.views import TokenRefreshView
 from accounts.views import LogoutAPI, LoginAPI
+from accounts.token_refresh import AgriWebTokenRefreshView
 from tracking.views import StartWorkDayAPI, EndWorkDayAPI
 from visits.dashboard_views import MapFarmersAPI
 
@@ -42,7 +42,7 @@ urlpatterns = [
     # Auth endpoints
     path("api/v1/auth/login/", LoginAPI.as_view(), name="token-obtain"),
     path("api/v1/auth/logout/", LogoutAPI.as_view(), name="logout"),
-    path("api/v1/auth/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+    path("api/v1/auth/refresh/", AgriWebTokenRefreshView.as_view(), name="token-refresh"),
     # Work session endpoints
     path("api/v1/work/start/", StartWorkDayAPI.as_view(), name="work-start"),
     path("api/v1/work/stop/", EndWorkDayAPI.as_view(), name="work-stop"),
