@@ -15,7 +15,6 @@ from tracking.duty_service import (
     DutyTrackingError,
     bulk_update_locations,
     end_duty,
-    get_active_duty,
     serialize_duty_status,
     start_duty,
     update_location,
@@ -45,13 +44,11 @@ class DutyStartAPI(DeviceSessionRequiredMixin, APIView):
             lng = request.data.get("longitude")
             latitude = float(lat) if lat not in (None, "") else None
             longitude = float(lng) if lng not in (None, "") else None
-            existing = get_active_duty(request.user)
-            duty = start_duty(
+            result = start_duty(
                 request.user,
                 latitude=latitude,
                 longitude=longitude,
             )
-            reused = existing is not None and existing.id == duty.id
         except DutyTrackingError as exc:
             return _duty_error(exc)
         except (TypeError, ValueError):
@@ -60,11 +57,11 @@ class DutyStartAPI(DeviceSessionRequiredMixin, APIView):
                 code="INVALID_COORDS",
                 status_code=400,
             )
-        payload = serialize_duty_status(request.user, duty)
+        payload = serialize_duty_status(request.user, result.duty)
         return success_response(
             data=payload,
-            message="Duty already active" if reused else "Duty started",
-            status_code=200 if reused else 201,
+            message="Duty started" if result.created else "Duty already active",
+            status_code=201 if result.created else 200,
         )
 
 
@@ -94,7 +91,13 @@ class DutyEndAPI(DeviceSessionRequiredMixin, APIView):
 
     def post(self, request):
         try:
-            duty = end_duty(request.user)
+            duty = end_duty(
+                request.user,
+                expected_duty_session_id=(
+                    request.data.get("duty_session_id")
+                    or request.data.get("expected_duty_session_id")
+                ),
+            )
         except DutyTrackingError as exc:
             return _duty_error(exc)
         payload = serialize_duty_status(request.user, duty)

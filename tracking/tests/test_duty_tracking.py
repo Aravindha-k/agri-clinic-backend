@@ -1,12 +1,15 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
 from masters.models import Crop, District, Farmer, Village
+from tracking.duty_service import start_duty
 from tracking.models import (
     DutySession,
     EmployeeLiveLocation,
@@ -85,12 +88,14 @@ class DutyTrackingAPITest(APITestCase):
     def test_duty_start_end(self):
         r = self._start_duty()
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(r.data["message"], "Duty started")
         duty_id = r.data["data"]["duty_session_id"]
         self.assertTrue(DutySession.objects.filter(pk=duty_id, is_active=True).exists())
         self.assertTrue(WorkDay.objects.filter(user=self.employee, is_active=True).exists())
 
         r2 = self._start_duty()
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertEqual(r2.data["message"], "Duty already active")
         self.assertEqual(r2.data["data"]["duty_session_id"], duty_id)
         self.assertEqual(r2.data["data"]["status"], "in_progress")
         self.assertEqual(DutySession.objects.filter(user=self.employee, is_active=True).count(), 1)
@@ -107,6 +112,47 @@ class DutyTrackingAPITest(APITestCase):
         duty = DutySession.objects.get(pk=duty_id)
         self.assertFalse(duty.is_active)
         self.assertIsNotNone(duty.end_time)
+
+    def test_end_with_session_id_is_idempotent_and_cannot_end_newer_duty(self):
+        first_id = self._start_duty().data["data"]["duty_session_id"]
+        first_end = self.client.post(
+            "/api/tracking/duty/end/",
+            {"duty_session_id": first_id},
+            format="json",
+        )
+        self.assertEqual(first_end.status_code, status.HTTP_200_OK)
+        first_end_time = first_end.data["data"]["end_time"]
+
+        repeated = self.client.post(
+            "/api/tracking/duty/end/",
+            {"duty_session_id": first_id},
+            format="json",
+        )
+        self.assertEqual(repeated.status_code, status.HTTP_200_OK)
+        self.assertEqual(repeated.data["data"]["end_time"], first_end_time)
+
+        second_id = self._start_duty().data["data"]["duty_session_id"]
+        self.assertNotEqual(second_id, first_id)
+
+        stale = self.client.post(
+            "/api/tracking/duty/end/",
+            {"duty_session_id": first_id},
+            format="json",
+        )
+        self.assertEqual(stale.status_code, status.HTTP_200_OK)
+        self.assertEqual(stale.data["data"]["duty_session_id"], first_id)
+        self.assertEqual(stale.data["data"]["end_time"], first_end_time)
+        self.assertTrue(
+            DutySession.objects.filter(pk=second_id, is_active=True).exists()
+        )
+
+    def test_start_reraises_unrelated_integrity_error(self):
+        with patch(
+            "tracking.duty_service._sync_workday_start",
+            side_effect=IntegrityError("unrelated constraint failure"),
+        ):
+            with self.assertRaises(IntegrityError):
+                start_duty(self.employee)
 
     def test_live_location_update_or_create(self):
         self._start_duty()

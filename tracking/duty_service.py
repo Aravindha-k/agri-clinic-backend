@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -42,6 +43,34 @@ class DutyTrackingError(Exception):
         self.message = message
 
 
+@dataclass(frozen=True)
+class DutyStartResult:
+    duty: DutySession
+    created: bool
+
+
+_ACTIVE_DUTY_CONSTRAINTS = {
+    "uniq_active_duty_per_user",
+    "uniq_active_workday_per_user",
+}
+
+
+def _is_active_duty_unique_violation(exc: IntegrityError) -> bool:
+    """Recognize only the conditional uniques used by duty start."""
+    cause = exc.__cause__
+    constraint_name = getattr(getattr(cause, "diag", None), "constraint_name", None)
+    if constraint_name:
+        return constraint_name in _ACTIVE_DUTY_CONSTRAINTS
+
+    # SQLite does not expose the constraint name. Keep this exact so unrelated
+    # integrity failures cannot be mistaken for a concurrent duty start.
+    message = str(exc)
+    return message in {
+        "UNIQUE constraint failed: tracking_dutysession.user_id",
+        "UNIQUE constraint failed: tracking_workday.user_id",
+    }
+
+
 def _ensure_field_employee(user: User) -> None:
     if user.is_staff:
         raise DutyTrackingError("Admins cannot use duty tracking", "FORBIDDEN")
@@ -74,19 +103,15 @@ def _sync_workday_start(user: User, now, *, latitude=None, longitude=None) -> Wo
     return WorkDay.objects.create(**workday_kwargs)
 
 
-def _get_locked_active_duty(user: User) -> DutySession | None:
-    return (
-        DutySession.objects.select_for_update()
-        .filter(user=user, is_active=True)
-        .order_by("-start_time")
-        .first()
-    )
+def _lock_user(user: User) -> User:
+    """Serialize duty lifecycle changes without locking nullable joined rows."""
+    return User.objects.select_for_update().only("pk").get(pk=user.pk)
 
 
-def _get_locked_active_workday(user: User) -> WorkDay | None:
+def _active_duty_for_locked_user(user: User) -> DutySession | None:
     return (
-        WorkDay.objects.select_for_update()
-        .filter(user=user, is_active=True)
+        DutySession.objects.filter(user=user, is_active=True)
+        .select_related("workday")
         .order_by("-start_time")
         .first()
     )
@@ -98,17 +123,18 @@ def start_duty(
     *,
     latitude: float | None = None,
     longitude: float | None = None,
-) -> DutySession:
+) -> DutyStartResult:
     """
-    Start a duty session, or return the existing active session.
+    Start a duty session and report whether this call created it.
 
     Guarantees one active DutySession per employee. Concurrent Start
     requests reuse the same session and started_at (never create a second).
     """
     _ensure_field_employee(user)
+    user = _lock_user(user)
     expire_overlong_workdays_for_user(user)
 
-    existing = _get_locked_active_duty(user)
+    existing = _active_duty_for_locked_user(user)
     if existing:
         logger.info(
             "DutyStart reuse user_id=%s duty_id=%s workday_id=%s",
@@ -116,7 +142,7 @@ def start_duty(
             existing.pk,
             existing.workday_id,
         )
-        return existing
+        return DutyStartResult(duty=existing, created=False)
 
     now = timezone.now()
     lat_dec = lng_dec = None
@@ -126,45 +152,48 @@ def start_duty(
         lng_dec = Decimal(str(longitude)).quantize(Decimal("0.000001"))
 
     try:
+        # Keep the create pair in a savepoint so a conditional-unique race does
+        # not poison the outer transaction before we can return the winner.
         with transaction.atomic():
-            workday = _get_locked_active_workday(user)
-            if workday is None:
-                workday = _sync_workday_start(
-                    user,
-                    now,
-                    latitude=lat_dec,
-                    longitude=lng_dec,
-                )
+            workday = _sync_workday_start(
+                user,
+                now,
+                latitude=lat_dec,
+                longitude=lng_dec,
+            )
             duty = DutySession.objects.create(
                 user=user,
                 workday=workday,
-                date=workday.date,
-                start_time=workday.start_time,
+                date=now.date(),
+                start_time=now,
                 is_active=True,
                 last_heartbeat=now,
                 latitude=lat_dec,
                 longitude=lng_dec,
             )
-    except IntegrityError:
-        existing = _get_locked_active_duty(user)
-        if existing:
-            logger.info(
-                "DutyStart concurrent reuse user_id=%s duty_id=%s workday_id=%s",
-                user.pk,
-                existing.pk,
-                existing.workday_id,
-            )
-            return existing
-        raise
-
+    except IntegrityError as exc:
+        if not _is_active_duty_unique_violation(exc):
+            raise
+        existing = _active_duty_for_locked_user(user)
+        if existing is None:
+            raise
+        logger.info(
+            "DutyStart unique-race reuse user_id=%s duty_id=%s workday_id=%s",
+            user.pk,
+            existing.pk,
+            existing.workday_id,
+        )
+        return DutyStartResult(duty=existing, created=False)
     logger.info("DutyStart user_id=%s duty_id=%s workday_id=%s", user.pk, duty.pk, workday.pk)
-    return duty
+    return DutyStartResult(duty=duty, created=True)
 
 
 def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[str, Any]:
     """Canonical current-duty payload for mobile multi-device restore."""
     now = timezone.now()
-    active = duty if duty is not None and duty.is_active else get_active_duty(user)
+    active = duty if duty is not None and duty.is_active else None
+    if duty is None:
+        active = get_active_duty(user)
     if active and active.is_active:
         workday = active.workday
         started = active.start_time or (workday.start_time if workday else None)
@@ -175,6 +204,8 @@ def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[s
             "user_id": user.pk,
             "duty_session_id": active.id,
             "workday_id": active.workday_id or (workday.id if workday else None),
+            "latitude": float(active.latitude) if active.latitude is not None else None,
+            "longitude": float(active.longitude) if active.longitude is not None else None,
             "started_at": started.isoformat() if started else None,
             "start_time": started.isoformat() if started else None,
             "work_date": work_date.isoformat() if work_date else None,
@@ -211,6 +242,12 @@ def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[s
             "user_id": user.pk,
             "duty_session_id": completed.id,
             "workday_id": completed.workday_id,
+            "latitude": (
+                float(completed.latitude) if completed.latitude is not None else None
+            ),
+            "longitude": (
+                float(completed.longitude) if completed.longitude is not None else None
+            ),
             "started_at": started.isoformat() if started else None,
             "start_time": started.isoformat() if started else None,
             "work_date": today.isoformat(),
@@ -230,6 +267,8 @@ def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[s
         "user_id": user.pk,
         "duty_session_id": None,
         "workday_id": None,
+        "latitude": None,
+        "longitude": None,
         "started_at": None,
         "work_date": today.isoformat(),
         "date": today.isoformat(),
@@ -240,11 +279,38 @@ def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[s
 
 
 @transaction.atomic
-def end_duty(user: User) -> DutySession:
+def end_duty(
+    user: User,
+    *,
+    expected_duty_session_id: int | str | None = None,
+) -> DutySession:
     _ensure_field_employee(user)
+    user = _lock_user(user)
     expire_overlong_workdays_for_user(user)
 
-    duty = get_active_duty(user)
+    expected_id = None
+    if expected_duty_session_id not in (None, ""):
+        try:
+            expected_id = int(expected_duty_session_id)
+        except (TypeError, ValueError) as exc:
+            raise DutyTrackingError(
+                "Invalid duty_session_id",
+                "INVALID_DUTY_SESSION_ID",
+            ) from exc
+
+    if expected_id is not None:
+        duty = DutySession.objects.filter(user=user, pk=expected_id).first()
+        if duty is None:
+            raise DutyTrackingError(
+                "Duty session not found",
+                "DUTY_SESSION_NOT_FOUND",
+            )
+        if not duty.is_active:
+            logger.info("DutyEnd idempotent user_id=%s duty_id=%s", user.pk, duty.pk)
+            return duty
+    else:
+        duty = _active_duty_for_locked_user(user)
+
     if not duty:
         last = (
             DutySession.objects.filter(user=user)
