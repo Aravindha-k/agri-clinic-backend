@@ -248,17 +248,41 @@ def build_admin_route_data(
 
     workday_start = None
     workday_end = None
+    expected_end = None
     if workdays:
+        from tracking.duty_timer import (
+            compute_duty_timer,
+            compute_session_timer,
+            resolve_duty_for_workday,
+        )
+
         starts = [w.start_time for w in workdays if w.start_time]
         ends = [w.end_time for w in workdays if w.end_time]
         if starts:
             workday_start = min(starts).isoformat()
         if ends:
             workday_end = max(ends).isoformat()
-        elif starts:
-            from .workday_utils import workday_scheduled_end
-
-            workday_end = workday_scheduled_end(max(starts)).isoformat()
+        # Scheduled 9h deadline from canonical timer (not a GPS track end).
+        latest = max(
+            (w for w in workdays if w.start_time),
+            key=lambda w: w.start_time,
+            default=None,
+        )
+        if latest is not None:
+            duty = resolve_duty_for_workday(latest)
+            if duty is not None:
+                timer = compute_duty_timer(duty)
+            else:
+                timer = compute_session_timer(
+                    start_time=latest.start_time,
+                    end_time=latest.end_time,
+                    is_active=bool(latest.is_active),
+                    auto_ended=bool(latest.auto_ended),
+                )
+            expected_end = timer.get("expected_end_at")
+            if workday_end is None:
+                # Compat: expose scheduled deadline only when no real end_time exists.
+                workday_end = expected_end
 
     raw_count = meta.get("raw_point_count", len(raw_route))
     return {
@@ -277,6 +301,7 @@ def build_admin_route_data(
         "duration": _format_duration(duration_seconds),
         "workday_start_time": workday_start,
         "workday_end_time": workday_end,
+        "expected_end_at": expected_end,
         "route": route,
         "points": route,
         "locations": route,

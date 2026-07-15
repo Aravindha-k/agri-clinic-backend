@@ -21,7 +21,12 @@ from tracking.status_utils import (
     MOVEMENT_MIN_SPEED_KMH,
     MOVEMENT_WINDOW_MINUTES,
 )
-from tracking.workday_utils import workday_scheduled_end
+from tracking.duty_timer import (
+    DURATION_LIMIT_SECONDS,
+    compute_duty_timer,
+    compute_session_timer,
+    resolve_duty_for_workday,
+)
 from visits.submitted import submitted_visits_qs
 
 
@@ -47,20 +52,29 @@ def compute_work_hours_seconds(
     *,
     now=None,
 ) -> int:
-    """Sum workday clock time (start → end) for all sessions on target_date."""
+    """
+    Sum session clock time for sessions on target_date.
+
+    Uses duty_timer only — elapsed is capped at DURATION_LIMIT_SECONDS.
+    Historical (non-current) sessions do not trigger lazy expiry writes.
+    """
     now = now or timezone.now()
     total = 0
     for wd in workdays:
         if not wd.start_time:
             continue
-        start = wd.start_time
-        if wd.end_time:
-            end = wd.end_time
-        elif wd.is_active and wd.date == now.date():
-            end = min(now, workday_scheduled_end(wd.start_time))
+        duty = resolve_duty_for_workday(wd)
+        if duty is not None:
+            timer = compute_duty_timer(duty, now=now)
         else:
-            end = workday_scheduled_end(wd.start_time)
-        total += max(int((end - start).total_seconds()), 0)
+            timer = compute_session_timer(
+                start_time=wd.start_time,
+                end_time=wd.end_time,
+                is_active=bool(wd.is_active),
+                auto_ended=bool(wd.auto_ended),
+                now=now,
+            )
+        total += min(int(timer["elapsed_seconds"]), DURATION_LIMIT_SECONDS)
     return total
 
 

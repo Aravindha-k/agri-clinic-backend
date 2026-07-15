@@ -32,8 +32,8 @@ from .workday_utils import (
     WORKDAY_EXPIRED_MESSAGE,
     expire_old_workdays,
     expire_overlong_workdays_for_user,
-    is_workday_within_duration,
 )
+from tracking.duty_timer import is_session_within_limit
 from .serializers import (
     LocationLogCreateSerializer,
     LocationLogSerializer,
@@ -201,7 +201,9 @@ def _format_duration(delta):
 
 def _tracking_health(workday, now):
     """Return OK / STALE / STOPPED for an active workday."""
-    if not is_workday_within_duration(workday, now):
+    if not workday or not is_session_within_limit(
+        workday.start_time, is_active=bool(workday.is_active), now=now
+    ):
         return "STOPPED"
     hb = workday.last_heartbeat
     if not hb:
@@ -586,11 +588,19 @@ class AdminTrackingDashboardStatsAPI(APIView):
                 "start_time", "last_heartbeat", "is_active", "user_id"
             )
         )
-        working_now = sum(1 for wd in active_wds if is_workday_within_duration(wd, now))
+        working_now = sum(
+            1
+            for wd in active_wds
+            if is_session_within_limit(
+                wd.start_time, is_active=bool(wd.is_active), now=now
+            )
+        )
         online = sum(
             1
             for wd in active_wds
-            if is_workday_within_duration(wd, now)
+            if is_session_within_limit(
+                wd.start_time, is_active=bool(wd.is_active), now=now
+            )
             and wd.last_heartbeat
             and wd.last_heartbeat >= heartbeat_threshold
         )
@@ -640,19 +650,62 @@ class AdminTrackingStatusAPI(APIView):
         today = now.date()
 
         # 2. Active workdays keyed by user_id (single query)
-        active_workdays = {
-            wd.user_id: wd
-            for wd in WorkDay.objects.filter(is_active=True).select_related("user")
-            if is_workday_within_duration(wd, now=now)
+        from tracking.duty_timer import compute_duty_timer, compute_session_timer
+        from tracking.models import DutySession
+
+        raw_active_wds = list(
+            WorkDay.objects.filter(is_active=True).select_related("user", "duty_session")
+        )
+        duty_by_workday_id = {
+            d.workday_id: d
+            for d in DutySession.objects.filter(
+                workday_id__in=[w.pk for w in raw_active_wds]
+            )
         }
+        # Also index by user for completed-today lookups below
+        active_workdays = {}
+        duty_by_user = {}
+        timer_by_user = {}
+        for wd in raw_active_wds:
+            duty = getattr(wd, "duty_session", None) or duty_by_workday_id.get(wd.pk)
+            if duty is not None:
+                timer = compute_duty_timer(duty, now=now)
+            else:
+                timer = compute_session_timer(
+                    start_time=wd.start_time,
+                    end_time=wd.end_time,
+                    is_active=bool(wd.is_active),
+                    auto_ended=bool(wd.auto_ended),
+                    now=now,
+                )
+            if not timer.get("is_active") or timer.get("is_expired"):
+                continue
+            active_workdays[wd.user_id] = wd
+            if duty is not None:
+                duty_by_user[wd.user_id] = duty
+            timer_by_user[wd.user_id] = timer
         working_user_ids = list(active_workdays.keys())
 
         # Today's workdays (active or ended) for workday_status display
         today_workdays = {}
-        for wd in WorkDay.objects.filter(date=today).select_related("user"):
+        for wd in WorkDay.objects.filter(date=today).select_related(
+            "user", "duty_session"
+        ):
             prev = today_workdays.get(wd.user_id)
             if not prev or wd.start_time > prev.start_time:
                 today_workdays[wd.user_id] = wd
+
+        # Batch DutySessions for today_workdays not already covered
+        today_wd_ids = [
+            w.pk
+            for uid, w in today_workdays.items()
+            if uid not in duty_by_user
+        ]
+        if today_wd_ids:
+            for d in DutySession.objects.filter(workday_id__in=today_wd_ids):
+                duty_by_user[d.user_id] = d
+                if d.user_id not in timer_by_user:
+                    timer_by_user[d.user_id] = compute_duty_timer(d, now=now)
 
         # GPS point counts today (batch)
         from django.db.models import Count
@@ -709,7 +762,11 @@ class AdminTrackingStatusAPI(APIView):
         employee_user_ids = [emp.user_id for emp in employees]
         device_status_map = batch_device_status_map(employee_user_ids)
         movement_map = batch_movement_status_map(
-            employee_user_ids, active_workdays, now=now
+            employee_user_ids,
+            active_workdays,
+            now=now,
+            duty_by_user=duty_by_user,
+            timer_by_user=timer_by_user,
         )
 
         data = []
@@ -718,6 +775,21 @@ class AdminTrackingStatusAPI(APIView):
             workday = active_workdays.get(uid) or today_workdays.get(uid)
             loc = last_locations.get(uid)
             points_today = int(today_point_counts.get(uid, 0))
+            duty = duty_by_user.get(uid)
+            timer = timer_by_user.get(uid)
+            if timer is None and workday is not None:
+                if duty is None:
+                    duty = getattr(workday, "duty_session", None)
+                if duty is not None:
+                    timer = compute_duty_timer(duty, now=now)
+                else:
+                    timer = compute_session_timer(
+                        start_time=workday.start_time,
+                        end_time=workday.end_time,
+                        is_active=bool(workday.is_active),
+                        auto_ended=bool(workday.auto_ended),
+                        now=now,
+                    )
             try:
                 row = build_admin_tracking_row(
                     emp=emp,
@@ -731,6 +803,8 @@ class AdminTrackingStatusAPI(APIView):
                     device_status=device_status_map.get(uid),
                     points_today=points_today,
                     distance_km_today=today_distance_map.get(uid, 0.0 if points_today else None),
+                    duty=duty,
+                    timer=timer,
                 )
             except Exception:
                 logger.exception("Failed to build tracking row user_id=%s", uid)
@@ -776,7 +850,7 @@ class AdminEmployeesGeoJSONAPI(APIView):
         active_workdays = {
             wd.user_id: wd
             for wd in WorkDay.objects.filter(is_active=True).select_related("user")
-            if is_workday_within_duration(wd, now=now)
+            if is_session_within_limit(wd.start_time, is_active=bool(wd.is_active), now=now)
         }
         working_user_ids = list(active_workdays.keys())
 
@@ -824,7 +898,7 @@ class AdminEmployeesGeoJSONAPI(APIView):
             }
             geom = None
 
-            if workday and is_workday_within_duration(workday, now):
+            if workday and is_session_within_limit(workday.start_time, is_active=bool(workday.is_active), now=now):
                 props["work_status"] = "WORKING"
                 props["tracking_health"] = _tracking_health(workday, now)
 
@@ -946,44 +1020,44 @@ class CurrentWorkdayAPI(DeviceSessionRequiredMixin, APIView):
 
     def get(self, request):
         from tracking.legacy_work_compat import log_deprecated_endpoint
-        from tracking.duty_service import get_active_duty, serialize_duty_status
+        from tracking.duty_service import serialize_duty_status
 
         log_deprecated_endpoint(
             request=request, endpoint="/api/v1/tracking/workday/current/"
         )
-        expire_overlong_workdays_for_user(request.user)
-        duty = get_active_duty(request.user)
-        if not duty:
+        # serialize_duty_status applies lazy expiry and compute_duty_timer once.
+        payload = serialize_duty_status(request.user)
+        if not payload.get("is_active"):
             return Response(
                 {
                     "detail": WORKDAY_EXPIRED_MESSAGE,
                     "code": "workday_expired",
+                    "duration_limit_seconds": payload.get("duration_limit_seconds"),
+                    "expected_end_at": payload.get("expected_end_at"),
+                    "server_now": payload.get("server_now"),
+                    "elapsed_seconds": payload.get("elapsed_seconds"),
+                    "remaining_seconds": payload.get("remaining_seconds"),
+                    "is_expired": payload.get("is_expired"),
+                    "completion_reason": payload.get("completion_reason"),
+                    "duty_session_id": payload.get("duty_session_id"),
+                    "workday_id": payload.get("workday_id"),
                 },
                 status=404,
             )
 
-        payload = serialize_duty_status(request.user, duty)
-        workday = duty.workday
         last_loc = None
-        if workday:
+        workday_id = payload.get("workday_id")
+        if workday_id:
             last_loc = (
-                LocationLog.objects.filter(user=request.user, workday=workday)
+                LocationLog.objects.filter(user=request.user, workday_id=workday_id)
                 .order_by("-recorded_at")
                 .first()
             )
         data = {
-            "workday_id": duty.workday_id or (workday.id if workday else None),
-            "duty_session_id": duty.id,
-            "date": payload.get("date") or (duty.date.isoformat() if duty.date else None),
-            "work_date": payload.get("work_date"),
-            "start_time": duty.start_time,
-            "started_at": duty.start_time,
-            "end_time": duty.end_time,
-            "is_active": duty.is_active,
-            "status": payload.get("status"),
-            "auto_ended": duty.auto_ended,
-            "last_heartbeat": duty.last_heartbeat,
-            "server_time": timezone.now(),
+            **payload,
+            "workday_id": workday_id,
+            "duty_session_id": payload.get("duty_session_id") or payload.get("id"),
+            "server_time": payload.get("server_now") or payload.get("server_time"),
             "last_location": (
                 LocationLogSerializer(last_loc, context={"request": request}).data
                 if last_loc
@@ -1367,7 +1441,7 @@ class AdminEmployeeTrackingDiagnosticsAPI(APIView):
             .order_by("-start_time")
             .first()
         )
-        if active_workday and not is_workday_within_duration(active_workday, now):
+        if active_workday and not is_session_within_limit(active_workday.start_time, is_active=bool(active_workday.is_active), now=now):
             active_workday = None
 
         display_workday = (
@@ -1619,7 +1693,7 @@ class EmployeeStatsAPIView(APIView):
             for wd in WorkDay.objects.filter(date=today, is_active=True).only(
                 "start_time", "last_heartbeat", "is_active"
             )
-            if is_workday_within_duration(wd, now)
+            if is_session_within_limit(wd.start_time, is_active=bool(wd.is_active), now=now)
             and wd.last_heartbeat
             and wd.last_heartbeat >= now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
         )
