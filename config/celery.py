@@ -1,15 +1,24 @@
 """
 Celery application configuration.
 
-Usage:
+Usage (local / production):
     celery -A config worker -l info
     celery -A config beat -l info
+
+Beat schedule (see settings.CELERY_BEAT_SCHEDULE):
+    expire-overdue-duties-every-5-minutes → tracking.tasks.expire_overdue_duties_task
+
+Fallback without beat:
+    python manage.py expire_overdue_duties
 """
 
+import logging
 import os
 
 from celery import Celery
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 

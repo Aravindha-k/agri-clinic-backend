@@ -29,6 +29,12 @@ from tracking.workday_utils import (
     clear_live_tracking_for_user,
     expire_overlong_workdays_for_user,
 )
+from tracking.duty_timer import (
+    COMPLETION_MANUAL,
+    compute_duty_timer,
+    empty_duty_timer,
+)
+from tracking.duty_expiry import expire_overdue_duty_for_user
 from utils.gps import validate_latitude_longitude
 
 logger = logging.getLogger(__name__)
@@ -80,7 +86,7 @@ def _ensure_field_employee(user: User) -> None:
 
 
 def get_active_duty(user: User) -> DutySession | None:
-    expire_overlong_workdays_for_user(user)
+    expire_overdue_duty_for_user(user, trigger="lazy_current")
     return (
         DutySession.objects.filter(user=user, is_active=True)
         .select_related("workday")
@@ -89,10 +95,17 @@ def get_active_duty(user: User) -> DutySession | None:
     )
 
 
-def _sync_workday_start(user: User, now, *, latitude=None, longitude=None) -> WorkDay:
+def _sync_workday_start(
+    user: User,
+    now,
+    *,
+    business_date: date | None = None,
+    latitude=None,
+    longitude=None,
+) -> WorkDay:
     workday_kwargs = {
         "user": user,
-        "date": now.date(),
+        "date": business_date or timezone.localdate(),
         "start_time": now,
         "is_active": True,
         "last_heartbeat": now,
@@ -132,7 +145,7 @@ def start_duty(
     """
     _ensure_field_employee(user)
     user = _lock_user(user)
-    expire_overlong_workdays_for_user(user)
+    expire_overdue_duty_for_user(user, trigger="lazy_start")
 
     existing = _active_duty_for_locked_user(user)
     if existing:
@@ -151,6 +164,7 @@ def start_duty(
         lat_dec = Decimal(str(latitude)).quantize(Decimal("0.000001"))
         lng_dec = Decimal(str(longitude)).quantize(Decimal("0.000001"))
 
+    business_date = timezone.localdate()
     try:
         # Keep the create pair in a savepoint so a conditional-unique race does
         # not poison the outer transaction before we can return the winner.
@@ -158,13 +172,14 @@ def start_duty(
             workday = _sync_workday_start(
                 user,
                 now,
+                business_date=business_date,
                 latitude=lat_dec,
                 longitude=lng_dec,
             )
             duty = DutySession.objects.create(
                 user=user,
                 workday=workday,
-                date=now.date(),
+                date=business_date,
                 start_time=now,
                 is_active=True,
                 last_heartbeat=now,
@@ -189,92 +204,102 @@ def start_duty(
 
 
 def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[str, Any]:
-    """Canonical current-duty payload for mobile multi-device restore."""
+    """Canonical current-duty payload including 9-hour timer fields."""
     now = timezone.now()
-    active = duty if duty is not None and duty.is_active else None
-    if duty is None:
-        active = get_active_duty(user)
-    if active and active.is_active:
-        workday = active.workday
-        started = active.start_time or (workday.start_time if workday else None)
-        work_date = active.date or (workday.date if workday else now.date())
-        return {
-            "status": "in_progress",
-            "is_active": True,
-            "user_id": user.pk,
-            "duty_session_id": active.id,
-            "workday_id": active.workday_id or (workday.id if workday else None),
-            "latitude": float(active.latitude) if active.latitude is not None else None,
-            "longitude": float(active.longitude) if active.longitude is not None else None,
-            "started_at": started.isoformat() if started else None,
-            "start_time": started.isoformat() if started else None,
-            "work_date": work_date.isoformat() if work_date else None,
-            "date": work_date.isoformat() if work_date else None,
-            "end_work_time": None,
-            "end_time": None,
-            "total_work_duration_ms": None,
-            "server_time": now.isoformat(),
-            "last_heartbeat": (
-                active.last_heartbeat.isoformat() if active.last_heartbeat else None
-            ),
-        }
+    today = timezone.localdate()
 
-    today = now.date()
-    completed = None
-    if duty is not None and not duty.is_active:
-        completed = duty
-    if completed is None:
-        completed = (
-            DutySession.objects.filter(user=user, date=today, is_active=False)
+    if duty is not None and duty.is_active:
+        expire_overdue_duty_for_user(user, now=now, trigger="lazy_current")
+        duty = (
+            DutySession.objects.filter(pk=duty.pk)
             .select_related("workday")
-            .order_by("-end_time", "-start_time")
             .first()
         )
-    if completed:
-        started = completed.start_time
-        ended = completed.end_time
-        duration_ms = None
-        if started and ended:
-            duration_ms = int(max(0, (ended - started).total_seconds() * 1000))
+
+    if duty is None:
+        finalized = expire_overdue_duty_for_user(
+            user, now=now, trigger="lazy_current"
+        )
+        active = (
+            DutySession.objects.filter(user=user, is_active=True)
+            .select_related("workday")
+            .order_by("-start_time")
+            .first()
+        )
+        if active:
+            duty = active
+        elif finalized is not None and not finalized.is_active:
+            duty = (
+                DutySession.objects.filter(pk=finalized.pk)
+                .select_related("workday")
+                .first()
+            )
+        else:
+            duty = (
+                DutySession.objects.filter(user=user, is_active=False)
+                .select_related("workday")
+                .order_by("-end_time", "-start_time")
+                .first()
+            )
+            if duty and duty.end_time:
+                if timezone.localtime(duty.end_time).date() != today:
+                    duty = None
+            elif duty and duty.date != today:
+                duty = None
+
+    if duty is None:
+        empty = empty_duty_timer(now=now)
         return {
-            "status": "completed",
-            "is_active": False,
+            **empty,
+            "status": "not_started",  # legacy alias
+            "duty_status": "NOT_STARTED",
             "user_id": user.pk,
-            "duty_session_id": completed.id,
-            "workday_id": completed.workday_id,
-            "latitude": (
-                float(completed.latitude) if completed.latitude is not None else None
-            ),
-            "longitude": (
-                float(completed.longitude) if completed.longitude is not None else None
-            ),
-            "started_at": started.isoformat() if started else None,
-            "start_time": started.isoformat() if started else None,
+            "duty_session_id": None,
+            "workday_id": None,
+            "latitude": None,
+            "longitude": None,
             "work_date": today.isoformat(),
             "date": today.isoformat(),
-            "end_work_time": ended.isoformat() if ended else None,
-            "end_time": ended.isoformat() if ended else None,
-            "total_work_duration_ms": duration_ms,
-            "server_time": now.isoformat(),
-            "last_heartbeat": (
-                completed.last_heartbeat.isoformat() if completed.last_heartbeat else None
-            ),
+            "end_work_time": None,
+            "total_work_duration_ms": None,
+            "server_time": empty["server_now"],
+            "last_heartbeat": None,
         }
 
+    timer = compute_duty_timer(duty, now=now)
+    workday = duty.workday
+    work_date = duty.date or (workday.date if workday else today)
+    started = duty.start_time
+    ended = duty.end_time
+    duration_ms = None
+    if started and ended:
+        duration_ms = int(max(0, (ended - started).total_seconds() * 1000))
+
+    if duty.is_active:
+        legacy_status = "in_progress"
+    elif duty.auto_ended:
+        legacy_status = "completed"  # keep completed; timer.is_expired / duty_status show auto
+    else:
+        legacy_status = "completed"
+
     return {
-        "status": "not_started",
-        "is_active": False,
+        **timer,
+        # Compatible aliases
+        "status": legacy_status,
+        "duty_status": timer["status"],
         "user_id": user.pk,
-        "duty_session_id": None,
-        "workday_id": None,
-        "latitude": None,
-        "longitude": None,
-        "started_at": None,
-        "work_date": today.isoformat(),
-        "date": today.isoformat(),
-        "end_work_time": None,
-        "total_work_duration_ms": None,
-        "server_time": now.isoformat(),
+        "duty_session_id": duty.id,
+        "workday_id": duty.workday_id or (workday.id if workday else None),
+        "latitude": float(duty.latitude) if duty.latitude is not None else None,
+        "longitude": float(duty.longitude) if duty.longitude is not None else None,
+        "work_date": work_date.isoformat() if work_date else None,
+        "date": work_date.isoformat() if work_date else None,
+        "end_work_time": ended.isoformat() if ended else None,
+        "total_work_duration_ms": duration_ms if not duty.is_active else None,
+        "server_time": timer["server_now"],
+        "last_heartbeat": (
+            duty.last_heartbeat.isoformat() if duty.last_heartbeat else None
+        ),
     }
 
 
@@ -284,9 +309,18 @@ def end_duty(
     *,
     expected_duty_session_id: int | str | None = None,
 ) -> DutySession:
+    """
+    Manually complete an active duty, or return the already-completed session.
+
+    If the duty is past the 9-hour deadline, canonical auto-expiry wins:
+    ended_at stays expected_end_at and completion_reason stays AUTO_EXPIRED.
+    """
+    from tracking.duty_expiry import complete_duty_as_auto_expired
+    from tracking.duty_timer import is_duty_overdue
+
     _ensure_field_employee(user)
     user = _lock_user(user)
-    expire_overlong_workdays_for_user(user)
+    now = timezone.now()
 
     expected_id = None
     if expected_duty_session_id not in (None, ""):
@@ -299,7 +333,11 @@ def end_duty(
             ) from exc
 
     if expected_id is not None:
-        duty = DutySession.objects.filter(user=user, pk=expected_id).first()
+        duty = (
+            DutySession.objects.select_for_update()
+            .filter(user=user, pk=expected_id)
+            .first()
+        )
         if duty is None:
             raise DutyTrackingError(
                 "Duty session not found",
@@ -309,7 +347,12 @@ def end_duty(
             logger.info("DutyEnd idempotent user_id=%s duty_id=%s", user.pk, duty.pk)
             return duty
     else:
-        duty = _active_duty_for_locked_user(user)
+        duty = (
+            DutySession.objects.select_for_update()
+            .filter(user=user, is_active=True)
+            .order_by("-start_time")
+            .first()
+        )
 
     if not duty:
         last = (
@@ -322,20 +365,39 @@ def end_duty(
             return last
         raise DutyTrackingError("No active duty session", "NO_ACTIVE_DUTY")
 
-    now = timezone.now()
+    # Past deadline → auto-complete; do not overwrite with a later manual time.
+    if is_duty_overdue(duty, now=now):
+        return complete_duty_as_auto_expired(
+            duty, now=now, trigger="lazy_manual_end"
+        )
+
     duty.end_time = now
     duty.is_active = False
-    duty.save(update_fields=["end_time", "is_active"])
+    duty.auto_ended = False
+    duty.completion_reason = COMPLETION_MANUAL
+    duty.save(
+        update_fields=[
+            "end_time",
+            "is_active",
+            "auto_ended",
+            "completion_reason",
+        ]
+    )
 
     if duty.workday_id:
-        WorkDay.objects.filter(pk=duty.workday_id, is_active=True).update(
+        WorkDay.objects.filter(pk=duty.workday_id).update(
             end_time=now,
             is_active=False,
             auto_ended=False,
         )
 
     clear_live_tracking_for_user(user.pk)
-    logger.info("DutyEnd user_id=%s duty_id=%s", user.pk, duty.pk)
+    logger.info(
+        "event=duty_manual_completed user_id=%s duty_id=%s end_time=%s",
+        user.pk,
+        duty.pk,
+        now.isoformat(),
+    )
     return duty
 
 

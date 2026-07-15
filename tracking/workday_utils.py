@@ -1,4 +1,4 @@
-"""Workday duration limits and auto-end helpers."""
+"""Workday duration limits and helpers (DutySession is authoritative for expiry)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 def _live_cache_key(user_id: int) -> str:
     return f"tracking:live:{user_id}"
+
 
 MAX_WORKDAY_DURATION = timedelta(hours=9)
 # Belt-and-suspenders: never treat a workday as active after 2 calendar days.
@@ -45,29 +46,16 @@ def is_workday_within_duration(workday: WorkDay | None, now=None) -> bool:
     return workday.start_time + MAX_WORKDAY_DURATION > now
 
 
-def _expire_workday_row(workday: WorkDay, *, now=None) -> None:
-    """Close one overlong workday and evict live tracking cache."""
+def _expire_orphan_workday_row(workday: WorkDay, *, now=None) -> None:
+    """Close an active WorkDay that has no linking active DutySession."""
     now = now or timezone.now()
     workday.end_time = workday_scheduled_end(workday.start_time)
     workday.is_active = False
     workday.auto_ended = True
     workday.save(update_fields=["end_time", "is_active", "auto_ended"])
-    from tracking.models import DutySession
-
-    DutySession.objects.filter(workday=workday, is_active=True).update(
-        end_time=workday.end_time,
-        is_active=False,
-        auto_ended=True,
-    )
     cache.delete(_live_cache_key(workday.user_id))
-    try:
-        from dashboard.services import invalidate_dashboard_caches
-
-        invalidate_dashboard_caches()
-    except Exception:
-        logger.exception("Dashboard cache invalidation failed after workday expiry")
     logger.info(
-        "WorkDay auto-ended: user_id=%s workday_id=%s end_time=%s",
+        "Orphan WorkDay auto-ended: user_id=%s workday_id=%s end_time=%s",
         workday.user_id,
         workday.pk,
         workday.end_time,
@@ -76,41 +64,59 @@ def _expire_workday_row(workday: WorkDay, *, now=None) -> None:
 
 def expire_old_workdays(*, now=None) -> int:
     """
-    End all active workdays whose start_time is older than MAX_WORKDAY_DURATION.
-    Sets end_time = start_time + 9 hours (not wall-clock now).
-    Clears Redis live-location keys for affected employees.
+    Prefer DutySession expiry; also close orphan active WorkDays without duty.
     """
     now = now or timezone.now()
+    from tracking.duty_expiry import expire_overdue_duties
+
+    count = expire_overdue_duties(now=now, trigger="expire_old_workdays")
     cutoff = now - MAX_WORKDAY_DURATION
-    qs = (
+    orphans = (
         WorkDay.objects.filter(is_active=True, start_time__lte=cutoff)
-        .select_related("user")
         .order_by("id")
     )
-    count = 0
-    for workday in qs.iterator(chunk_size=200):
-        _expire_workday_row(workday, now=now)
+    for workday in orphans.iterator(chunk_size=200):
+        from tracking.models import DutySession
+
+        if DutySession.objects.filter(workday=workday, is_active=True).exists():
+            continue
+        if DutySession.objects.filter(
+            user=workday.user, is_active=True
+        ).exists():
+            # Active duty exists (possibly different workday link) — leave for duty expiry
+            continue
+        _expire_orphan_workday_row(workday, now=now)
         count += 1
     if count:
-        logger.info("expire_old_workdays closed %s workday(s)", count)
+        logger.info("expire_old_workdays closed %s session/workday row(s)", count)
     return count
 
 
 def expire_overlong_workdays_for_user(user, *, now=None) -> int:
     """
-    End active workdays for one user that exceeded MAX_WORKDAY_DURATION.
-    Returns the number of workdays closed.
+    Lazy expiry for one user via DutySession (WorkDay synced through duty service).
+    Returns the number of rows closed (duty and/or orphan workdays).
     """
     if not user or not getattr(user, "is_authenticated", True):
         return 0
     now = now or timezone.now()
+    from tracking.duty_expiry import expire_overdue_duty_for_user
+    from tracking.models import DutySession
+
+    was_active = DutySession.objects.filter(user=user, is_active=True).exists()
+    duty = expire_overdue_duty_for_user(user, now=now, trigger="lazy_user")
+    count = 0
+    if was_active and duty is not None and not duty.is_active and duty.auto_ended:
+        count = 1
+
     cutoff = now - MAX_WORKDAY_DURATION
     qs = WorkDay.objects.filter(
         user=user, is_active=True, start_time__lte=cutoff
     ).order_by("id")
-    count = 0
     for workday in qs:
-        _expire_workday_row(workday, now=now)
+        if DutySession.objects.filter(user=user, is_active=True).exists():
+            break
+        _expire_orphan_workday_row(workday, now=now)
         count += 1
     return count
 

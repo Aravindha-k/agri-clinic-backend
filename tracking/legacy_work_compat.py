@@ -6,8 +6,6 @@ import logging
 from typing import Any
 
 from django.contrib.auth.models import User
-from django.utils import timezone
-from rest_framework import status
 from rest_framework.response import Response
 
 from tracking.duty_service import (
@@ -93,6 +91,14 @@ def legacy_start_via_duty(request, *, endpoint: str, response_style: str = "work
                 "start_time": payload.get("start_time"),
                 "server_time": payload.get("server_time"),
                 "is_active": True,
+                "duration_limit_seconds": payload.get("duration_limit_seconds"),
+                "expected_end_at": payload.get("expected_end_at"),
+                "server_now": payload.get("server_now"),
+                "elapsed_seconds": payload.get("elapsed_seconds"),
+                "remaining_seconds": payload.get("remaining_seconds"),
+                "is_expired": payload.get("is_expired"),
+                "completion_reason": payload.get("completion_reason"),
+                "duty_status": payload.get("duty_status"),
             },
             status=201 if result.created else 200,
         )
@@ -113,6 +119,14 @@ def legacy_start_via_duty(request, *, endpoint: str, response_style: str = "work
             "started_at": payload.get("started_at"),
             "start_time": payload.get("start_time"),
             "server_time": payload.get("server_time"),
+            "duration_limit_seconds": payload.get("duration_limit_seconds"),
+            "expected_end_at": payload.get("expected_end_at"),
+            "server_now": payload.get("server_now"),
+            "elapsed_seconds": payload.get("elapsed_seconds"),
+            "remaining_seconds": payload.get("remaining_seconds"),
+            "is_expired": payload.get("is_expired"),
+            "completion_reason": payload.get("completion_reason"),
+            "duty_status": payload.get("duty_status"),
         },
         message="Workday started" if result.created else "Workday already started",
     )
@@ -172,41 +186,62 @@ def legacy_end_via_duty(request, *, endpoint: str, response_style: str = "workda
 
 
 def mobile_work_status_payload(user: User) -> dict[str, Any]:
-    expire_overlong_workdays_for_user(user)
-    duty = get_active_duty(user)
-    if duty and duty.is_active:
+    """Compatibility status: includes canonical timer fields."""
+    payload = serialize_duty_status(user)
+    timer = {
+        "duration_limit_seconds": payload.get("duration_limit_seconds"),
+        "expected_end_at": payload.get("expected_end_at"),
+        "server_now": payload.get("server_now"),
+        "elapsed_seconds": payload.get("elapsed_seconds"),
+        "remaining_seconds": payload.get("remaining_seconds"),
+        "is_expired": payload.get("is_expired"),
+        "completion_reason": payload.get("completion_reason"),
+        "duty_status": payload.get("duty_status") or payload.get("status"),
+        "ended_at": payload.get("ended_at"),
+        "start_time": payload.get("start_time"),
+        "started_at": payload.get("started_at"),
+        "server_time": payload.get("server_time") or payload.get("server_now"),
+    }
+
+    if payload.get("is_active"):
         return {
             "work_status": "started",
-            "workday_id": duty.workday_id,
-            "duty_session_id": duty.id,
-            "started_at": duty.start_time.isoformat() if duty.start_time else None,
-            "start_time": duty.start_time.isoformat() if duty.start_time else None,
-            "server_time": timezone.now().isoformat(),
+            "workday_id": payload.get("workday_id"),
+            "duty_session_id": payload.get("duty_session_id"),
+            **timer,
         }
-    auto = (
-        DutySession.objects.filter(user=user, auto_ended=True)
-        .order_by("-end_time", "-start_time")
-        .first()
-    )
-    if auto:
+
+    if payload.get("is_expired") or payload.get("completion_reason") == "AUTO_EXPIRED":
         return {
             "work_status": "expired",
             "message": WORKDAY_EXPIRED_MESSAGE,
             "code": "workday_expired",
-            "workday_id": auto.workday_id,
-            "duty_session_id": auto.id,
-            "server_time": timezone.now().isoformat(),
+            "workday_id": payload.get("workday_id"),
+            "duty_session_id": payload.get("duty_session_id"),
+            **timer,
         }
+
+    if payload.get("duty_session_id"):
+        return {
+            "work_status": "not_started",
+            "workday_id": payload.get("workday_id"),
+            "duty_session_id": payload.get("duty_session_id"),
+            **timer,
+        }
+
     return {
         "work_status": "not_started",
-        "server_time": timezone.now().isoformat(),
+        **timer,
     }
 
 
 def _duty_as_worklog_dict(duty: DutySession) -> dict[str, Any]:
+    from tracking.duty_timer import compute_duty_timer
+
     duration = None
     if duty.start_time and duty.end_time:
         duration = str(duty.end_time - duty.start_time)
+    timer = compute_duty_timer(duty)
     return {
         "id": duty.id,
         "employee": duty.user_id,
@@ -216,6 +251,16 @@ def _duty_as_worklog_dict(duty: DutySession) -> dict[str, Any]:
         "is_active": duty.is_active,
         "duty_session_id": duty.id,
         "workday_id": duty.workday_id,
+        "duration_limit_seconds": timer["duration_limit_seconds"],
+        "expected_end_at": timer["expected_end_at"],
+        "server_now": timer["server_now"],
+        "elapsed_seconds": timer["elapsed_seconds"],
+        "remaining_seconds": timer["remaining_seconds"],
+        "is_expired": timer["is_expired"],
+        "completion_reason": timer["completion_reason"],
+        "duty_status": timer["status"],
+        "ended_at": timer["ended_at"],
+        "started_at": timer["started_at"],
     }
 
 

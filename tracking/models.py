@@ -197,6 +197,12 @@ class DutySession(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True, db_index=True)
     auto_ended = models.BooleanField(default=False)
+    completion_reason = models.CharField(
+        max_length=32,
+        null=True,
+        blank=True,
+        help_text="MANUAL | AUTO_EXPIRED — set when duty ends.",
+    )
     last_heartbeat = models.DateTimeField(null=True, blank=True)
     latitude = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True
