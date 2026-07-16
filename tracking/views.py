@@ -69,19 +69,26 @@ from mobile_api.device_session import DeviceSessionRequiredMixin
     responses={201: SIMPLE_SUCCESS},
 )
 class BulkLocationUploadAPI(DeviceSessionRequiredMixin, APIView):
+    """LEGACY wrapper → canonical gps_service.bulk_update_gps_points."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Accept either:
-        # 1) {"locations": [...]} or 2) [...] (raw array payload)
+        from tracking.gps_service import GpsTrackingError, bulk_update_gps_points
+
         if isinstance(request.data, list):
             locations_data = request.data
+            meta = {}
         elif isinstance(request.data, dict):
             locations_data = (
                 request.data.get("points")
                 or request.data.get("locations")
                 or []
             )
+            meta = {
+                "device_model": request.data.get("device_model"),
+                "app_version": request.data.get("app_version"),
+            }
         else:
             return api_response(
                 success=False,
@@ -98,45 +105,37 @@ class BulkLocationUploadAPI(DeviceSessionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        expire_overlong_workdays_for_user(request.user)
-        if not WorkDay.objects.filter(user=request.user, is_active=True).exists():
+        try:
+            result = bulk_update_gps_points(
+                request.user,
+                locations_data,
+                request_meta=meta,
+            )
+        except GpsTrackingError as exc:
+            code = 403 if exc.code in {"FORBIDDEN", "ACCOUNT_DISABLED"} else 400
             return api_response(
                 success=False,
-                message=WORKDAY_EXPIRED_MESSAGE,
-                data={"errors": [{"detail": "No active workday"}]},
-                status=status.HTTP_400_BAD_REQUEST,
+                message=exc.message,
+                data={"code": exc.code},
+                status=code,
             )
 
-        created = []
-        errors = []
-        for index, ldata in enumerate(locations_data):
-            serializer = LocationLogCreateSerializer(
-                data=ldata,
-                context={"request": request, "location_source": "bulk_upload"},
-            )
-            if serializer.is_valid():
-                loc = serializer.save()
-                created.append(loc.id)
-            else:
-                errors.append({"index": index, "errors": serializer.errors})
-        logger.info(
-            "BulkLocationUpload employee_id=%s saved=%s failed=%s",
-            request.user.pk,
-            len(created),
-            len(errors),
-        )
+        errors = result.get("failed_items") or []
         return api_response(
-            success=len(errors) == 0,
+            success=result["failed_count"] == 0,
             message="Bulk locations upload complete",
             data={
-                "created": created,
-                "saved_count": len(created),
-                "failed_count": len(errors),
+                "created": result.get("accepted_ids") or [],
+                "saved_count": result["success_count"],
+                "failed_count": result["failed_count"],
+                "duplicate_count": result.get("duplicate_count", 0),
+                "route_points_saved": result.get("route_points_saved", 0),
+                "duty_session_id": result.get("duty_session_id"),
                 "errors": errors,
             },
             status=(
                 status.HTTP_201_CREATED
-                if len(errors) == 0
+                if result["failed_count"] == 0
                 else status.HTTP_207_MULTI_STATUS
             ),
         )
@@ -322,93 +321,38 @@ class HeartbeatAPI(DeviceSessionRequiredMixin, APIView):
     responses={201: SIMPLE_SUCCESS, 400: error_schema("LocationPushError")},
 )
 class PushLocationAPI(DeviceSessionRequiredMixin, APIView):
+    """LEGACY wrapper → canonical gps_service.update_gps_point."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user = request.user
+        from tracking.gps_service import GpsTrackingError, update_gps_point
+        from tracking.serializers import LocationLogSerializer
 
+        user = request.user
         if user.is_staff:
             return Response({"detail": "Admin cannot push location"}, status=403)
 
-        expire_overlong_workdays_for_user(user)
-
-        serializer = LocationLogCreateSerializer(
-            data=request.data,
-            context={"request": request, "location_source": "location_push"},
-        )
-        serializer.is_valid(raise_exception=True)
-
-        profile = EmployeeProfile.objects.filter(user=user).first()
-        if profile and not profile.is_active_employee:
-            return Response({"detail": "Inactive employee"}, status=403)
-
-        workday = WorkDay.objects.filter(user=user, is_active=True).first()
-        if not workday:
-            return Response(
-                {
-                    "detail": WORKDAY_EXPIRED_MESSAGE
-                },
-                status=400,
-            )
-
-        lat = float(serializer.validated_data["latitude"])
-        lng = float(serializer.validated_data["longitude"])
-        accuracy = float(serializer.validated_data.get("accuracy") or 999)
-
-        is_suspicious = False
-
-        # Flag low accuracy
-        if accuracy > 50:
-            is_suspicious = True
-
-        # Flag GPS jump
-        last_point = (
-            LocationLog.objects.filter(user=user, workday=workday)
-            .order_by("-recorded_at")
-            .first()
-        )
-        if last_point:
-            jump = distance_km(
-                float(last_point.latitude),
-                float(last_point.longitude),
-                lat,
-                lng,
-            )
-            if jump > GPS_JUMP_KM:
-                is_suspicious = True
-
-        location = serializer.save()
-        if is_suspicious:
-            location.is_suspicious = True
-            location.save(update_fields=["is_suspicious"])
-
-        from tracking.location_helpers import workday_distance_km
-
-        total_points = LocationLog.objects.filter(workday=workday).count()
-        route_distance_km = workday_distance_km(workday.pk)
-        logger.info(
-            "LocationPush employee_id=%s workday_id=%s lat=%s lng=%s "
-            "timestamp=%s location_log_id=%s total_points=%s "
-            "distance_km=%s suspicious=%s",
-            user.pk,
-            workday.pk,
-            lat,
-            lng,
-            location.recorded_at,
-            location.pk,
-            total_points,
-            route_distance_km,
-            is_suspicious,
-        )
         try:
-            from dashboard.services import invalidate_stats_cache_only
+            result = update_gps_point(user, dict(request.data))
+        except GpsTrackingError as exc:
+            code = 403 if exc.code in {"FORBIDDEN", "ACCOUNT_DISABLED"} else 400
+            return Response({"detail": exc.message, "code": exc.code}, status=code)
 
-            invalidate_stats_cache_only()
-        except Exception:
-            logger.exception("Stats cache invalidation failed after location push")
-
-        out = LocationLogSerializer(location, context={"request": request}).data
-        return Response({"message": "Location saved", "location": out}, status=201)
+        out = {
+            "id": result.get("location_log_id") or result.get("route_point_id"),
+            "route_point_id": result.get("route_point_id"),
+            "duty_session_id": result.get("duty_session_id"),
+            "latitude": request.data.get("latitude"),
+            "longitude": request.data.get("longitude"),
+            "recorded_at": result.get("recorded_at"),
+            "duplicate": result.get("duplicate", False),
+            "client_point_id": result.get("client_point_id"),
+        }
+        return Response(
+            {"message": "Location saved", "location": out, "data": result},
+            status=201,
+        )
 
 
 # ──────────────────────────────────────────────
@@ -422,137 +366,55 @@ class PushLocationAPI(DeviceSessionRequiredMixin, APIView):
     responses={201: SIMPLE_SUCCESS, 207: SIMPLE_SUCCESS},
 )
 class BulkPushLocationAPI(DeviceSessionRequiredMixin, APIView):
+    """LEGACY wrapper → canonical gps_service.bulk_update_gps_points."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user = request.user
+        from tracking.gps_service import GpsTrackingError, bulk_update_gps_points
 
+        user = request.user
         if user.is_staff:
             return Response({"detail": "Admin cannot push location"}, status=403)
 
-        expire_overlong_workdays_for_user(user)
+        if isinstance(request.data, list):
+            points = request.data
+            meta = {}
+            device_model = None
+            app_version = None
+        else:
+            serializer = BulkLocationPushSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            points = serializer.validated_data["locations"]
+            device_model = serializer.validated_data.get("device_model")
+            app_version = serializer.validated_data.get("app_version")
+            meta = {}
 
-        profile = EmployeeProfile.objects.filter(user=user).first()
-        if profile and not profile.is_active_employee:
-            return Response({"detail": "Inactive employee"}, status=403)
-
-        workday = WorkDay.objects.filter(user=user, is_active=True).first()
-        if not workday:
-            return Response(
-                {
-                    "detail": WORKDAY_EXPIRED_MESSAGE
-                },
-                status=400,
+        try:
+            result = bulk_update_gps_points(
+                user,
+                points,
+                device_model=device_model,
+                app_version=app_version,
+                request_meta=meta,
             )
+        except GpsTrackingError as exc:
+            code = 403 if exc.code in {"FORBIDDEN", "ACCOUNT_DISABLED"} else 400
+            return Response({"detail": exc.message, "code": exc.code}, status=code)
 
-        serializer = BulkLocationPushSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        points = serializer.validated_data["locations"]
-        if len(points) > MAX_BULK_POINTS:
-            return Response(
-                {"detail": f"Max {MAX_BULK_POINTS} points per request"},
-                status=400,
-            )
-
-        device_model = serializer.validated_data.get("device_model")
-        app_version = serializer.validated_data.get("app_version")
-
-        def _point_time(pt):
-            return (
-                pt.get("captured_at")
-                or pt.get("recorded_at")
-                or pt.get("timestamp")
-                or timezone.now()
-            )
-
-        # Sort by device timestamp so jump detection is sequential
-        points.sort(key=_point_time)
-
-        # Get last saved point for jump detection
-        prev = (
-            LocationLog.objects.filter(user=user, workday=workday)
-            .order_by("-recorded_at")
-            .values_list("latitude", "longitude")
-            .first()
-        )
-        prev_lat = float(prev[0]) if prev else None
-        prev_lng = float(prev[1]) if prev else None
-
-        objects_to_create = []
-        saved = 0
-        suspicious = 0
-
-        for pt in points:
-            lat = float(pt["latitude"])
-            lng = float(pt["longitude"])
-            accuracy = float(pt.get("accuracy") or 999)
-            is_sus = False
-
-            if accuracy > 50:
-                is_sus = True
-
-            if prev_lat is not None:
-                jump = distance_km(prev_lat, prev_lng, lat, lng)
-                if jump > GPS_JUMP_KM:
-                    is_sus = True
-
-            recorded_at = _point_time(pt)
-            objects_to_create.append(
-                LocationLog(
-                    user=user,
-                    workday=workday,
-                    latitude=pt["latitude"],
-                    longitude=pt["longitude"],
-                    accuracy=pt.get("accuracy"),
-                    speed=pt.get("speed"),
-                    heading=pt.get("heading"),
-                    battery_level=pt.get("battery_level"),
-                    network_type=pt.get("network_type"),
-                    device_model=device_model,
-                    app_version=app_version,
-                    recorded_at=recorded_at,
-                    is_suspicious=is_sus,
-                )
-            )
-            if is_sus:
-                suspicious += 1
-            saved += 1
-            prev_lat, prev_lng = lat, lng
-
-        LocationLog.objects.bulk_create(objects_to_create)
-
-        if points:
-            from .services import refresh_workday_live_state
-
-            latest = points[-1]
-            refresh_workday_live_state(
-                user=user,
-                workday=workday,
-                latitude=float(latest["latitude"]),
-                longitude=float(latest["longitude"]),
-                accuracy=float(latest["accuracy"]) if latest.get("accuracy") is not None else None,
-                battery_level=latest.get("battery_level"),
-                recorded_at=_point_time(latest),
-            )
-            workday.last_heartbeat = timezone.now()
-            workday.save(update_fields=["last_heartbeat"])
-            logger.info(
-                "BulkLocationPush employee_id=%s workday_id=%s lat=%s lng=%s heartbeat_updated=1 saved=%s",
-                user.pk,
-                workday.pk,
-                latest["latitude"],
-                latest["longitude"],
-                saved,
-            )
-
+        status_code = 201 if result["failed_count"] == 0 else 207
         return Response(
             {
-                "message": f"{saved} locations saved",
-                "saved": saved,
-                "suspicious": suspicious,
+                "message": f"{result['success_count']} locations saved",
+                "saved": result["success_count"],
+                "failed": result["failed_count"],
+                "duplicate_count": result.get("duplicate_count", 0),
+                "route_points_saved": result.get("route_points_saved", 0),
+                "accepted_ids": result.get("accepted_ids"),
+                "failed_items": result.get("failed_items"),
+                "duty_session_id": result.get("duty_session_id"),
             },
-            status=201,
+            status=status_code,
         )
 
 

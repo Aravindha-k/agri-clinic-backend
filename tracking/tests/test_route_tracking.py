@@ -351,7 +351,8 @@ class RouteTrackingAPITest(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 0)
 
-    def test_poor_accuracy_rejected_after_first_point(self):
+    def test_poor_accuracy_accepted_by_canonical_path(self):
+        """Accuracy flags are not rejection criteria on the GPS service path."""
         self._start_workday()
         r1 = self.emp_client.post(
             "/api/v1/tracking/location/push/",
@@ -359,6 +360,7 @@ class RouteTrackingAPITest(APITestCase):
                 "latitude": "12.971600",
                 "longitude": "77.594600",
                 "accuracy": 250,
+                "client_point_id": "acc-1",
             },
             format="json",
         )
@@ -369,19 +371,24 @@ class RouteTrackingAPITest(APITestCase):
                 "latitude": "12.972000",
                 "longitude": "77.595000",
                 "accuracy": 250,
+                "client_point_id": "acc-2",
             },
             format="json",
         )
-        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 1)
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            EmployeeRoutePoint.objects.filter(user=self.employee).count(), 2
+        )
 
-    def test_duplicate_point_rejected(self):
+    def test_duplicate_client_point_replay_idempotent(self):
+        """Coordinate equality is not replay protection; client_point_id is."""
         self._start_workday()
         t0 = timezone.now()
         payload = {
             "latitude": "12.971600",
             "longitude": "77.594600",
             "timestamp": t0.isoformat(),
+            "client_point_id": "dup-replay-1",
         }
         r1 = self.emp_client.post(
             "/api/v1/tracking/location/push/", payload, format="json"
@@ -390,8 +397,12 @@ class RouteTrackingAPITest(APITestCase):
         r2 = self.emp_client.post(
             "/api/v1/tracking/location/push/", payload, format="json"
         )
-        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(LocationLog.objects.filter(user=self.employee).count(), 1)
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(r2.data.get("location", {}).get("duplicate") or r2.data.get("data", {}).get("duplicate"))
+        self.assertEqual(
+            EmployeeRoutePoint.objects.filter(client_point_id="dup-replay-1").count(),
+            1,
+        )
 
     def test_workday_locations_chronological(self):
         self._start_workday()

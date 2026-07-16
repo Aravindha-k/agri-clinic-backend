@@ -285,7 +285,11 @@ class EmployeeGpsState(models.Model):
         return f"GPS state {self.user_id}"
 
 class EmployeeRoutePoint(models.Model):
-    """Filtered route history + permanent visit/farmer stops."""
+    """Canonical filtered route history + permanent visit/farmer stops.
+
+    Owned by DutySession. Offline replay idempotency uses
+    (duty_session, client_point_id) when client_point_id is set.
+    """
 
     POINT_GPS = "gps"
     POINT_VISIT = "visit"
@@ -317,6 +321,12 @@ class EmployeeRoutePoint(models.Model):
     point_type = models.CharField(
         max_length=10, choices=POINT_TYPE_CHOICES, default=POINT_GPS
     )
+    client_point_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        help_text="Client-generated UUID for offline replay idempotency.",
+    )
     visit_id = models.IntegerField(null=True, blank=True, db_index=True)
     farmer_id = models.IntegerField(null=True, blank=True, db_index=True)
     is_permanent = models.BooleanField(
@@ -331,6 +341,22 @@ class EmployeeRoutePoint(models.Model):
             models.Index(fields=["user", "recorded_at"]),
             models.Index(fields=["duty_session", "recorded_at"]),
             models.Index(fields=["user", "point_type", "recorded_at"]),
+            models.Index(fields=["duty_session", "client_point_id"], name="tracking_em_duty_se_422a77_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["duty_session", "client_point_id"],
+                condition=Q(client_point_id__isnull=False),
+                name="uniq_route_point_duty_client_id",
+            ),
+            models.CheckConstraint(
+                check=Q(latitude__gte=-90) & Q(latitude__lte=90),
+                name="route_point_latitude_range",
+            ),
+            models.CheckConstraint(
+                check=Q(longitude__gte=-180) & Q(longitude__lte=180),
+                name="route_point_longitude_range",
+            ),
         ]
 
     def __str__(self):

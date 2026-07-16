@@ -413,140 +413,14 @@ def _parse_recorded_at(raw) -> datetime:
     return timezone.now()
 
 
-@transaction.atomic
 def update_location(user: User, payload: dict[str, Any]) -> dict[str, Any]:
-    _ensure_field_employee(user)
-    expire_overlong_workdays_for_user(user)
+    """Compatibility wrapper → tracking.gps_service (canonical GPS writer)."""
+    from tracking.gps_service import GpsTrackingError, update_gps_point
 
-    duty = get_active_duty(user)
-    if not duty:
-        raise DutyTrackingError(WORKDAY_EXPIRED_MESSAGE, "NO_ACTIVE_DUTY")
-
-    return _apply_location_point(user, duty, payload)
-
-
-def _validate_bulk_point_session(duty: DutySession, payload: dict[str, Any]) -> None:
-    duty_session_id = payload.get("duty_session_id")
-    workday_id = payload.get("workday_id")
-    if duty_session_id not in (None, ""):
-        if int(duty_session_id) != duty.pk:
-            raise ValueError("duty_session_id does not match active duty session")
-    if workday_id not in (None, ""):
-        if duty.workday_id and int(workday_id) != duty.workday_id:
-            raise ValueError("workday_id does not match active duty workday")
-
-
-def _apply_location_point(
-    user: User,
-    duty: DutySession,
-    payload: dict[str, Any],
-    *,
-    device_model: str | None = None,
-    app_version: str | None = None,
-) -> dict[str, Any]:
-    """Apply one GPS fix: live location + throttled route point + legacy LocationLog."""
-    if "latitude" not in payload or "longitude" not in payload:
-        raise ValueError("latitude and longitude are required")
-
-    _validate_bulk_point_session(duty, payload)
-
-    lat = float(payload["latitude"])
-    lng = float(payload["longitude"])
-    validate_latitude_longitude(lat, lng)
-    recorded_at = _parse_recorded_at(
-        payload.get("recorded_at") or payload.get("captured_at") or payload.get("timestamp")
-    )
-    accuracy = payload.get("accuracy")
-    speed = payload.get("speed")
-    heading = payload.get("heading")
-    battery = payload.get("battery_level")
-    gps_defaults = gps_state_defaults_from_payload(payload)
-
-    live, _created = EmployeeLiveLocation.objects.update_or_create(
-        user=user,
-        defaults={
-            "duty_session": duty,
-            "latitude": Decimal(str(lat)).quantize(Decimal("0.000001")),
-            "longitude": Decimal(str(lng)).quantize(Decimal("0.000001")),
-            "accuracy": accuracy,
-            "speed": speed,
-            "heading": heading,
-            "battery_level": battery,
-            "recorded_at": recorded_at,
-            **gps_defaults,
-        },
-    )
-    upsert_employee_gps_state(
-        user,
-        payload,
-        reported_at=recorded_at,
-        sync_live_location=False,
-    )
-
-    save_route = should_save_route_point(
-        duty_session_id=duty.pk,
-        latitude=lat,
-        longitude=lng,
-        recorded_at=recorded_at,
-    )
-    route_point = None
-    location_log = None
-
-    if save_route and duty.workday_id:
-        route_point = EmployeeRoutePoint.objects.create(
-            user=user,
-            duty_session=duty,
-            latitude=live.latitude,
-            longitude=live.longitude,
-            accuracy=accuracy,
-            speed=speed,
-            heading=heading,
-            recorded_at=recorded_at,
-            point_type=EmployeeRoutePoint.POINT_GPS,
-        )
-        location_log = LocationLog.objects.create(
-            user=user,
-            workday_id=duty.workday_id,
-            latitude=live.latitude,
-            longitude=live.longitude,
-            accuracy=accuracy,
-            speed=speed,
-            heading=heading,
-            battery_level=battery,
-            network_type=payload.get("network_type"),
-            device_model=device_model or payload.get("device_model"),
-            app_version=app_version or payload.get("app_version"),
-            recorded_at=recorded_at,
-        )
-
-    if duty.workday_id:
-        refresh_workday_live_state(
-            user=user,
-            workday=duty.workday,
-            latitude=lat,
-            longitude=lng,
-            accuracy=accuracy,
-            battery_level=battery,
-            recorded_at=recorded_at,
-        )
-        WorkDay.objects.filter(pk=duty.workday_id).update(last_heartbeat=timezone.now())
-
-    duty.last_heartbeat = timezone.now()
-    duty.save(update_fields=["last_heartbeat"])
-
-    return {
-        "live_location_id": live.pk,
-        "route_point_saved": save_route,
-        "route_point_id": route_point.pk if route_point else None,
-        "location_log_id": location_log.pk if location_log else None,
-        "recorded_at": recorded_at.isoformat(),
-    }
-
-
-def _bulk_point_sort_key(point: dict[str, Any]) -> datetime:
-    return _parse_recorded_at(
-        point.get("recorded_at") or point.get("captured_at") or point.get("timestamp")
-    )
+    try:
+        return update_gps_point(user, payload)
+    except GpsTrackingError as exc:
+        raise DutyTrackingError(exc.message, exc.code) from exc
 
 
 def bulk_update_locations(
@@ -557,92 +431,19 @@ def bulk_update_locations(
     app_version: str | None = None,
     request_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Offline batch sync: per-point live update + throttled route points."""
-    _ensure_field_employee(user)
-    expire_overlong_workdays_for_user(user)
+    """Compatibility wrapper → tracking.gps_service.bulk_update_gps_points."""
+    from tracking.gps_service import GpsTrackingError, bulk_update_gps_points
 
-    duty = get_active_duty(user)
-    if not duty:
-        raise DutyTrackingError(WORKDAY_EXPIRED_MESSAGE, "NO_ACTIVE_DUTY")
-
-    if len(points) > MAX_BULK_LOCATION_POINTS:
-        raise DutyTrackingError(
-            f"Max {MAX_BULK_LOCATION_POINTS} points per request",
-            "BULK_LIMIT_EXCEEDED",
+    try:
+        return bulk_update_gps_points(
+            user,
+            points,
+            device_model=device_model,
+            app_version=app_version,
+            request_meta=request_meta,
         )
-
-    sorted_points = sorted(enumerate(points), key=lambda item: _bulk_point_sort_key(item[1]))
-    request_meta = request_meta or {}
-
-    success_count = 0
-    failed_count = 0
-    failed_items: list[dict[str, Any]] = []
-    accepted_ids: list[str] = []
-    route_points_saved = 0
-
-    for original_index, point in sorted_points:
-        merged_point = {**request_meta, **point}
-        client_point_id = (
-            str(merged_point.get("client_point_id") or merged_point.get("local_point_id") or "")
-            .strip()
-        )
-        try:
-            with transaction.atomic():
-                result = _apply_location_point(
-                    user,
-                    duty,
-                    merged_point,
-                    device_model=device_model,
-                    app_version=app_version,
-                )
-            success_count += 1
-            if client_point_id:
-                accepted_ids.append(client_point_id)
-            if result.get("route_point_saved"):
-                route_points_saved += 1
-        except (ValueError, TypeError) as exc:
-            failed_count += 1
-            failed_items.append(
-                {
-                    "index": original_index,
-                    "client_point_id": client_point_id or None,
-                    "local_point_id": client_point_id or None,
-                    "code": "INVALID_POINT",
-                    "message": str(exc),
-                    "retryable": False,
-                }
-            )
-        except Exception as exc:
-            failed_count += 1
-            failed_items.append(
-                {
-                    "index": original_index,
-                    "client_point_id": client_point_id or None,
-                    "local_point_id": client_point_id or None,
-                    "code": "POINT_ERROR",
-                    "message": str(exc),
-                    "retryable": True,
-                }
-            )
-
-    logger.info(
-        "BulkLocationSync user_id=%s duty_id=%s success=%s failed=%s route_saved=%s",
-        user.pk,
-        duty.pk,
-        success_count,
-        failed_count,
-        route_points_saved,
-    )
-
-    return {
-        "success_count": success_count,
-        "failed_count": failed_count,
-        "accepted_ids": accepted_ids,
-        "failed_items": failed_items,
-        "route_points_saved": route_points_saved,
-        "duty_session_id": duty.pk,
-        "workday_id": duty.workday_id,
-    }
+    except GpsTrackingError as exc:
+        raise DutyTrackingError(exc.message, exc.code) from exc
 
 
 @transaction.atomic
@@ -726,4 +527,5 @@ def serialize_route_point_model(point: EmployeeRoutePoint) -> dict[str, Any]:
         "visit_id": point.visit_id,
         "farmer_id": point.farmer_id,
         "is_permanent": point.is_permanent,
+        "client_point_id": point.client_point_id,
     }
