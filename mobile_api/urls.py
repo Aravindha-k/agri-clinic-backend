@@ -4,6 +4,7 @@ from .auth import (
     MobileTokenObtainPairView,
     MobileTokenRefreshView,
     MobileMeView,
+    MobileBootstrapAPI,
     MobileLogoutAPI,
 )
 from .form_options import MobileVisitFormOptionsAPI
@@ -13,6 +14,8 @@ urlpatterns = [
     path("auth/refresh/", MobileTokenRefreshView.as_view(), name="mobile-refresh"),
     path("auth/logout/", MobileLogoutAPI.as_view(), name="mobile-logout"),
     path("auth/me/", MobileMeView.as_view(), name="mobile-me"),
+    path("bootstrap/", MobileBootstrapAPI.as_view(), name="mobile-bootstrap"),
+    path("auth/bootstrap/", MobileBootstrapAPI.as_view(), name="mobile-auth-bootstrap"),
     path("dashboard/", views.MobileDashboardAPI.as_view(), name="mobile-dashboard"),
     path("work/start/", views.MobileWorkStartAPI.as_view(), name="mobile-work-start"),
     path("work/stop/", views.MobileWorkStopAPI.as_view(), name="mobile-work-stop"),

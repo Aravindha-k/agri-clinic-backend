@@ -87,9 +87,13 @@ def _point_source(point: EmployeeRoutePoint | dict) -> str:
         client_id = point.client_point_id or ""
         visit_id = point.visit_id
 
-    if ptype == POINT_TYPE_START or str(client_id).startswith("duty_start:"):
+    if ptype == POINT_TYPE_START or str(client_id).startswith(
+        ("duty-start:", "duty_start:")
+    ):
         return SOURCE_WORKDAY_START
-    if ptype == POINT_TYPE_END or str(client_id).startswith("duty_end:"):
+    if ptype == POINT_TYPE_END or str(client_id).startswith(
+        ("duty-end:", "duty_end:")
+    ):
         return SOURCE_WORKDAY_END
     if ptype == EmployeeRoutePoint.POINT_VISIT or visit_id:
         return SOURCE_VISIT
@@ -290,16 +294,7 @@ def _resolve_start_marker(
     duty: DutySession,
     route_rows: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    pair = _valid_pair(duty.latitude, duty.longitude)
-    if pair:
-        return _marker(
-            marker_id=f"duty-start:{duty.pk}",
-            latitude=pair[0],
-            longitude=pair[1],
-            captured_at=duty.start_time.isoformat() if duty.start_time else None,
-            source=SOURCE_DUTY_START,
-            inferred=False,
-        )
+    # Prefer explicit WORKDAY_START route point over duty lat/lng or inference.
     for row in route_rows:
         if row.get("source") == SOURCE_WORKDAY_START:
             return _marker(
@@ -311,6 +306,16 @@ def _resolve_start_marker(
                 accuracy=row.get("accuracy"),
                 inferred=False,
             )
+    pair = _valid_pair(duty.latitude, duty.longitude)
+    if pair:
+        return _marker(
+            marker_id=f"duty-start:{duty.pk}",
+            latitude=pair[0],
+            longitude=pair[1],
+            captured_at=duty.start_time.isoformat() if duty.start_time else None,
+            source=SOURCE_DUTY_START,
+            inferred=False,
+        )
     if route_rows:
         row = route_rows[0]
         return _marker(

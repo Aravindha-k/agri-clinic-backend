@@ -155,6 +155,7 @@ def start_duty(
             existing.pk,
             existing.workday_id,
         )
+        _ensure_start_route_point(user, existing, latitude, longitude)
         return DutyStartResult(duty=existing, created=False)
 
     now = timezone.now()
@@ -198,9 +199,67 @@ def start_duty(
             existing.pk,
             existing.workday_id,
         )
+        _ensure_start_route_point(user, existing, latitude, longitude)
         return DutyStartResult(duty=existing, created=False)
     logger.info("DutyStart user_id=%s duty_id=%s workday_id=%s", user.pk, duty.pk, workday.pk)
+    _ensure_start_route_point(user, duty, latitude, longitude)
     return DutyStartResult(duty=duty, created=True)
+
+
+def _ensure_start_route_point(user, duty, latitude, longitude) -> None:
+    """Optional WORKDAY_START point. Missing coords do not fail duty start."""
+    from tracking.gps_service import (
+        duty_start_client_point_id,
+        ensure_duty_boundary_point,
+    )
+    from tracking.models import EmployeeRoutePoint
+
+    lat = latitude
+    lng = longitude
+    if lat is None and duty.latitude is not None:
+        lat = float(duty.latitude)
+    if lng is None and duty.longitude is not None:
+        lng = float(duty.longitude)
+    point = ensure_duty_boundary_point(
+        user=user,
+        duty=duty,
+        latitude=lat,
+        longitude=lng,
+        point_type=EmployeeRoutePoint.POINT_START,
+        client_point_id=duty_start_client_point_id(duty.pk),
+        recorded_at=duty.start_time,
+    )
+    if point:
+        logger.info(
+            "event=duty_start_route_point duty_id=%s point_id=%s",
+            duty.pk,
+            point.pk,
+        )
+
+
+def _ensure_end_route_point(user, duty, latitude, longitude) -> None:
+    """Optional WORKDAY_END point for manual end only."""
+    from tracking.gps_service import (
+        duty_end_client_point_id,
+        ensure_duty_boundary_point,
+    )
+    from tracking.models import EmployeeRoutePoint
+
+    point = ensure_duty_boundary_point(
+        user=user,
+        duty=duty,
+        latitude=latitude,
+        longitude=longitude,
+        point_type=EmployeeRoutePoint.POINT_END,
+        client_point_id=duty_end_client_point_id(duty.pk),
+        recorded_at=duty.end_time or timezone.now(),
+    )
+    if point:
+        logger.info(
+            "event=duty_end_route_point duty_id=%s point_id=%s",
+            duty.pk,
+            point.pk,
+        )
 
 
 def serialize_duty_status(user: User, duty: DutySession | None = None) -> dict[str, Any]:
@@ -308,12 +367,15 @@ def end_duty(
     user: User,
     *,
     expected_duty_session_id: int | str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
 ) -> DutySession:
     """
     Manually complete an active duty, or return the already-completed session.
 
     If the duty is past the 9-hour deadline, canonical auto-expiry wins:
     ended_at stays expected_end_at and completion_reason stays AUTO_EXPIRED.
+    End coordinates are optional; auto-expiry never fabricates a GPS point.
     """
     from tracking.duty_expiry import complete_duty_as_auto_expired
     from tracking.duty_timer import is_duty_overdue
@@ -345,6 +407,7 @@ def end_duty(
             )
         if not duty.is_active:
             logger.info("DutyEnd idempotent user_id=%s duty_id=%s", user.pk, duty.pk)
+            _ensure_end_route_point(user, duty, latitude, longitude)
             return duty
     else:
         duty = (
@@ -362,14 +425,19 @@ def end_duty(
         )
         if last and not last.is_active:
             logger.info("DutyEnd idempotent user_id=%s duty_id=%s", user.pk, last.pk)
+            _ensure_end_route_point(user, last, latitude, longitude)
             return last
         raise DutyTrackingError("No active duty session", "NO_ACTIVE_DUTY")
 
     # Past deadline → auto-complete; do not overwrite with a later manual time.
+    # Auto-expiry does not invent end GPS coordinates.
     if is_duty_overdue(duty, now=now):
         return complete_duty_as_auto_expired(
             duty, now=now, trigger="lazy_manual_end"
         )
+
+    if latitude is not None and longitude is not None:
+        validate_latitude_longitude(latitude, longitude)
 
     duty.end_time = now
     duty.is_active = False
@@ -391,6 +459,7 @@ def end_duty(
             auto_ended=False,
         )
 
+    _ensure_end_route_point(user, duty, latitude, longitude)
     clear_live_tracking_for_user(user.pk)
     logger.info(
         "event=duty_manual_completed user_id=%s duty_id=%s end_time=%s",

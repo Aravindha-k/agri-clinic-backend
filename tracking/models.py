@@ -294,10 +294,14 @@ class EmployeeRoutePoint(models.Model):
     POINT_GPS = "gps"
     POINT_VISIT = "visit"
     POINT_FARMER = "farmer"
+    POINT_START = "start"
+    POINT_END = "end"
     POINT_TYPE_CHOICES = (
         (POINT_GPS, "GPS"),
         (POINT_VISIT, "Visit"),
         (POINT_FARMER, "Farmer"),
+        (POINT_START, "Workday start"),
+        (POINT_END, "Workday end"),
     )
 
     user = models.ForeignKey(

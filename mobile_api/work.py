@@ -17,7 +17,11 @@ from tracking.legacy_work_compat import (
 @extend_schema(
     tags=["Mobile", "Tracking"],
     summary="Mobile workday start (compat → DutySession)",
-    description="Deprecated wrapper. Starts DutySession via duty_service.",
+    description=(
+        "DEPRECATED. Use POST /api/v1/tracking/duty/start/. "
+        "Compatibility wrapper → duty_service.start_duty."
+    ),
+    deprecated=True,
     request={
         "application/json": {
             "type": "object",
@@ -43,7 +47,11 @@ class MobileWorkStartAPI(MobileEmployeeAPIView):
 @extend_schema(
     tags=["Mobile", "Tracking"],
     summary="Mobile workday stop (compat → DutySession)",
-    description="Deprecated wrapper. Ends DutySession via duty_service.",
+    description=(
+        "DEPRECATED. Use POST /api/v1/tracking/duty/end/. "
+        "Compatibility wrapper → duty_service.end_duty."
+    ),
+    deprecated=True,
     request=None,
     responses={200: SIMPLE_SUCCESS, 400: error_schema("MobileWorkStopError")},
 )
@@ -61,7 +69,11 @@ class MobileWorkStopAPI(MobileEmployeeAPIView):
 @extend_schema(
     tags=["Mobile", "Tracking"],
     summary="Mobile workday status (compat → DutySession)",
-    description="Deprecated wrapper. Status derived from DutySession only.",
+    description=(
+        "DEPRECATED. Use GET /api/v1/tracking/duty/current/. "
+        "Compatibility wrapper → serialize_duty_status."
+    ),
+    deprecated=True,
     responses={200: SIMPLE_SUCCESS},
 )
 class MobileWorkStatusAPI(MobileEmployeeAPIView):

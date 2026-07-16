@@ -527,3 +527,84 @@ def bulk_update_gps_points(
 def generate_compat_client_point_id() -> str:
     """Server-generated id for legacy callers that omit client_point_id."""
     return f"compat-{uuid.uuid4()}"
+
+
+def duty_start_client_point_id(duty_session_id: int) -> str:
+    return f"duty-start:{duty_session_id}"
+
+
+def duty_end_client_point_id(duty_session_id: int) -> str:
+    return f"duty-end:{duty_session_id}"
+
+
+def ensure_duty_boundary_point(
+    *,
+    user: User,
+    duty: DutySession,
+    latitude: float | None,
+    longitude: float | None,
+    point_type: str,
+    client_point_id: str,
+    recorded_at=None,
+) -> EmployeeRoutePoint | None:
+    """
+    Create exactly one permanent start/end route point for a DutySession.
+
+    Location is optional: missing/invalid coordinates return None without
+    failing the duty lifecycle. Idempotent on (duty_session, client_point_id).
+    """
+    if latitude is None or longitude is None:
+        return None
+    try:
+        validate_latitude_longitude(latitude, longitude)
+    except Exception:
+        logger.warning(
+            "event=duty_boundary_point_invalid_coords duty_id=%s point_type=%s",
+            duty.pk,
+            point_type,
+        )
+        return None
+
+    existing = (
+        EmployeeRoutePoint.objects.filter(
+            duty_session=duty, client_point_id=client_point_id
+        )
+        .order_by("id")
+        .first()
+    )
+    if existing:
+        return existing
+
+    existing_type = (
+        EmployeeRoutePoint.objects.filter(duty_session=duty, point_type=point_type)
+        .order_by("id")
+        .first()
+    )
+    if existing_type:
+        return existing_type
+
+    lat = Decimal(str(latitude)).quantize(Decimal("0.000001"))
+    lng = Decimal(str(longitude)).quantize(Decimal("0.000001"))
+    recorded_at = recorded_at or duty.start_time or timezone.now()
+
+    try:
+        with transaction.atomic():
+            return EmployeeRoutePoint.objects.create(
+                user=user,
+                duty_session=duty,
+                latitude=lat,
+                longitude=lng,
+                recorded_at=recorded_at,
+                point_type=point_type,
+                client_point_id=client_point_id,
+                is_permanent=True,
+            )
+    except IntegrityError:
+        return (
+            EmployeeRoutePoint.objects.filter(
+                duty_session=duty, client_point_id=client_point_id
+            ).first()
+            or EmployeeRoutePoint.objects.filter(
+                duty_session=duty, point_type=point_type
+            ).first()
+        )

@@ -41,6 +41,28 @@ class MobileMeView(DeviceSessionRequiredMixin, APIView):
         return success_response(data=employee_me_payload(request, profile))
 
 
+@extend_schema(
+    tags=["Mobile", "Auth"],
+    summary="Mobile bootstrap",
+    description=(
+        "Canonical authenticated bootstrap: user, device session, current duty, "
+        "day-map summary, server_now, feature flags. Full map via /tracking/duty/.../map/."
+    ),
+    responses={200: SIMPLE_SUCCESS, 409: error_schema("SessionReplaced")},
+)
+class MobileBootstrapAPI(DeviceSessionRequiredMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = getattr(request.user, "employee_profile", None)
+        if not profile:
+            return error_response(message="Employee profile not found", status_code=404)
+        from mobile_api.bootstrap import build_mobile_bootstrap
+
+        data = build_mobile_bootstrap(request=request)
+        return success_response(data=data, message="Bootstrap")
+
+
 class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
     # Accept employee_id OR username so mobile apps do not need to know Django usernames.
     employee_id = serializers.CharField(required=False, write_only=True)

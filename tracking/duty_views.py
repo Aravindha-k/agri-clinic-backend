@@ -182,15 +182,27 @@ class DutyEndAPI(DeviceSessionRequiredMixin, APIView):
 
     def post(self, request):
         try:
+            lat = request.data.get("latitude")
+            lng = request.data.get("longitude")
+            latitude = float(lat) if lat not in (None, "") else None
+            longitude = float(lng) if lng not in (None, "") else None
             duty = end_duty(
                 request.user,
                 expected_duty_session_id=(
                     request.data.get("duty_session_id")
                     or request.data.get("expected_duty_session_id")
                 ),
+                latitude=latitude,
+                longitude=longitude,
             )
         except DutyTrackingError as exc:
             return _duty_error(exc)
+        except (TypeError, ValueError):
+            return error_response(
+                message="Invalid latitude or longitude.",
+                code="INVALID_COORDS",
+                status_code=400,
+            )
         payload = serialize_duty_status(request.user, duty)
         return success_response(
             data=payload,

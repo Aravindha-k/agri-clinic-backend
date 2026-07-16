@@ -47,6 +47,23 @@ Copy the full connection string from your Render Postgres instance (`agri_clinic
 4. Check deploy logs for `DATABASE_URL host:` and `verify_production_db` success.
 5. Confirm `GET https://agri-clinic-backend.onrender.com/healthz/` returns `{"status":"ok","database":"ok"}`.
 
+## Health checks
+
+- `/healthz/` — liveness + DB
+- `/livez/` — process up
+- `/readyz/` — DB readiness (+ Celery broker config hint)
+
+## Celery / Redis (duty auto-expiry)
+
+Code includes beat schedule + `tracking.tasks.expire_overdue_duties_task`. **`render.yaml` does not yet define worker/beat services.**
+
+Until worker + beat (or cron) are deployed with Redis:
+
+- Lazy expiry on duty current/end still works
+- Periodic background expiry is **not** production-verified
+
+See [CELERY_REDIS_PRODUCTION.md](./CELERY_REDIS_PRODUCTION.md).
+
 ## New database (old instance suspended)
 
 If the previous Postgres instance is **expired/suspended**, do **not** delete it until the new DB is verified.

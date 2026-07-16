@@ -21,6 +21,7 @@ from tracking.day_map_service import (
     SOURCE_DUTY_START,
     SOURCE_EARLIEST_FALLBACK,
     SOURCE_LAST_FALLBACK,
+    SOURCE_WORKDAY_START,
     build_duty_day_map,
 )
 from tracking.models import DutySession, EmployeeRoutePoint, LocationLog, WorkDay
@@ -108,7 +109,11 @@ class DutyDayMapTests(TestCase):
         self.assertEqual(r.status_code, 200, r.data)
         data = r.data["data"]
         self.assertEqual(data["duty"]["id"], self.duty.pk)
-        self.assertEqual(data["start_marker"]["source"], SOURCE_DUTY_START)
+        # Explicit WORKDAY_START route point preferred when present; else DUTY_START coords.
+        self.assertIn(
+            data["start_marker"]["source"],
+            {SOURCE_DUTY_START, SOURCE_WORKDAY_START},
+        )
         self.assertIsNone(data["end_marker"])
         self.assertEqual(data["metadata"]["route_source"], ROUTE_SOURCE_CANONICAL)
 

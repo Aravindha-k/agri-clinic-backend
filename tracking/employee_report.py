@@ -49,28 +49,59 @@ def resolve_employee_profile(employee_ref: int) -> EmployeeProfile:
 
 
 def attach_visit_duty_links(visit: Visit) -> None:
-    """Link visit to duty session / workday for the visit date (offline-safe)."""
+    """
+    Link visit to duty session / workday for the visit date (offline-safe).
+
+    Only attaches when the match is deterministic (active same-date, or exactly
+    one historical DutySession). Never guesses among multiple duties.
+    """
     if not visit.employee_id or not visit.visit_date:
         return
     updates = {}
     if not visit.duty_session_id:
-        duty = (
+        active = (
             DutySession.objects.filter(
-                user_id=visit.employee_id, date=visit.visit_date
+                user_id=visit.employee_id,
+                is_active=True,
+                date=visit.visit_date,
             )
             .order_by("-start_time")
             .first()
         )
-        if duty:
-            updates["duty_session_id"] = duty.pk
+        if active:
+            updates["duty_session_id"] = active.pk
+        else:
+            matches = list(
+                DutySession.objects.filter(
+                    user_id=visit.employee_id, date=visit.visit_date
+                ).order_by("-start_time")[:3]
+            )
+            if len(matches) == 1:
+                updates["duty_session_id"] = matches[0].pk
+
     if not visit.workday_id:
-        workday = (
-            WorkDay.objects.filter(user_id=visit.employee_id, date=visit.visit_date)
-            .order_by("-start_time")
-            .first()
+        workdays = list(
+            WorkDay.objects.filter(
+                user_id=visit.employee_id, date=visit.visit_date
+            ).order_by("-start_time")[:3]
         )
-        if workday:
-            updates["workday_id"] = workday.pk
+        if len(workdays) == 1:
+            updates["workday_id"] = workdays[0].pk
+        elif len(workdays) > 1:
+            # Prefer workday linked to the chosen/known duty when available.
+            duty_id = updates.get("duty_session_id") or visit.duty_session_id
+            if duty_id:
+                linked = (
+                    WorkDay.objects.filter(
+                        user_id=visit.employee_id,
+                        date=visit.visit_date,
+                        duty_session__pk=duty_id,
+                    )
+                    .order_by("-start_time")
+                    .first()
+                )
+                if linked:
+                    updates["workday_id"] = linked.pk
     if updates:
         Visit.objects.filter(pk=visit.pk).update(**updates)
 

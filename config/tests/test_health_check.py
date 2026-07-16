@@ -12,6 +12,19 @@ class HealthCheckTests(TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["database"], "ok")
 
+    def test_livez_ok(self):
+        response = self.client.get(reverse("liveness"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "alive")
+
+    def test_readyz_ok(self):
+        response = self.client.get(reverse("readiness"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["database"], "ok")
+        self.assertIn("X-Request-ID", response.headers)
+
     @patch("django.db.connection.cursor")
     def test_healthz_database_failure_returns_503(self, mock_cursor):
         mock_cursor.side_effect = Exception("database unavailable")

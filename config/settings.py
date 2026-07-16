@@ -283,6 +283,7 @@ except ImportError:
 # MIDDLEWARE
 # --------------------------------------------------
 MIDDLEWARE = [
+    "config.request_id.RequestIdMiddleware",
     "mobile_api.logging.MobileAPILoggingMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -294,6 +295,14 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Mobile bootstrap / force-update hints (optional; null = no client gate)
+MINIMUM_SUPPORTED_APP_VERSION = os.getenv("MINIMUM_SUPPORTED_APP_VERSION") or None
+FORCE_APP_UPDATE = os.getenv("FORCE_APP_UPDATE", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # --------------------------------------------------
 # TEMPLATES (REQUIRED FOR ADMIN)
@@ -581,6 +590,10 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": timedelta(minutes=5),
     },
 }
+# When true, /readyz/ fails if broker is missing/memory-only (optional gate).
+CELERY_REQUIRED_FOR_READY = os.getenv(
+    "CELERY_REQUIRED_FOR_READY", "false"
+).lower() in ("1", "true", "yes")
 
 # --------------------------------------------------
 # STRUCTURED LOGGING

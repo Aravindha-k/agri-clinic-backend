@@ -22,6 +22,7 @@ from masters.problem_item_views import (
 
 
 def health_check(_request):
+    """Liveness + basic DB probe (legacy /healthz/)."""
     from django.db import connection
 
     payload = {"status": "ok", "database": "ok"}
@@ -36,9 +37,63 @@ def health_check(_request):
     return JsonResponse(payload, status=http_status)
 
 
+def liveness(_request):
+    """Process is up (no dependency checks)."""
+    return JsonResponse({"status": "alive"})
+
+
+def readiness(_request):
+    """
+    Readiness for load balancers.
+
+    Checks database. Celery/Redis are reported when configured but do not
+    fail readiness unless CELERY_REQUIRED_FOR_READY=true (production beat/worker
+    may be separate services).
+    """
+    from django.conf import settings
+    from django.db import connection
+
+    payload = {
+        "status": "ready",
+        "database": "ok",
+        "celery_broker": "unverified",
+        "notes": (
+            "Celery worker/beat physical deployment is not verified by this "
+            "endpoint unless CELERY_REQUIRED_FOR_READY=true."
+        ),
+    }
+    http_status = 200
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except Exception:
+        payload["status"] = "not_ready"
+        payload["database"] = "error"
+        http_status = 503
+
+    broker = getattr(settings, "CELERY_BROKER_URL", "") or ""
+    if broker.startswith("memory://"):
+        payload["celery_broker"] = "memory_dev_only"
+    elif broker:
+        payload["celery_broker"] = "configured"
+    else:
+        payload["celery_broker"] = "missing"
+
+    require_celery = str(
+        getattr(settings, "CELERY_REQUIRED_FOR_READY", False)
+    ).lower() in ("1", "true", "yes")
+    if require_celery and payload["celery_broker"] in ("missing", "memory_dev_only"):
+        payload["status"] = "not_ready"
+        http_status = 503
+
+    return JsonResponse(payload, status=http_status)
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("healthz/", health_check, name="health-check"),
+    path("livez/", liveness, name="liveness"),
+    path("readyz/", readiness, name="readiness"),
     # Auth endpoints
     path("api/v1/auth/login/", LoginAPI.as_view(), name="token-obtain"),
     path("api/v1/auth/logout/", LogoutAPI.as_view(), name="logout"),

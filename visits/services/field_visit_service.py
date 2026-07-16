@@ -73,8 +73,9 @@ def visit_route_client_point_id(visit: Visit) -> str:
 
 def resolve_duty_for_visit(visit: Visit) -> DutySession | None:
     """
-    Prefer active DutySession for the employee; else unambiguous historical
-    session matching employee + visit_date. Never invent a duty.
+    Prefer active DutySession for the employee matching visit date;
+    else an unambiguous historical DutySession for employee + visit_date.
+    Never invent a duty. Ambiguous multi-duty days leave visit unmatched.
     """
     if not visit.employee_id:
         return None
@@ -104,13 +105,28 @@ def resolve_duty_for_visit(visit: Visit) -> DutySession | None:
         matches = list(
             DutySession.objects.filter(
                 user_id=visit.employee_id, date=visit.visit_date
-            ).order_by("-start_time")[:2]
+            ).order_by("-start_time")[:3]
         )
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            # Prefer the latest on that day when multiple exist (historical).
-            return matches[0]
+            logger.warning(
+                "event=visit_duty_unmatched reason=ambiguous visit_id=%s "
+                "employee_id=%s visit_date=%s candidates=%s",
+                visit.pk,
+                visit.employee_id,
+                visit.visit_date,
+                [d.pk for d in matches],
+            )
+            return None
+
+    logger.info(
+        "event=visit_duty_unmatched reason=no_match visit_id=%s employee_id=%s "
+        "visit_date=%s",
+        visit.pk,
+        visit.employee_id,
+        visit.visit_date,
+    )
     return None
 
 
