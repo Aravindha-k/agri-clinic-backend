@@ -11,11 +11,8 @@ from rest_framework.views import APIView
 
 from accounts.device_sessions import batch_device_status_map
 from accounts.models import EmployeeProfile
-from tracking.daily_summary import build_visit_stops
-from tracking.duty_service import get_route_points_for_date, serialize_route_point_model
 from tracking.employee_status import batch_gps_off_user_ids, build_status_for_live_employee
 from tracking.models import DutySession, EmployeeGpsState, EmployeeLiveLocation
-from tracking.route_utils import build_route_polyline, compute_route_distance_km
 from tracking.workday_utils import expire_old_workdays
 from utils.photo_urls import build_profile_photo_url
 from utils.response import error_response, not_found_response, success_response
@@ -37,31 +34,25 @@ def _resolve_target_date(request):
 
 
 def _build_route_payload(*, emp, user_id: int, target_date, request) -> dict:
-    points = get_route_points_for_date(user_id, target_date)
-    route = [serialize_route_point_model(p) for p in points]
-    polyline = build_route_polyline(route)
-    distance_km = compute_route_distance_km(route)
+    """Compatibility adapter → canonical day_map_service."""
+    from tracking.day_map_service import build_admin_route_compat_payload
+    from tracking.legacy_work_compat import log_deprecated_endpoint
 
+    log_deprecated_endpoint(
+        request=request,
+        endpoint=f"/api/admin/tracking/employee/{user_id}/route",
+    )
     duty = (
         DutySession.objects.filter(user_id=user_id, date=target_date)
         .order_by("-start_time")
         .first()
     )
-    stops = build_visit_stops(user_id, target_date)
-
-    return {
-        "date": str(target_date),
-        "user_id": user_id,
-        "employee_id": emp.employee_id,
-        "duty_session_id": duty.id if duty else None,
-        "total_points": len(route),
-        "distance_km": distance_km,
-        "polyline": polyline,
-        "route": route,
-        "stops": stops,
-        "duty_started_at": duty.start_time.isoformat() if duty and duty.start_time else None,
-        "duty_ended_at": duty.end_time.isoformat() if duty and duty.end_time else None,
-    }
+    return build_admin_route_compat_payload(
+        duty=duty,
+        emp=emp,
+        user_id=user_id,
+        target_date=target_date,
+    )
 
 
 @extend_schema(

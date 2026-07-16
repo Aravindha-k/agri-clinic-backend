@@ -83,6 +83,97 @@ class DutyCurrentAPI(DeviceSessionRequiredMixin, APIView):
 
 @extend_schema(
     tags=["Tracking"],
+    summary="Duty day map by session id",
+    description=(
+        "Canonical workday map: duty timer, start/end markers, visit markers, "
+        "route points, bounds, and summary. DutySession-scoped."
+    ),
+    responses={
+        200: SIMPLE_SUCCESS,
+        404: error_schema("DutyMapNotFound"),
+        409: error_schema("SessionReplaced"),
+    },
+)
+class DutyDayMapAPI(DeviceSessionRequiredMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, duty_session_id):
+        from tracking.day_map_service import DayMapError, build_duty_day_map, get_duty_for_map
+        from visits.access import is_privileged_user
+
+        # Staff/admin may omit device session (mixin exemption already applies).
+        try:
+            duty = get_duty_for_map(int(duty_session_id), viewer=request.user)
+        except (TypeError, ValueError):
+            return error_response(
+                message="Invalid duty session id.",
+                code="VALIDATION_ERROR",
+                status_code=400,
+            )
+        except DayMapError as exc:
+            return error_response(
+                message=exc.message,
+                code=exc.code,
+                status_code=exc.status,
+            )
+
+        include_live = duty.is_active and (
+            duty.user_id == request.user.pk or is_privileged_user(request.user)
+        )
+        data = build_duty_day_map(
+            duty,
+            viewer=request.user,
+            include_live_location=include_live,
+        )
+        return success_response(data=data, message="Duty day map")
+
+
+@extend_schema(
+    tags=["Tracking"],
+    summary="Current duty day map",
+    description="Convenience wrapper: map for the caller's current/latest duty.",
+    responses={200: SIMPLE_SUCCESS, 404: error_schema("DutyMapNotFound")},
+)
+class DutyCurrentMapAPI(DeviceSessionRequiredMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from tracking.day_map_service import DayMapError, build_duty_day_map
+        from tracking.models import DutySession
+
+        try:
+            status_payload = serialize_duty_status(request.user)
+        except DutyTrackingError as exc:
+            return _duty_error(exc)
+
+        duty_id = status_payload.get("duty_session_id")
+        if not duty_id:
+            return error_response(
+                message="No duty session for map.",
+                code="NOT_FOUND",
+                status_code=404,
+            )
+        duty = (
+            DutySession.objects.select_related("user", "workday")
+            .filter(pk=duty_id, user=request.user)
+            .first()
+        )
+        if duty is None:
+            return error_response(
+                message="Duty session not found.",
+                code="NOT_FOUND",
+                status_code=404,
+            )
+        data = build_duty_day_map(
+            duty,
+            viewer=request.user,
+            include_live_location=duty.is_active,
+        )
+        return success_response(data=data, message="Current duty day map")
+
+
+@extend_schema(
+    tags=["Tracking"],
     summary="End employee duty",
     responses={200: SIMPLE_SUCCESS, 400: error_schema("DutyEndError")},
 )
