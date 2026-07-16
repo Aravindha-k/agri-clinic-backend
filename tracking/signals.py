@@ -1,13 +1,14 @@
-"""Persist visit/farmer locations as permanent route stops."""
+"""Persist visit/farmer locations as permanent route stops.
 
-from datetime import datetime
+Phase 5: Visit route-point creation is owned by
+``visits.services.field_visit_service.ensure_visit_route_point``.
+This signal is a compatibility safety net only — it never creates a second
+point when the service already wrote one, and prefers the service helper.
+"""
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.utils import timezone
 
-from tracking.duty_service import save_permanent_place_point
-from tracking.employee_report import attach_visit_duty_links
 from tracking.models import EmployeeRoutePoint
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
@@ -24,26 +25,14 @@ def visit_save_permanent_route_point(sender, instance: Visit, raw=False, **kwarg
     if not instance.employee_id:
         return
 
-    recorded_at = timezone.now()
-    if instance.visit_date and instance.visit_time:
-        recorded_at = timezone.make_aware(
-            datetime.combine(instance.visit_date, instance.visit_time)
-        )
-
+    # Compatibility only: if a VISIT point already exists, do nothing.
     if EmployeeRoutePoint.objects.filter(
         visit_id=instance.id,
         point_type=EmployeeRoutePoint.POINT_VISIT,
     ).exists():
         return
 
-    save_permanent_place_point(
-        user=instance.employee,
-        duty_session=None,
-        latitude=float(instance.latitude),
-        longitude=float(instance.longitude),
-        recorded_at=recorded_at,
-        point_type=EmployeeRoutePoint.POINT_VISIT,
-        visit_id=instance.id,
-        farmer_id=instance.farmer_id,
-    )
-    attach_visit_duty_links(instance)
+    # Prefer canonical service (idempotent). Avoid legacy save_permanent_place_point.
+    from visits.services.field_visit_service import ensure_visit_route_point
+
+    ensure_visit_route_point(instance)

@@ -67,7 +67,14 @@ class VisitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Visit
         exclude = ("employee", "status")
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "created_at",
+            "updated_at",
+            "local_sync_id",
+            "duty_session",
+            "workday",
+        )
         extra_kwargs = {
             "local_sync_id": {"required": False, "allow_null": True, "allow_blank": True},
             "crop": {"required": False, "allow_null": True},
@@ -79,6 +86,45 @@ class VisitSerializer(serializers.ModelSerializer):
             "observation": {"required": False, "allow_null": True},
             "action_taken": {"required": False, "allow_null": True},
         }
+
+    def create(self, validated_data):
+        """Compatibility adapter → canonical field visit service."""
+        from visits.services.field_visit_service import submit_field_visit
+
+        request = self.context.get("request")
+        employee = getattr(request, "user", None)
+        if employee is None:
+            raise serializers.ValidationError(
+                {"employee": "Authenticated employee required."}
+            )
+        raw = {}
+        if request is not None and hasattr(request, "data"):
+            raw = (
+                dict(request.data.items())
+                if hasattr(request.data, "items")
+                else dict(request.data)
+            )
+        else:
+            raw = dict(validated_data)
+        result = submit_field_visit(
+            employee=employee,
+            raw_data=raw,
+            request=request,
+        )
+        return result.visit
+
+    def update(self, instance, validated_data):
+        validated_data.pop("local_sync_id", None)
+        validated_data.pop("duty_session", None)
+        validated_data.pop("workday", None)
+        validated_data.pop("employee", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        from visits.services.field_visit_service import ensure_visit_route_point
+
+        ensure_visit_route_point(instance)
+        return instance
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_crop_info(self, obj):

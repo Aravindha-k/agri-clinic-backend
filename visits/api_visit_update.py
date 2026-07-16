@@ -219,17 +219,25 @@ class VisitDetailUpdateAPI(DeviceSessionRequiredMixin, APIView):
                     visit.village = village
 
         visit.farmer_phone = phone
-        farmer = None
-        if visit.farmer_id:
-            farmer = visit.farmer
-        if phone:
-            farmer = Farmer.objects.filter(phone=phone).order_by("id").first()
-        if farmer is None and visit.farmer_name:
-            farmer = (
-                Farmer.objects.filter(name__iexact=visit.farmer_name)
-                .order_by("id")
-                .first()
+        # Canonical farmer resolution: farmer_id / phone only (no name-only match).
+        from visits.services.farmer_resolution import resolve_farmer_for_visit
+
+        resolve_payload = {
+            "farmer": visit.farmer_id,
+            "farmer_phone": phone,
+            "farmer_name": visit.farmer_name,
+            "village": visit.village,
+            "field": visit.field,
+            "district": visit.district,
+        }
+        try:
+            farmer = resolve_farmer_for_visit(
+                resolve_payload,
+                employee=request.user,
+                create_if_missing=False,
             )
+        except Exception:
+            farmer = visit.farmer
         if farmer:
             visit.farmer = farmer
             if not visit.farmer_name:
@@ -258,7 +266,11 @@ class VisitDetailUpdateAPI(DeviceSessionRequiredMixin, APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Protect local_sync_id / duty linkage from client mutation.
         visit.save()
+        from visits.services.field_visit_service import ensure_visit_route_point
+
+        ensure_visit_route_point(visit)
         try:
             from visits.views import _invalidate_visit_caches
 

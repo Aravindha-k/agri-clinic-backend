@@ -22,17 +22,33 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
     name = (visit.farmer_name or "").strip()
     farmer = visit.farmer
 
+    # Match order: existing FK → normalized phone → controlled create.
+    # Never link by farmer name alone.
     if not farmer and phone:
-        farmer = Farmer.objects.filter(phone=phone, is_active=True).order_by("id").first()
-    if not farmer and name:
+        digits = "".join(ch for ch in phone if ch.isdigit())
         farmer = (
-            Farmer.objects.filter(name__iexact=name, is_active=True).order_by("id").first()
+            Farmer.objects.filter(phone=digits, is_active=True).order_by("id").first()
+            if digits
+            else None
         )
+        if farmer is None and digits:
+            farmer = Farmer.objects.filter(phone=phone).order_by("id").first()
 
-    if not farmer and (phone or name):
+    if not farmer and phone:
+        digits = "".join(ch for ch in phone if ch.isdigit()) or phone
         farmer = Farmer.objects.create(
             name=name or "Unknown",
-            phone=phone or f"V{visit.pk}",
+            phone=digits,
+            district=visit.district,
+            village=visit.village,
+            created_by_employee=employee,
+            assigned_employee=employee,
+        )
+    elif not farmer and name and not phone:
+        # Name-only: do not match existing farmers; create a visit-scoped stub.
+        farmer = Farmer.objects.create(
+            name=name,
+            phone=f"V{visit.pk}",
             district=visit.district,
             village=visit.village,
             created_by_employee=employee,

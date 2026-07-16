@@ -484,11 +484,19 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
             return forbidden_response(
                 "Admin users cannot create visits. Employee access only."
             )
-        serializer = BaseVisitSerializer(
+        from visits.field_visit_serializers import FieldVisitSubmitSerializer
+        from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE
+
+        serializer = FieldVisitSubmitSerializer(
             data=request.data, context={"request": request}
         )
-        serializer.is_valid(raise_exception=True)
-        visit = serializer.save(employee=request.user)
+        if not serializer.is_valid():
+            return error_response(
+                message=SUBMIT_VISIT_REQUIRED_MESSAGE,
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        visit = serializer.save()
         try:
             from dashboard.services import invalidate_dashboard_caches
 
@@ -695,16 +703,25 @@ class VisitMediaUploadAPI(DeviceSessionRequiredMixin, APIView):
                 message="file is required.", status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        valid_types = {c[0] for c in VisitMedia.MEDIA_TYPE_CHOICES}
-        if media_type not in valid_types:
+        from visits.services.media_service import VisitMediaServiceError, upload_visit_media
+
+        try:
+            result = upload_visit_media(
+                visit=visit,
+                file=file,
+                media_type=media_type,
+                caption=request.data.get("caption", ""),
+                client_upload_id=(request.data.get("client_upload_id") or "").strip()
+                or None,
+            )
+        except VisitMediaServiceError as exc:
             return error_response(
-                message=f"media_type must be one of: {', '.join(sorted(valid_types))}",
+                message=exc.message,
+                errors=exc.errors or None,
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-
-        media = VisitMedia.objects.create(visit=visit, file=file, media_type=media_type)
         return created_response(
-            data=VisitMediaSerializer(media, context={"request": request}).data
+            data=VisitMediaSerializer(result.media, context={"request": request}).data
         )
 
 

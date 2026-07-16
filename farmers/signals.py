@@ -21,39 +21,12 @@ def log_farmer_created(sender, instance, created, raw=False, **kwargs):
 
 @receiver(post_save, sender=Visit)
 def log_visit_activity(sender, instance, created, raw=False, **kwargs):
+    """Compatibility: deterministic get_or_create (canonical service also writes)."""
     if raw:
         return
-    farmer = instance.farmer
-    if not farmer and instance.farmer_phone:
-        farmer = Farmer.objects.filter(phone=instance.farmer_phone).order_by("id").first()
-    if not farmer:
-        return
+    from visits.services.field_visit_service import ensure_visit_farmer_activity
 
-    label = instance.farmer_name or farmer.name
-    if created:
-        from visits.submitted import visit_has_submitted_details
-
-        if visit_has_submitted_details(instance):
-            FarmerActivity.objects.create(
-                farmer=farmer,
-                activity_type="VISIT_COMPLETED",
-                reference_id=instance.pk,
-                created_by=instance.employee,
-                notes=instance.notes or f"Field visit recorded for {label}",
-            )
-    else:
-        from visits.submitted import visit_has_submitted_details
-
-        if visit_has_submitted_details(instance):
-            FarmerActivity.objects.get_or_create(
-                farmer=farmer,
-                activity_type="VISIT_COMPLETED",
-                reference_id=instance.pk,
-                defaults={
-                    "created_by": instance.employee,
-                    "notes": instance.notes or f"Visit recorded for {label}",
-                },
-            )
+    ensure_visit_farmer_activity(instance)
 
 
 @receiver(post_save, sender=CropIssue)

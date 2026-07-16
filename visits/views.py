@@ -143,40 +143,54 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
     responses={201: SIMPLE_SUCCESS, 207: SIMPLE_SUCCESS},
 )
 class BulkVisitUploadAPI(DeviceSessionRequiredMixin, APIView):
+    """LEGACY offline bulk → canonical field_visit_service (partial success)."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        visits_data = request.data.get("visits", [])
-        created = []
-        errors = []
-        for index, vdata in enumerate(visits_data):
-            sync_id = (vdata.get("local_sync_id") or "").strip()
-            if sync_id:
-                existing = Visit.objects.filter(
-                    employee=request.user, local_sync_id=sync_id
-                ).first()
-                if existing:
-                    created.append(existing.id)
-                    continue
-            serializer = VisitSerializer(data=vdata, context={"request": request})
-            if serializer.is_valid():
-                visit = serializer.save(employee=request.user)
-                from tracking.employee_report import attach_visit_duty_links
+        from visits.services.field_visit_service import (
+            FieldVisitServiceError,
+            MAX_BULK_VISITS,
+            bulk_submit_field_visits,
+        )
 
-                attach_visit_duty_links(visit)
-                created.append(visit.id)
-            else:
-                errors.append({"index": index, "errors": serializer.errors})
-        # Ensure errors is always a list
-        if errors is None:
-            errors = []
+        visits_data = request.data.get("visits", [])
+        try:
+            results, all_ok = bulk_submit_field_visits(
+                employee=request.user,
+                visits_data=visits_data,
+                request=request,
+                max_batch=MAX_BULK_VISITS,
+            )
+        except FieldVisitServiceError as exc:
+            return error_response(
+                message=exc.message,
+                errors=exc.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        created_ids = [
+            row["visit_id"]
+            for row in results
+            if row.get("visit_id") and row.get("status") in ("created", "duplicate")
+        ]
+        item_errors = [
+            {"index": idx, "errors": row["errors"], "local_sync_id": row.get("local_sync_id")}
+            for idx, row in enumerate(results)
+            if row.get("status") == "error"
+        ]
+        _invalidate_visit_caches()
         return api_response(
-            success=len(errors) == 0,
+            success=all_ok,
             message="Bulk visits upload complete",
-            data={"created": created, "errors": errors},
+            data={
+                "created": created_ids,
+                "results": results,
+                "errors": item_errors,
+            },
             status=(
                 status.HTTP_201_CREATED
-                if len(errors) == 0
+                if all_ok
                 else status.HTTP_207_MULTI_STATUS
             ),
         )
@@ -357,26 +371,31 @@ class VisitMediaUploadAPIView(DeviceSessionRequiredMixin, APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        media_errors = validate_visit_media_file(file_obj=file, media_type=media_type)
-        if media_errors:
+        from visits.services.media_service import VisitMediaServiceError, upload_visit_media
+
+        try:
+            result = upload_visit_media(
+                visit=visit,
+                file=file,
+                media_type=media_type,
+                caption=caption,
+                client_upload_id=(request.data.get("client_upload_id") or "").strip()
+                or None,
+            )
+        except VisitMediaServiceError as exc:
             return error_response(
-                message=media_errors.get("file")
-                or media_errors.get("media_type", "Invalid media file."),
+                message=exc.message,
+                errors=exc.errors or None,
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        media = VisitMedia.objects.create(
-            visit=visit,
-            file=file,
-            media_type=media_type,
-            caption=caption,
-        )
-
         return api_response(
             success=True,
-            message="Media uploaded",
-            data=VisitMediaSerializer(media, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+            message="Media already uploaded" if result.duplicate else "Media uploaded",
+            data=VisitMediaSerializer(result.media, context={"request": request}).data,
+            status=(
+                status.HTTP_200_OK if result.duplicate else status.HTTP_201_CREATED
+            ),
         )
 
 
@@ -487,23 +506,29 @@ class VisitPhotoUploadAPI(DeviceSessionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        media_errors = validate_visit_media_file(file_obj=image, media_type="image")
-        if media_errors:
+        from visits.services.media_service import VisitMediaServiceError, upload_visit_media
+
+        try:
+            result = upload_visit_media(
+                visit=visit,
+                file=image,
+                media_type="image",
+                caption="",
+                client_upload_id=(request.data.get("client_upload_id") or "").strip()
+                or None,
+            )
+        except VisitMediaServiceError as exc:
             return api_response(
                 success=False,
-                message=media_errors.get("file", "Invalid image file."),
+                message=exc.message,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        media = VisitMedia.objects.create(
-            visit=visit,
-            file=image,
-            media_type="image",
-        )
-
         return api_response(
             success=True,
-            message="Photo uploaded",
-            data=VisitMediaSerializer(media, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+            message="Photo already uploaded" if result.duplicate else "Photo uploaded",
+            data=VisitMediaSerializer(result.media, context={"request": request}).data,
+            status=(
+                status.HTTP_200_OK if result.duplicate else status.HTTP_201_CREATED
+            ),
         )

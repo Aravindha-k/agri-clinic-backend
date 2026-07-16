@@ -233,33 +233,24 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
             )
 
         client_upload_id = (request.data.get("client_upload_id") or "").strip()
-        if client_upload_id:
-            existing = VisitMedia.objects.filter(
-                visit=visit, client_upload_id=client_upload_id
-            ).first()
-            if existing:
-                return success_response(
-                    data=VisitMediaSerializer(existing, context={"request": request}).data,
-                    message="Media already uploaded",
-                    status_code=200,
-                )
+        from visits.services.media_service import VisitMediaServiceError, upload_visit_media
 
-        media_errors = validate_visit_media_file(file_obj=file, media_type=media_type)
-        if media_errors:
+        try:
+            result = upload_visit_media(
+                visit=visit,
+                file=file,
+                media_type=media_type,
+                caption=request.data.get("caption", ""),
+                client_upload_id=client_upload_id or None,
+            )
+        except VisitMediaServiceError as exc:
             return error_response(
-                message=media_errors.get("file")
-                or media_errors.get("media_type", "Invalid media file."),
+                message=exc.message,
                 status_code=400,
             )
 
-        media = VisitMedia.objects.create(
-            visit=visit,
-            file=file,
-            media_type=media_type,
-            caption=request.data.get("caption", ""),
-            client_upload_id=client_upload_id,
-        )
         return success_response(
-            data=VisitMediaSerializer(media, context={"request": request}).data,
-            message="Media uploaded",
+            data=VisitMediaSerializer(result.media, context={"request": request}).data,
+            message="Media already uploaded" if result.duplicate else "Media uploaded",
+            status_code=200 if result.duplicate else 201,
         )

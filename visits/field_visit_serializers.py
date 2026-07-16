@@ -1,17 +1,23 @@
-"""Write serializer for client Field Visit (Add Visit) form."""
+"""Write serializer for client Field Visit (Add Visit) form.
+
+Validation stays here; persistence is owned by
+``visits.services.field_visit_service``.
+"""
 
 from __future__ import annotations
 
 from django.contrib.auth.models import User
-from django.utils import timezone
 from rest_framework import serializers
 
 from masters.models import Crop, Farmer, ProblemCategory, ProblemMaster, Village
-from visits.farmer_inline import get_or_create_farmer_for_field_visit
 from visits.field_notes import apply_observation_write
 from visits.field_visit import merge_field_visit_request_aliases, validate_visit_submit_data
 from visits.models import Visit
-from tracking.employee_report import attach_visit_duty_links
+from visits.services.farmer_resolution import resolve_farmer_for_visit
+from visits.services.field_visit_service import (
+    ensure_visit_route_point,
+    submit_field_visit_validated,
+)
 from utils.gps import validate_latitude_longitude
 
 
@@ -129,7 +135,10 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
         create_flag = raw.get("create_farmer_if_missing", True)
         if isinstance(create_flag, str):
             create_flag = create_flag.strip().lower() not in {"false", "0", "no"}
-        self._link_farmer_and_field(data, create_if_missing=bool(create_flag))
+        employee = getattr(request, "user", None) if request else None
+        resolve_farmer_for_visit(
+            data, employee=employee, create_if_missing=bool(create_flag)
+        )
         apply_observation_write(data, raw, instance=self.instance)
 
         lat = data.get("latitude")
@@ -142,16 +151,8 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        validated_data.pop("age", None)
-        validated_data.pop("phone", None)
-        validated_data.pop("phone_number", None)
-        validated_data.pop("acreage", None)
-        validated_data.pop("create_farmer_if_missing", None)
-        validated_data.pop("problem_subcategory", None)
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        validated_data.pop("status", None)
-
         employee = user
         if user and user.is_staff and request is not None:
             emp_id = request.data.get("employee_id") or request.data.get("employee")
@@ -162,33 +163,41 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {"employee_id": "Invalid employee."}
                     )
-        validated_data.pop("employee", None)
+        if employee is None:
+            raise serializers.ValidationError(
+                {"employee": "Authenticated employee required."}
+            )
 
-        now = timezone.now()
-        validated_data.setdefault("visit_date", now.date())
-        validated_data.setdefault("visit_time", now.time())
-        sync_id = (validated_data.get("local_sync_id") or "").strip() or None
-        if sync_id:
-            validated_data["local_sync_id"] = sync_id
-            existing = Visit.objects.filter(employee=employee, local_sync_id=sync_id).first()
-            if existing:
-                return existing
-        else:
-            validated_data.pop("local_sync_id", None)
-        visit = Visit.objects.create(**validated_data, employee=employee)
-        attach_visit_duty_links(visit)
-        visit.refresh_from_db()
+        result = submit_field_visit_validated(
+            employee=employee,
+            validated_data=validated_data,
+            request=request,
+        )
+        visit = result.visit
+        # Stash for transport adapters that need duplicate flag without re-query.
+        visit._field_visit_submit_result = result  # type: ignore[attr-defined]
         return visit
 
     def update(self, instance, validated_data):
-        validated_data.pop("age", None)
-        validated_data.pop("phone", None)
-        validated_data.pop("phone_number", None)
-        validated_data.pop("acreage", None)
-        validated_data.pop("create_farmer_if_missing", None)
-        validated_data.pop("problem_subcategory", None)
-        validated_data.pop("status", None)
-        self._link_farmer_and_field(validated_data, create_if_missing=False)
+        for key in (
+            "age",
+            "phone",
+            "phone_number",
+            "acreage",
+            "create_farmer_if_missing",
+            "problem_subcategory",
+            "status",
+            "local_sync_id",
+            "duty_session",
+            "employee",
+        ):
+            validated_data.pop(key, None)
+
+        request = self.context.get("request")
+        employee = getattr(request, "user", None) if request else instance.employee
+        resolve_farmer_for_visit(
+            validated_data, employee=employee, create_if_missing=False
+        )
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         validate_visit_submit_data(
@@ -208,64 +217,5 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
             }
         )
         instance.save()
+        ensure_visit_route_point(instance)
         return instance
-
-    def _resolve_farmer(self, farmer):
-        if farmer is None or isinstance(farmer, Farmer):
-            return farmer
-        try:
-            return Farmer.objects.get(pk=farmer)
-        except (Farmer.DoesNotExist, TypeError, ValueError):
-            return None
-
-    def _link_farmer_and_field(self, data, *, create_if_missing: bool):
-        farmer = self._resolve_farmer(data.get("farmer"))
-        village = data.get("village")
-        if isinstance(village, int):
-            try:
-                village = Village.objects.get(pk=village)
-                data["village"] = village
-            except Village.DoesNotExist:
-                village = None
-
-        if farmer:
-            data["farmer"] = farmer
-            data.setdefault("farmer_name", farmer.name)
-            data.setdefault("farmer_phone", farmer.phone)
-            data.setdefault("district", farmer.district)
-            if not data.get("village") and farmer.village_id:
-                data["village"] = farmer.village
-
-        field = data.get("field")
-        if field and not farmer:
-            data["farmer"] = field.farmer
-            farmer = field.farmer
-
-        if not farmer:
-            phone = (data.get("farmer_phone") or data.get("phone_number") or "").strip()
-            name = (data.get("farmer_name") or "").strip()
-            if phone:
-                farmer = Farmer.objects.filter(phone=phone).order_by("id").first()
-            if farmer is None and name:
-                farmer = Farmer.objects.filter(name__iexact=name).order_by("id").first()
-
-        if not farmer and create_if_missing and village:
-            phone = data.get("farmer_phone") or data.get("phone_number")
-            name = (data.get("farmer_name") or "").strip()
-            if phone and name:
-                request = self.context.get("request")
-                user = getattr(request, "user", None)
-                farmer, _created = get_or_create_farmer_for_field_visit(
-                    name=name,
-                    phone=phone,
-                    village=village,
-                    created_by=user,
-                )
-
-        if farmer:
-            data["farmer"] = farmer
-            data["farmer_name"] = farmer.name
-            data["farmer_phone"] = farmer.phone
-            data.setdefault("district", farmer.district)
-            if not data.get("village") and farmer.village_id:
-                data["village"] = farmer.village
