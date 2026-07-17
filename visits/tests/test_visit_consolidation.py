@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 from datetime import timedelta
 
 from django.contrib.auth.models import User
@@ -22,6 +21,7 @@ from masters.models import (
     Village,
 )
 from mobile_api.test_helpers import login_mobile_client
+from utils.concurrency_test_helpers import run_concurrent_workers
 from tracking.models import DutySession, EmployeeRoutePoint
 from visits.models import Visit, VisitMedia
 from visits.services.field_visit_service import (
@@ -424,11 +424,7 @@ class ConcurrentVisitReplayTests(TransactionTestCase):
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
-        threads = [threading.Thread(target=worker) for _ in range(2)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        run_concurrent_workers(worker)
         self.assertEqual(
             Visit.objects.filter(
                 employee=self.employee, local_sync_id="race-sync-1"

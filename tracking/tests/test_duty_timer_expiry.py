@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from unittest import mock
 
@@ -13,6 +12,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile
+from utils.concurrency_test_helpers import run_concurrent_workers, run_two_concurrent
 from tracking.duty_expiry import (
     complete_duty_as_auto_expired,
     expire_overdue_duties,
@@ -466,11 +466,9 @@ class DutyConcurrencyExpiryTests(TransactionTestCase):
         duty = self._overdue()
         expected = expected_end_at(duty.start_time)
 
-        def run():
-            return expire_overdue_duties(trigger="celery")
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(lambda _: run(), range(2)))
+        results = run_concurrent_workers(
+            lambda: expire_overdue_duties(trigger="celery")
+        )
         self.assertEqual(sum(results), 1)
         duty.refresh_from_db()
         self.assertFalse(duty.is_active)
@@ -491,11 +489,7 @@ class DutyConcurrencyExpiryTests(TransactionTestCase):
         def manual():
             return end_duty(self.user)
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            f1 = pool.submit(auto)
-            f2 = pool.submit(manual)
-            a = f1.result()
-            b = f2.result()
+        a, b = run_two_concurrent(auto, manual)
         self.assertEqual(a.pk, b.pk)
         duty.refresh_from_db()
         self.assertFalse(duty.is_active)

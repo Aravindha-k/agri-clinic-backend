@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
 
@@ -14,6 +13,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile, EmployeeDeviceSession
 from tracking.duty_service import start_duty
+from utils.concurrency_test_helpers import run_concurrent_workers
 from tracking.gps_service import (
     GpsTrackingError,
     apply_gps_point,
@@ -259,11 +259,9 @@ class GpsConcurrentReplayTests(TransactionTestCase):
             "recorded_at": timezone.now().isoformat(),
         }
 
-        def run():
-            return update_gps_point(self.user, payload)
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(lambda _: run(), range(2)))
+        results = run_concurrent_workers(
+            lambda: update_gps_point(self.user, payload)
+        )
         ids = {r["route_point_id"] for r in results}
         self.assertEqual(len(ids), 1)
         self.assertEqual(

@@ -3,6 +3,13 @@
 # Uses explicit labels to avoid accidental discovery of scripts/ or conflicting modules.
 set -Eeuo pipefail
 
+if [[ -n "${GITHUB_RUN_ID:-}" && -z "${CI_TEST_DATABASE_NAME:-}" ]]; then
+  export CI_TEST_DATABASE_NAME="test_agri_test_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT:-1}"
+fi
+
+echo "CI test database name: ${CI_TEST_DATABASE_NAME:-<django default>}"
+echo "Starting backend test suite (single Python process)..."
+
 python manage.py test \
   config.tests \
   utils.tests \
@@ -15,4 +22,11 @@ python manage.py test \
   masters.tests.test_problem_item_import \
   masters.tests.test_problem_category_cleanup \
   system_settings.tests.test_clean_test_data \
+  system_settings.tests.test_terminate_test_db_connections \
   "$@"
+TEST_EXIT=$?
+
+echo "=== Process diagnostics after test run ==="
+ps -ef | grep -E "python|manage.py|celery|pytest" | grep -v grep || true
+
+exit "$TEST_EXIT"

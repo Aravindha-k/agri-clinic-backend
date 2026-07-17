@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: backend-ci-${{ github.ref }}
+  group: backend-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,6 +36,9 @@ jobs:
       DEBUG: "True"
       SECRET_KEY: ci-only-secret-key-not-for-production
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agri_test
+      CI: "true"
+      GITHUB_ACTIONS: "true"
+      CI_TEST_DATABASE_NAME: test_agri_test_${{ github.run_id }}_${{ github.run_attempt }}
       ALLOWED_HOSTS: localhost,127.0.0.1
       CORS_ALLOW_ALL_ORIGINS: "true"
       PYTHONDONTWRITEBYTECODE: "1"

@@ -505,6 +505,52 @@ def _configure_databases() -> dict:
 DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
 DATABASES = _configure_databases()
 
+
+def _sanitize_pg_identifier(name: str) -> str:
+    import re
+
+    safe = re.sub(r"[^a-zA-Z0-9_]", "_", (name or "").strip())
+    return safe[:63]
+
+
+def _ci_test_database_name() -> str:
+    explicit = _sanitize_pg_identifier(os.getenv("CI_TEST_DATABASE_NAME", ""))
+    if explicit:
+        return explicit
+    run_id = os.getenv("GITHUB_RUN_ID", "").strip()
+    run_attempt = os.getenv("GITHUB_RUN_ATTEMPT", "1").strip() or "1"
+    if run_id:
+        return _sanitize_pg_identifier(f"test_agri_test_{run_id}_{run_attempt}")
+    return ""
+
+
+def _configure_test_database() -> None:
+    """Harden PostgreSQL settings for Django's test runner."""
+    if "test" not in sys.argv:
+        return
+
+    for alias, db in DATABASES.items():
+        db["CONN_MAX_AGE"] = 0
+        db.pop("CONN_HEALTH_CHECKS", None)
+
+    ci_test_name = _ci_test_database_name()
+    if ci_test_name:
+        if not ci_test_name.startswith("test_"):
+            raise RuntimeError(
+                f"CI test database name must start with test_: {ci_test_name!r}"
+            )
+        DATABASES["default"].setdefault("TEST", {})["NAME"] = ci_test_name
+
+    if (
+        os.getenv("CI", "").lower() in {"1", "true", "yes"}
+        or os.getenv("GITHUB_ACTIONS", "").lower() in {"1", "true", "yes"}
+        or ci_test_name
+    ):
+        globals()["TEST_RUNNER"] = "config.test_runner.CIPostgresTestRunner"
+
+
+_configure_test_database()
+
 # --------------------------------------------------
 # STATIC FILES
 # --------------------------------------------------

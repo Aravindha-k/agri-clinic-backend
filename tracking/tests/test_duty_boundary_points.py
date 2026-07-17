@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.db import close_old_connections, connection
+from django.db import connection
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -19,6 +18,7 @@ from tracking.duty_expiry import complete_duty_as_auto_expired
 from tracking.duty_service import end_duty, start_duty
 from tracking.models import EmployeeRoutePoint
 from tracking.gps_service import duty_end_client_point_id, duty_start_client_point_id
+from utils.concurrency_test_helpers import run_concurrent_workers
 
 
 def _employee(username="bound_emp", employee_id="BND-001"):
@@ -163,17 +163,10 @@ class DutyBoundaryConcurrencyTests(TransactionTestCase):
         barrier = Barrier(2)
 
         def worker():
-            close_old_connections()
-            try:
-                user = User.objects.get(pk=self.user.pk)
-                barrier.wait(timeout=5)
-                return operation(user)
-            finally:
-                close_old_connections()
+            user = User.objects.get(pk=self.user.pk)
+            return operation(user)
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(worker) for _ in range(2)]
-            return [future.result(timeout=15) for future in futures]
+        return run_concurrent_workers(worker, barrier=barrier)
 
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_start_one_start_point(self):

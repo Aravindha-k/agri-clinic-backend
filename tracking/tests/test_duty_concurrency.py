@@ -1,13 +1,13 @@
-from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 from django.contrib.auth.models import User
-from django.db import close_old_connections, connection
+from django.db import connection
 from django.test import TransactionTestCase, skipUnlessDBFeature
 
 from accounts.models import EmployeeProfile
 from tracking.duty_service import end_duty, start_duty
 from tracking.models import DutySession, WorkDay
+from utils.concurrency_test_helpers import run_concurrent_workers
 
 
 class DutyConcurrencyPostgresTest(TransactionTestCase):
@@ -28,17 +28,10 @@ class DutyConcurrencyPostgresTest(TransactionTestCase):
         barrier = Barrier(2)
 
         def worker():
-            close_old_connections()
-            try:
-                user = User.objects.get(pk=self.user.pk)
-                barrier.wait(timeout=5)
-                return operation(user)
-            finally:
-                close_old_connections()
+            user = User.objects.get(pk=self.user.pk)
+            return operation(user)
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(worker) for _ in range(2)]
-            return [future.result(timeout=15) for future in futures]
+        return run_concurrent_workers(worker, barrier=barrier)
 
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_start_reuses_single_active_session(self):
