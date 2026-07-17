@@ -1,6 +1,19 @@
-# Render Blueprint — Agri Clinic backend (production web service)
-# PostgreSQL: use your Render Postgres instance (set DATABASE_URL in dashboard).
-# Do NOT commit real DATABASE_URL or SECRET_KEY to git.
+# Automatic backend deployment — Render (no GitHub EC2 SSH secrets)
+#
+# This repository's historical automatic production deploy path is Render Blueprint.
+# Render watches `main` and deploys on each commit (`autoDeployTrigger: commit`).
+# No GitHub Actions secrets (EC2_HOST / SSH keys) are required for this path.
+#
+# The GitHub Actions "Backend Deploy" SSH-to-EC2 workflow was introduced on
+# 2026-07-12 (commit 55e1e58) and has been removed so it is not a competing
+# production deployment path.
+#
+# EC2 host 13.207.17.117 is a separate Git checkout and was never driven by
+# GitHub Actions auto-deploy in this repository's history. Updating that host
+# requires an on-server git pull + service restart (or a future self-hosted
+# runner registered on that machine — not present in prior workflows).
+#
+# PostgreSQL: set DATABASE_URL in the Render dashboard (do not commit secrets).
 
 services:
   - type: web
