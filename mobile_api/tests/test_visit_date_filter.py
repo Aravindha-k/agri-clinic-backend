@@ -45,7 +45,12 @@ class MobileVisitDateFilterTest(APITestCase):
             "status": "completed",
         }
         self.today_visit = Visit.objects.create(**base, visit_date=today)
-        self.week_visit = Visit.objects.create(**base, visit_date=week_start)
+        # On Monday, week_start == today — avoid a second same-day visit that
+        # would make "today" and "week" filters indistinguishable.
+        if week_start < today:
+            self.week_visit = Visit.objects.create(**base, visit_date=week_start)
+        else:
+            self.week_visit = self.today_visit
         self.old_visit = Visit.objects.create(**base, visit_date=last_month)
 
         submitted_visits_qs().filter(

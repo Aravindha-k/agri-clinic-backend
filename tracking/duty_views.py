@@ -14,7 +14,6 @@ from mobile_api.device_session import DeviceSessionRequiredMixin
 from tracking.duty_service import (
     DutyTrackingError,
     bulk_update_locations,
-    end_duty,
     serialize_duty_status,
     start_duty,
     update_location,
@@ -174,39 +173,24 @@ class DutyCurrentMapAPI(DeviceSessionRequiredMixin, APIView):
 
 @extend_schema(
     tags=["Tracking"],
-    summary="End employee duty",
-    responses={200: SIMPLE_SUCCESS, 400: error_schema("DutyEndError")},
+    summary="End employee duty (disabled for employees)",
+    description=(
+        "Employees cannot manually end a workday. "
+        "Workdays end automatically after 9 hours, or via an authorized admin action."
+    ),
+    responses={403: error_schema("EmployeeEndForbidden")},
 )
 class DutyEndAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            lat = request.data.get("latitude")
-            lng = request.data.get("longitude")
-            latitude = float(lat) if lat not in (None, "") else None
-            longitude = float(lng) if lng not in (None, "") else None
-            duty = end_duty(
-                request.user,
-                expected_duty_session_id=(
-                    request.data.get("duty_session_id")
-                    or request.data.get("expected_duty_session_id")
-                ),
-                latitude=latitude,
-                longitude=longitude,
-            )
-        except DutyTrackingError as exc:
-            return _duty_error(exc)
-        except (TypeError, ValueError):
-            return error_response(
-                message="Invalid latitude or longitude.",
-                code="INVALID_COORDS",
-                status_code=400,
-            )
-        payload = serialize_duty_status(request.user, duty)
-        return success_response(
-            data=payload,
-            message="Duty ended",
+        return error_response(
+            message=(
+                "Employees cannot end the workday manually. "
+                "It ends automatically after 9 hours or by an administrator."
+            ),
+            code="EMPLOYEE_END_FORBIDDEN",
+            status_code=403,
         )
 
 

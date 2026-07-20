@@ -72,12 +72,13 @@ class LegacyWorkProxyTests(TestCase):
             DutySession.objects.filter(user=self.employee, is_active=True).count(), 1
         )
 
-    def test_legacy_end_ends_duty(self):
+    def test_legacy_end_is_forbidden_for_employees(self):
         self._login()
         start_duty(self.employee)
         r = self.client.post("/api/v1/tracking/workday/end/", {}, format="json")
-        self.assertEqual(r.status_code, 200)
-        self.assertFalse(
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.data.get("code"), "EMPLOYEE_END_FORBIDDEN")
+        self.assertTrue(
             DutySession.objects.filter(user=self.employee, is_active=True).exists()
         )
 

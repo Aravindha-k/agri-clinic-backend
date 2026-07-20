@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -36,6 +36,8 @@ from utils.gps import validate_latitude_longitude
 logger = logging.getLogger(__name__)
 
 MAX_BULK_LOCATION_POINTS = 500
+# Allow minor device/server clock skew; still blocks yesterday's points on today's duty.
+DUTY_POINT_CLOCK_SKEW = timedelta(minutes=15)
 
 
 class GpsTrackingError(Exception):
@@ -105,6 +107,24 @@ def _validate_duty_ownership(user: User, duty: DutySession, payload: dict[str, A
                 )
         except (TypeError, ValueError) as exc:
             raise GpsTrackingError("Invalid workday_id", "WRONG_WORKDAY") from exc
+
+
+def _validate_recorded_at_within_duty(
+    duty: DutySession, recorded_at: datetime
+) -> None:
+    """
+    Prevent offline/bulk GPS from attaching a prior workday's points to the
+    currently active DutySession when the client omits duty_session_id.
+    """
+    if not duty.start_time:
+        return
+    window_start = duty.start_time - DUTY_POINT_CLOCK_SKEW
+    window_end = (duty.end_time or timezone.now()) + DUTY_POINT_CLOCK_SKEW
+    if recorded_at < window_start or recorded_at > window_end:
+        raise GpsTrackingError(
+            "GPS point timestamp is outside the active duty session window",
+            "OUTSIDE_DUTY_WINDOW",
+        )
 
 
 def _quantize(lat: float, lng: float) -> tuple[Decimal, Decimal]:
@@ -222,6 +242,8 @@ def apply_gps_point(
         raise
     except Exception as exc:
         raise GpsTrackingError("Invalid recorded_at timestamp", "INVALID_TIMESTAMP") from exc
+
+    _validate_recorded_at_within_duty(duty, recorded_at)
 
     client_point_id = extract_client_point_id(payload)
     accuracy = payload.get("accuracy")
@@ -474,7 +496,7 @@ def bulk_update_gps_points(
                     "code": exc.code,
                     "message": exc.message,
                     "retryable": exc.code
-                    in {"POINT_ERROR", "NO_ACTIVE_DUTY"},
+                    in {"POINT_ERROR", "NO_ACTIVE_DUTY", "OUTSIDE_DUTY_WINDOW"},
                 }
             )
         except (ValueError, TypeError) as exc:

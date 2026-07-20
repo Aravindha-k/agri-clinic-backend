@@ -250,6 +250,16 @@ class EmployeeStatusAPITest(APITestCase):
 
     def test_live_api_gps_lost(self):
         self._start_duty()
+        # Backdate duty start so a 20-minute-old fix is still inside the duty window.
+        from tracking.models import DutySession, WorkDay
+
+        started = timezone.now() - timedelta(hours=1)
+        DutySession.objects.filter(user=self.employee, is_active=True).update(
+            start_time=started
+        )
+        WorkDay.objects.filter(user=self.employee, is_active=True).update(
+            start_time=started
+        )
         t0 = timezone.now() - timedelta(minutes=20)
         self._location_update(recorded_at=t0.isoformat())
         row = self._live_row()

@@ -159,6 +159,46 @@ class GpsCanonicalServiceTests(TestCase):
             )
         self.assertEqual(ctx.exception.code, "WRONG_DUTY")
 
+    def test_bulk_rejects_points_from_prior_duty_window(self):
+        """Stale offline points must not attach to a newly started workday."""
+        from tracking.duty_service import end_duty
+
+        end_duty(self.user, latitude=12.97, longitude=77.59)
+        new_duty = start_duty(self.user, latitude=12.98, longitude=77.60).duty
+        self.assertNotEqual(new_duty.pk, self.duty.pk)
+
+        stale_at = self.duty.start_time + timedelta(minutes=30)
+        result = bulk_update_gps_points(
+            self.user,
+            [
+                {
+                    "latitude": 12.50,
+                    "longitude": 77.50,
+                    "client_point_id": "stale-old-duty",
+                    "recorded_at": stale_at.isoformat(),
+                },
+                {
+                    "latitude": 12.981,
+                    "longitude": 77.601,
+                    "client_point_id": "fresh-new-duty",
+                    "recorded_at": timezone.now().isoformat(),
+                },
+            ],
+        )
+        self.assertEqual(result["success_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["failed_items"][0]["code"], "OUTSIDE_DUTY_WINDOW")
+        self.assertFalse(
+            EmployeeRoutePoint.objects.filter(
+                duty_session=new_duty, client_point_id="stale-old-duty"
+            ).exists()
+        )
+        self.assertTrue(
+            EmployeeRoutePoint.objects.filter(
+                duty_session=new_duty, client_point_id="fresh-new-duty"
+            ).exists()
+        )
+
     def test_wrong_user_cannot_write_other_duty(self):
         other = _employee("gps_other", "GPS-002")
         other_duty = start_duty(other, latitude=12.0, longitude=77.0).duty

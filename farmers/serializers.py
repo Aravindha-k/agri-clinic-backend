@@ -635,6 +635,19 @@ class FarmerUpdateSerializer(serializers.ModelSerializer):
 
         return validate_gps_location_string(value)
 
+    def validate_phone(self, value):
+        phone = (value or "").strip()
+        if not phone:
+            raise serializers.ValidationError("Phone is required.")
+        qs = Farmer.objects.filter(phone=phone)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                "A farmer with this mobile number already exists."
+            )
+        return phone
+
 
 # ══════════════════════════════════════════════
 # FARMER ACTIVITY TIMELINE

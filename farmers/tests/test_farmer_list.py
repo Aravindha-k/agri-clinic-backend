@@ -79,3 +79,15 @@ class FarmerListAPITest(TestCase):
         ):
             self.assertIn(key, row)
         self.assertNotIn("is_active", row)
+
+    def test_update_rejects_duplicate_phone(self):
+        self.client.force_authenticate(user=self.employee)
+        response = self.client.put(
+            f"/api/v1/farmers/{self.zero_visits.id}/",
+            {"phone": self.with_visit.phone},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.data
+        self.assertFalse(body.get("success", True))
+        self.assertIn("already exists", (body.get("message") or "").lower())

@@ -14,7 +14,9 @@ Migration guide for clients switching to canonical DutySession / GPS / Visit / d
 |------|---------|
 | `SESSION_REPLACED` | Device session revoked / replaced (HTTP 409) |
 | `ACCOUNT_DISABLED` | Employee inactive |
+| `EMPLOYEE_END_FORBIDDEN` | Employee cannot manually end workday (HTTP 403) |
 | `NO_ACTIVE_DUTY` | No active DutySession for write |
+| `OUTSIDE_DUTY_WINDOW` | GPS `recorded_at` outside active duty window |
 | `DUTY_ALREADY_COMPLETED` | Duty already ended (idempotent end may still return 200) |
 | `INVALID_COORDINATES` / `INVALID_COORDS` | Bad lat/lng |
 | `VALIDATION_ERROR` | Payload validation |
@@ -88,7 +90,8 @@ Response `data`:
 |--------|------|-------|
 | POST | `/api/v1/tracking/duty/start/` | Optional `latitude`/`longitude`. Creates `WORKDAY_START` route point when coords valid. Idempotent restore. Key: `duty-start:<duty_id>` |
 | GET | `/api/v1/tracking/duty/current/` | Timer from `duty_timer` only |
-| POST | `/api/v1/tracking/duty/end/` | Optional end coords → `WORKDAY_END` (`duty-end:<duty_id>`). Auto-expiry never fabricates GPS |
+| POST | `/api/v1/tracking/duty/end/` | **Blocked for employees** (`403` / `EMPLOYEE_END_FORBIDDEN`). Workdays end via 9h auto-expiry or admin force-end. |
+| POST | `/api/admin/tracking/employee/<user_id>/end-duty/` | Admin-only force end. Idempotent. Optional `duty_session_id`, `latitude`/`longitude` → `WORKDAY_END`. |
 
 Device session required for employee mobile clients.
 
@@ -138,7 +141,7 @@ Builder: `tracking.day_map_service`. Prefers explicit `WORKDAY_START` / `WORKDAY
 | Legacy | Canonical | Status |
 |--------|-----------|--------|
 | `POST /api/v1/mobile/work/start/` | `POST /api/v1/tracking/duty/start/` | Deprecated OpenAPI + `deprecated_endpoint` log |
-| `POST /api/v1/mobile/work/stop/` | `POST /api/v1/tracking/duty/end/` | Deprecated |
+| `POST /api/v1/mobile/work/stop/` | Admin end-duty / auto-expiry | Deprecated; returns `EMPLOYEE_END_FORBIDDEN` |
 | `GET /api/v1/mobile/work/status/` | `GET /api/v1/tracking/duty/current/` | Deprecated |
 | `POST /api/v1/work/start/` | duty start | Deprecated wrapper |
 | `POST /api/v1/work/stop/` | duty end | Deprecated wrapper |

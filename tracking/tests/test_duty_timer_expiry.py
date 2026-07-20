@@ -490,12 +490,16 @@ class DutyConcurrencyExpiryTests(TransactionTestCase):
             return end_duty(self.user)
 
         a, b = run_two_concurrent(auto, manual)
-        self.assertEqual(a.pk, b.pk)
+        # Losing worker that finds no active row may return None; winner returns duty.
+        final = a or b
+        self.assertIsNotNone(final)
+        if a is not None and b is not None:
+            self.assertEqual(a.pk, b.pk)
         duty.refresh_from_db()
         self.assertFalse(duty.is_active)
         self.assertEqual(duty.end_time, expected)
         self.assertEqual(duty.completion_reason, COMPLETION_AUTO_EXPIRED)
-        self.assertEqual(duty.start_time, a.start_time)
+        self.assertEqual(duty.start_time, final.start_time)
 
 
 class SerializeDoesNotTrustClientClockTests(TestCase):

@@ -37,10 +37,17 @@ def make_employee(username="emp001", password="emppass", employee_id="KAC-0001")
     return user
 
 
-def auth_client(user):
+def auth_client(user, *, with_device_session: bool = False):
     """Return an authenticated APIClient for the given user."""
     client = APIClient()
     client.force_authenticate(user=user)
+    if with_device_session:
+        from accounts.device_sessions import register_device_session
+
+        session = register_device_session(
+            user, request_data={"device_id": f"test-{user.pk}"}
+        )
+        client.credentials(HTTP_X_DEVICE_SESSION=str(session.session_key))
     return client
 
 
@@ -174,7 +181,7 @@ class ChangePasswordTests(TestCase):
     def setUp(self):
         self.emp = make_employee(username="fielduser", password=OLD_EMP_PASSWORD)
         self.profile = self.emp.employee_profile
-        self.client = auth_client(self.emp)  # authenticated as the employee
+        self.client = auth_client(self.emp, with_device_session=True)
         self.url = "/api/v1/employees/change-password/"
 
     def test_wrong_current_password_returns_error(self):

@@ -108,23 +108,45 @@ class DutyTrackingAPITest(APITestCase):
         self.assertIsNotNone(r_current.data["data"].get("server_time"))
 
         r3 = self.client.post("/api/tracking/duty/end/", {}, format="json")
-        self.assertEqual(r3.status_code, status.HTTP_200_OK)
+        self.assertEqual(r3.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(r3.data.get("code"), "EMPLOYEE_END_FORBIDDEN")
         duty = DutySession.objects.get(pk=duty_id)
+        self.assertTrue(duty.is_active)
+        self.assertIsNone(duty.end_time)
+
+        admin_end = self.admin_client.post(
+            f"/api/admin/tracking/employee/{self.employee.pk}/end-duty/",
+            {},
+            format="json",
+        )
+        self.assertEqual(admin_end.status_code, status.HTTP_200_OK)
+        duty.refresh_from_db()
         self.assertFalse(duty.is_active)
         self.assertIsNotNone(duty.end_time)
 
-    def test_end_with_session_id_is_idempotent_and_cannot_end_newer_duty(self):
+    def test_employee_end_forbidden_even_with_session_id(self):
         first_id = self._start_duty().data["data"]["duty_session_id"]
         first_end = self.client.post(
             "/api/tracking/duty/end/",
             {"duty_session_id": first_id},
             format="json",
         )
-        self.assertEqual(first_end.status_code, status.HTTP_200_OK)
-        first_end_time = first_end.data["data"]["end_time"]
+        self.assertEqual(first_end.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(first_end.data.get("code"), "EMPLOYEE_END_FORBIDDEN")
+        self.assertTrue(
+            DutySession.objects.filter(pk=first_id, is_active=True).exists()
+        )
 
-        repeated = self.client.post(
-            "/api/tracking/duty/end/",
+        admin_end = self.admin_client.post(
+            f"/api/admin/tracking/employee/{self.employee.pk}/end-duty/",
+            {"duty_session_id": first_id},
+            format="json",
+        )
+        self.assertEqual(admin_end.status_code, status.HTTP_200_OK)
+        first_end_time = admin_end.data["data"]["end_time"]
+
+        repeated = self.admin_client.post(
+            f"/api/admin/tracking/employee/{self.employee.pk}/end-duty/",
             {"duty_session_id": first_id},
             format="json",
         )
@@ -134,8 +156,8 @@ class DutyTrackingAPITest(APITestCase):
         second_id = self._start_duty().data["data"]["duty_session_id"]
         self.assertNotEqual(second_id, first_id)
 
-        stale = self.client.post(
-            "/api/tracking/duty/end/",
+        stale = self.admin_client.post(
+            f"/api/admin/tracking/employee/{self.employee.pk}/end-duty/",
             {"duty_session_id": first_id},
             format="json",
         )

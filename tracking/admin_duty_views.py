@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from accounts.device_sessions import batch_device_status_map
 from accounts.models import EmployeeProfile
 from tracking.employee_status import batch_gps_off_user_ids, build_status_for_live_employee
+from tracking.duty_service import DutyTrackingError, end_duty, serialize_duty_status
 from tracking.models import DutySession, EmployeeGpsState, EmployeeLiveLocation
 from tracking.workday_utils import expire_old_workdays
 from utils.photo_urls import build_profile_photo_url
@@ -210,3 +211,51 @@ class AdminEmployeeRouteByDateAPI(APIView):
             data=data,
             message="Route loaded" if data["total_points"] else "No route points for date",
         )
+
+
+@extend_schema(
+    tags=["Tracking"],
+    summary="Admin: force-end employee duty",
+    description=(
+        "Authorized admin action to complete an employee's active workday. "
+        "Field employees cannot call the mobile duty/end endpoint."
+    ),
+    responses={200: SIMPLE_SUCCESS, 403: error_schema("Forbidden"), 404: error_schema("EmployeeNotFound")},
+)
+class AdminEmployeeEndDutyAPI(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, user_id):
+        try:
+            emp = EmployeeProfile.objects.select_related("user").get(
+                user_id=user_id, is_active_employee=True
+            )
+        except EmployeeProfile.DoesNotExist:
+            return not_found_response("Employee not found")
+
+        try:
+            lat = request.data.get("latitude")
+            lng = request.data.get("longitude")
+            latitude = float(lat) if lat not in (None, "") else None
+            longitude = float(lng) if lng not in (None, "") else None
+            duty = end_duty(
+                emp.user,
+                expected_duty_session_id=(
+                    request.data.get("duty_session_id")
+                    or request.data.get("expected_duty_session_id")
+                ),
+                latitude=latitude,
+                longitude=longitude,
+            )
+        except DutyTrackingError as exc:
+            status_code = 403 if exc.code == "FORBIDDEN" else 400
+            return error_response(message=exc.message, code=exc.code, status_code=status_code)
+        except (TypeError, ValueError):
+            return error_response(
+                message="Invalid latitude or longitude.",
+                code="INVALID_COORDS",
+                status_code=400,
+            )
+
+        payload = serialize_duty_status(emp.user, duty)
+        return success_response(data=payload, message="Employee duty ended by admin")

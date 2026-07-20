@@ -134,54 +134,18 @@ def legacy_start_via_duty(request, *, endpoint: str, response_style: str = "work
 
 def legacy_end_via_duty(request, *, endpoint: str, response_style: str = "workday"):
     log_deprecated_endpoint(request=request, endpoint=endpoint)
-    if request.user.is_staff and response_style == "workday":
-        return Response({"detail": "Admins cannot end workday"}, status=403)
-
-    try:
-        duty = end_duty(
-            request.user,
-            expected_duty_session_id=(
-                request.data.get("duty_session_id")
-                or request.data.get("expected_duty_session_id")
-            ),
-        )
-    except DutyTrackingError as exc:
-        code = 403 if exc.code == "FORBIDDEN" else 400
-        if response_style == "workday":
-            detail = "No active workday" if exc.code in {"NO_ACTIVE_DUTY", "NOT_FOUND"} else exc.message
-            return Response({"detail": detail}, status=code)
-        return error_response(message=exc.message, code=exc.code, status_code=code)
-
-    payload = serialize_duty_status(request.user, duty)
-
+    # Employees (and legacy mobile clients) cannot manually end a workday.
+    # Auto-expiry (9h) and admin force-end remain the only completion paths.
+    message = (
+        "Employees cannot end the workday manually. "
+        "It ends automatically after 9 hours or by an administrator."
+    )
     if response_style == "workday":
-        return Response(
-            {
-                "message": "Workday ended",
-                "ended_count": 1,
-                "workday_id": duty.workday_id,
-                "duty_session_id": duty.id,
-                "end_time": payload.get("end_time"),
-                "server_time": payload.get("server_time"),
-            },
-            status=200,
-        )
-
-    if response_style == "worklog":
-        return success_response(
-            data=_duty_as_worklog_dict(duty),
-            message="Work session ended",
-        )
-
-    return success_response(
-        data={
-            "work_status": "not_started",
-            "workday_id": duty.workday_id,
-            "duty_session_id": duty.id,
-            "end_time": payload.get("end_time"),
-            "server_time": payload.get("server_time"),
-        },
-        message="Workday stopped",
+        return Response({"detail": message, "code": "EMPLOYEE_END_FORBIDDEN"}, status=403)
+    return error_response(
+        message=message,
+        code="EMPLOYEE_END_FORBIDDEN",
+        status_code=403,
     )
 
 
