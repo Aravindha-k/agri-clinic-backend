@@ -111,7 +111,8 @@ def get_active_employees_on_field() -> QuerySet:
 
 def get_last_known_location(user_id: int) -> Optional[Dict[str, Any]]:
     """
-    Latest GPS for admin maps: Redis live cache first, then latest LocationLog.
+    Latest GPS for admin maps: Redis live cache, then EmployeeLiveLocation,
+    then latest LocationLog.
     """
     live = get_live_location(user_id)
     if live and live.get("latitude") is not None:
@@ -120,6 +121,16 @@ def get_last_known_location(user_id: int) -> Optional[Dict[str, Any]]:
             "longitude": live.get("longitude"),
             "recorded_at": live.get("timestamp"),
         }
+
+    from tracking.models import EmployeeLiveLocation
+
+    db_live = (
+        EmployeeLiveLocation.objects.filter(user_id=user_id)
+        .values("latitude", "longitude", "recorded_at")
+        .first()
+    )
+    if db_live and db_live.get("latitude") is not None:
+        return db_live
 
     return (
         LocationLog.objects.filter(user_id=user_id)

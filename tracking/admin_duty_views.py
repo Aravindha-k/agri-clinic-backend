@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from accounts.device_sessions import batch_device_status_map
 from accounts.models import EmployeeProfile
+from tracking.duty_timer import compute_duty_timer
 from tracking.employee_status import batch_gps_off_user_ids, build_status_for_live_employee
 from tracking.duty_service import DutyTrackingError, end_duty, serialize_duty_status
 from tracking.models import DutySession, EmployeeGpsState, EmployeeLiveLocation
@@ -18,6 +19,18 @@ from tracking.workday_utils import expire_old_workdays
 from utils.photo_urls import build_profile_photo_url
 from utils.response import error_response, not_found_response, success_response
 from utils.schema import SIMPLE_SUCCESS, error_schema
+
+# Prevent proxies/browsers from serving a stale Live Tracking payload.
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+}
+
+
+def _no_store_response(response):
+    for key, value in _NO_STORE_HEADERS.items():
+        response[key] = value
+    return response
 
 
 def _resolve_target_date(request):
@@ -68,9 +81,13 @@ class AdminTrackingLiveAPI(APIView):
         expire_old_workdays()
         now = timezone.now()
 
-        active_duty_user_ids = set(
-            DutySession.objects.filter(is_active=True).values_list("user_id", flat=True)
-        )
+        active_duties = {
+            d.user_id: d
+            for d in DutySession.objects.filter(is_active=True).select_related(
+                "workday"
+            )
+        }
+        active_duty_user_ids = set(active_duties.keys())
 
         employees = EmployeeProfile.objects.filter(
             is_active_employee=True
@@ -95,28 +112,34 @@ class AdminTrackingLiveAPI(APIView):
         features = []
         for emp in employees:
             live = live_rows.get(emp.user_id)
-            on_duty = emp.user_id in active_duty_user_ids
+            duty = active_duties.get(emp.user_id)
+            on_duty = duty is not None
             if not live and not on_duty:
                 continue
+            device_status = device_status_map.get(emp.user_id) or {}
             gps_state_row = gps_state_rows.get(emp.user_id)
             stored_gps_enabled = gps_state_row.gps_enabled if gps_state_row else None
             legacy_gps_off = (
                 emp.user_id in gps_off_user_ids and stored_gps_enabled is None
             )
+            last_heartbeat_at = None
+            if duty is not None:
+                last_heartbeat_at = duty.last_heartbeat
+            elif live and live.duty_session_id and live.duty_session:
+                last_heartbeat_at = live.duty_session.last_heartbeat
             status_fields = build_status_for_live_employee(
                 user_id=emp.user_id,
                 live_row=live,
                 gps_state_row=gps_state_row,
                 has_active_duty=on_duty,
-                device_status=device_status_map.get(emp.user_id),
+                device_status=device_status,
                 gps_off=legacy_gps_off,
-                last_heartbeat_at=(
-                    live.duty_session.last_heartbeat
-                    if live and live.duty_session_id and live.duty_session
-                    else None
-                ),
+                last_heartbeat_at=last_heartbeat_at,
                 now=now,
             )
+            timer = compute_duty_timer(duty, now=now) if duty is not None else {}
+            started_at = timer.get("started_at")
+            expected_end = timer.get("expected_end_at")
             features.append(
                 {
                     "user_id": emp.user_id,
@@ -130,6 +153,7 @@ class AdminTrackingLiveAPI(APIView):
                         else None
                     ),
                     "is_on_duty": status_fields["is_on_duty"],
+                    "active_workday": on_duty,
                     "duty_status": status_fields["duty_status"],
                     "gps_status": status_fields["gps_status"],
                     "gps_enabled": status_fields["gps_enabled"],
@@ -139,7 +163,12 @@ class AdminTrackingLiveAPI(APIView):
                     "legacy_gps_status": status_fields["legacy_gps_status"],
                     "connection": status_fields["connection"],
                     "tracking_health": status_fields["tracking_health"],
-                    "duty_session_id": live.duty_session_id if live else None,
+                    "duty_session_id": (
+                        duty.pk if duty is not None else (live.duty_session_id if live else None)
+                    ),
+                    "workday_id": duty.workday_id if duty is not None else None,
+                    "started_at": started_at,
+                    "expected_end_at": expected_end,
                     "latitude": float(live.latitude) if live else None,
                     "longitude": float(live.longitude) if live else None,
                     "accuracy": live.accuracy if live else None,
@@ -149,16 +178,32 @@ class AdminTrackingLiveAPI(APIView):
                     "last_seen_minutes": status_fields["last_seen_minutes"],
                     "last_update": status_fields["last_update"],
                     "last_update_age_minutes": status_fields["last_update_age_minutes"],
+                    "device_status": device_status,
+                    "device_information": {
+                        "device_name": device_status.get("device_name"),
+                        "device_model": device_status.get("device_model"),
+                        "platform": device_status.get("platform"),
+                        "app_version": device_status.get("app_version"),
+                        "active_device_id": device_status.get("active_device_id"),
+                        "is_active": device_status.get("is_active"),
+                    },
+                    "last_login": device_status.get("last_login_at"),
+                    "last_seen": device_status.get("last_seen_at"),
                 }
             )
 
-        return success_response(
-            data={
-                "updated_at": now.isoformat(),
-                "count": len(features),
-                "employees": features,
-            },
-            message="Live tracking loaded",
+        return _no_store_response(
+            success_response(
+                data={
+                    "updated_at": now.isoformat(),
+                    "count": len(features),
+                    "employees": features,
+                    "online_count": sum(
+                        1 for row in features if row.get("connection") == "ONLINE"
+                    ),
+                },
+                message="Live tracking loaded",
+            )
         )
 
 

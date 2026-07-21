@@ -509,11 +509,11 @@ class AdminTrackingStatusAPI(APIView):
             is_active_employee=True
         ).select_related("user", "village", "village__district")
 
-        today = now.date()
+        today = timezone.localdate()
 
         # 2. Active workdays keyed by user_id (single query)
         from tracking.duty_timer import compute_duty_timer, compute_session_timer
-        from tracking.models import DutySession
+        from tracking.models import DutySession, EmployeeLiveLocation
 
         raw_active_wds = list(
             WorkDay.objects.filter(is_active=True).select_related("user", "duty_session")
@@ -587,20 +587,15 @@ class AdminTrackingStatusAPI(APIView):
             except Exception:
                 today_distance_map[uid] = 0.0
 
-        # 3. Latest LocationLog per user with activity today (single subquery)
+        # 3. Latest location: prefer EmployeeLiveLocation (updated on duty start +
+        # GPS pings), then fall back to LocationLog for historical-only rows.
         last_locations = {}
         location_user_ids = list(
             set(working_user_ids) | set(today_workdays.keys()) | set(users_with_points)
         )
         if location_user_ids:
-            latest_loc_subq = (
-                LocationLog.objects.filter(user_id=OuterRef("user_id"))
-                .order_by("-recorded_at")
-                .values("id")[:1]
-            )
-            latest_locs_qs = LocationLog.objects.filter(
-                user_id__in=location_user_ids,
-                id=Subquery(latest_loc_subq),
+            for row in EmployeeLiveLocation.objects.filter(
+                user_id__in=location_user_ids
             ).values(
                 "user_id",
                 "latitude",
@@ -609,8 +604,32 @@ class AdminTrackingStatusAPI(APIView):
                 "speed",
                 "accuracy",
                 "battery_level",
-            )
-            last_locations = {loc["user_id"]: loc for loc in latest_locs_qs}
+            ):
+                last_locations[row["user_id"]] = row
+
+            missing_user_ids = [
+                uid for uid in location_user_ids if uid not in last_locations
+            ]
+            if missing_user_ids:
+                latest_loc_subq = (
+                    LocationLog.objects.filter(user_id=OuterRef("user_id"))
+                    .order_by("-recorded_at")
+                    .values("id")[:1]
+                )
+                latest_locs_qs = LocationLog.objects.filter(
+                    user_id__in=missing_user_ids,
+                    id=Subquery(latest_loc_subq),
+                ).values(
+                    "user_id",
+                    "latitude",
+                    "longitude",
+                    "recorded_at",
+                    "speed",
+                    "accuracy",
+                    "battery_level",
+                )
+                for loc in latest_locs_qs:
+                    last_locations[loc["user_id"]] = loc
 
         # 4. Active GPS_OFF events -> set of user_ids (single query)
         gps_off_user_ids = set(
@@ -684,7 +703,10 @@ class AdminTrackingStatusAPI(APIView):
             data.append(row)
 
         logger.info("AdminTrackingStatus map_rows=%s online=%s", len(data), sum(1 for r in data if r["connection"] == "ONLINE"))
-        return Response(data)
+        response = Response(data)
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        return response
 
 
 # ──────────────────────────────────────────────

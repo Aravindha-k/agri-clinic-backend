@@ -206,6 +206,65 @@ def start_duty(
     return DutyStartResult(duty=duty, created=True)
 
 
+def _resolve_duty_start_coords(duty, latitude, longitude):
+    """Prefer request coords; fall back to duty start lat/lng."""
+    lat = latitude
+    lng = longitude
+    if lat is None and duty.latitude is not None:
+        lat = float(duty.latitude)
+    if lng is None and duty.longitude is not None:
+        lng = float(duty.longitude)
+    return lat, lng
+
+
+def _sync_live_location_on_duty_start(user, duty, latitude, longitude) -> None:
+    """
+    Upsert EmployeeLiveLocation + Redis so admin Live Tracking reflects Start
+    Work Day immediately (without waiting for a later GPS ping).
+    """
+    lat, lng = _resolve_duty_start_coords(duty, latitude, longitude)
+    if lat is None or lng is None:
+        # Keep admin duty_session_id current even when start has no coords.
+        EmployeeLiveLocation.objects.filter(user=user).update(duty_session=duty)
+        return
+
+    try:
+        validate_latitude_longitude(lat, lng)
+    except Exception:
+        logger.warning(
+            "event=duty_start_live_invalid_coords user_id=%s duty_id=%s",
+            user.pk,
+            duty.pk,
+        )
+        EmployeeLiveLocation.objects.filter(user=user).update(duty_session=duty)
+        return
+
+    lat_dec = Decimal(str(lat)).quantize(Decimal("0.000001"))
+    lng_dec = Decimal(str(lng)).quantize(Decimal("0.000001"))
+    recorded_at = timezone.now()
+    EmployeeLiveLocation.objects.update_or_create(
+        user=user,
+        defaults={
+            "duty_session": duty,
+            "latitude": lat_dec,
+            "longitude": lng_dec,
+            "recorded_at": recorded_at,
+        },
+    )
+    if duty.workday_id:
+        workday = duty.workday
+        if workday is None:
+            workday = WorkDay.objects.filter(pk=duty.workday_id).first()
+        if workday is not None:
+            refresh_workday_live_state(
+                user=user,
+                workday=workday,
+                latitude=float(lat_dec),
+                longitude=float(lng_dec),
+                recorded_at=recorded_at,
+            )
+
+
 def _ensure_start_route_point(user, duty, latitude, longitude) -> None:
     """Optional WORKDAY_START point. Missing coords do not fail duty start."""
     from tracking.gps_service import (
@@ -214,12 +273,7 @@ def _ensure_start_route_point(user, duty, latitude, longitude) -> None:
     )
     from tracking.models import EmployeeRoutePoint
 
-    lat = latitude
-    lng = longitude
-    if lat is None and duty.latitude is not None:
-        lat = float(duty.latitude)
-    if lng is None and duty.longitude is not None:
-        lng = float(duty.longitude)
+    lat, lng = _resolve_duty_start_coords(duty, latitude, longitude)
     point = ensure_duty_boundary_point(
         user=user,
         duty=duty,
@@ -235,6 +289,7 @@ def _ensure_start_route_point(user, duty, latitude, longitude) -> None:
             duty.pk,
             point.pk,
         )
+    _sync_live_location_on_duty_start(user, duty, latitude, longitude)
 
 
 def _ensure_end_route_point(user, duty, latitude, longitude) -> None:
