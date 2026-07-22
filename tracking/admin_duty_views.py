@@ -252,9 +252,14 @@ class AdminEmployeeRouteByDateAPI(APIView):
         data = _build_route_payload(
             emp=emp, user_id=user_id, target_date=target_date, request=request
         )
+        has_content = bool(
+            data.get("marker_count")
+            or data.get("total_points")
+            or data.get("has_start_marker")
+        )
         return success_response(
             data=data,
-            message="Route loaded" if data["total_points"] else "No route points for date",
+            message="Route loaded" if has_content else "No route points for date",
         )
 
 

@@ -19,8 +19,7 @@ from tracking.day_map_service import (
     ROUTE_SOURCE_CANONICAL,
     ROUTE_SOURCE_LEGACY,
     SOURCE_DUTY_START,
-    SOURCE_EARLIEST_FALLBACK,
-    SOURCE_LAST_FALLBACK,
+    SOURCE_WORKDAY_END,
     SOURCE_WORKDAY_START,
     build_duty_day_map,
 )
@@ -136,7 +135,7 @@ class DutyDayMapTests(TestCase):
         r = self.admin_client.get(f"/api/v1/tracking/duty/{self.duty.pk}/map/")
         self.assertEqual(r.status_code, 200, r.data)
 
-    def test_completed_duty_end_marker_inferred(self):
+    def test_completed_duty_end_marker_from_workday_end_only(self):
         self._add_route(lat=12.971, lng=77.591, minutes=1)
         self._add_route(lat=12.972, lng=77.592, minutes=10)
         self.duty.is_active = False
@@ -144,9 +143,22 @@ class DutyDayMapTests(TestCase):
         self.duty.completion_reason = "MANUAL"
         self.duty.save()
         data = build_duty_day_map(self.duty, include_live_location=False)
+        # Without an explicit WORKDAY_END point, do not invent End from GPS.
+        self.assertIsNone(data["end_marker"])
+        EmployeeRoutePoint.objects.create(
+            user=self.employee,
+            duty_session=self.duty,
+            latitude=Decimal("12.973000"),
+            longitude=Decimal("77.593000"),
+            recorded_at=timezone.now(),
+            point_type=EmployeeRoutePoint.POINT_END,
+            client_point_id=f"duty-end:{self.duty.pk}",
+            is_permanent=True,
+        )
+        data = build_duty_day_map(self.duty, include_live_location=False)
         self.assertIsNotNone(data["end_marker"])
-        self.assertEqual(data["end_marker"]["source"], SOURCE_LAST_FALLBACK)
-        self.assertTrue(data["end_marker"]["inferred"])
+        self.assertEqual(data["end_marker"]["source"], SOURCE_WORKDAY_END)
+        self.assertFalse(data["end_marker"]["inferred"])
 
     def test_active_duty_no_inferred_end(self):
         self._add_route(lat=12.971, lng=77.591)
@@ -304,14 +316,20 @@ class DutyDayMapTests(TestCase):
         # Should not N+1 per point (allow timer/expiry overhead)
         self.assertLess(len(ctx), 25)
 
-    def test_earliest_fallback_start_without_duty_coords(self):
+    def test_start_marker_not_inferred_from_gps_heartbeats(self):
         self.duty.latitude = None
         self.duty.longitude = None
         self.duty.save(update_fields=["latitude", "longitude"])
         self._add_route(lat=12.971, lng=77.591, minutes=1)
         data = build_duty_day_map(self.duty, include_live_location=False)
-        self.assertEqual(data["start_marker"]["source"], SOURCE_EARLIEST_FALLBACK)
-        self.assertTrue(data["start_marker"]["inferred"])
+        self.assertIsNone(data["start_marker"])
+
+    def test_start_marker_from_duty_coords_without_route_point(self):
+        # Duty has start coords even if WORKDAY_START row is missing.
+        data = build_duty_day_map(self.duty, include_live_location=False)
+        self.assertIsNotNone(data["start_marker"])
+        self.assertEqual(data["start_marker"]["source"], SOURCE_DUTY_START)
+        self.assertAlmostEqual(data["start_marker"]["latitude"], 12.97, places=4)
 
     def test_invalid_visit_coords_skipped(self):
         visit = Visit.objects.create(

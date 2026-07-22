@@ -155,6 +155,7 @@ def start_duty(
             existing.pk,
             existing.workday_id,
         )
+        _persist_duty_start_coords(existing, latitude, longitude)
         _ensure_start_route_point(user, existing, latitude, longitude)
         return DutyStartResult(duty=existing, created=False)
 
@@ -164,6 +165,12 @@ def start_duty(
         validate_latitude_longitude(latitude, longitude)
         lat_dec = Decimal(str(latitude)).quantize(Decimal("0.000001"))
         lng_dec = Decimal(str(longitude)).quantize(Decimal("0.000001"))
+    else:
+        logger.warning(
+            "DutyStart missing_start_coords user_id=%s — "
+            "Route History Start marker will be empty until coordinates are persisted",
+            user.pk,
+        )
 
     business_date = timezone.localdate()
     try:
@@ -199,11 +206,60 @@ def start_duty(
             existing.pk,
             existing.workday_id,
         )
+        _persist_duty_start_coords(existing, latitude, longitude)
         _ensure_start_route_point(user, existing, latitude, longitude)
         return DutyStartResult(duty=existing, created=False)
-    logger.info("DutyStart user_id=%s duty_id=%s workday_id=%s", user.pk, duty.pk, workday.pk)
+    logger.info(
+        "DutyStart user_id=%s duty_id=%s workday_id=%s date=%s lat=%s lng=%s",
+        user.pk,
+        duty.pk,
+        workday.pk,
+        business_date,
+        duty.latitude,
+        duty.longitude,
+    )
     _ensure_start_route_point(user, duty, latitude, longitude)
     return DutyStartResult(duty=duty, created=True)
+
+
+def _persist_duty_start_coords(duty: DutySession, latitude, longitude) -> bool:
+    """
+    Persist Start Work Day coordinates onto DutySession + WorkDay once.
+
+    Never overwrites an existing start position. Returns True when coords were
+    written on this call.
+    """
+    if latitude is None or longitude is None:
+        return False
+    if duty.latitude is not None and duty.longitude is not None:
+        return False
+    try:
+        validate_latitude_longitude(latitude, longitude)
+    except Exception:
+        logger.warning(
+            "event=duty_start_coords_invalid duty_id=%s user_id=%s",
+            duty.pk,
+            duty.user_id,
+        )
+        return False
+
+    lat_dec = Decimal(str(latitude)).quantize(Decimal("0.000001"))
+    lng_dec = Decimal(str(longitude)).quantize(Decimal("0.000001"))
+    duty.latitude = lat_dec
+    duty.longitude = lng_dec
+    duty.save(update_fields=["latitude", "longitude"])
+    if duty.workday_id:
+        WorkDay.objects.filter(pk=duty.workday_id, latitude__isnull=True).update(
+            latitude=lat_dec,
+            longitude=lng_dec,
+        )
+    logger.info(
+        "event=duty_start_coords_persisted duty_id=%s lat=%s lng=%s",
+        duty.pk,
+        lat_dec,
+        lng_dec,
+    )
+    return True
 
 
 def _resolve_duty_start_coords(duty, latitude, longitude):
@@ -273,6 +329,8 @@ def _ensure_start_route_point(user, duty, latitude, longitude) -> None:
     )
     from tracking.models import EmployeeRoutePoint
 
+    _persist_duty_start_coords(duty, latitude, longitude)
+    duty.refresh_from_db(fields=["latitude", "longitude"])
     lat, lng = _resolve_duty_start_coords(duty, latitude, longitude)
     point = ensure_duty_boundary_point(
         user=user,
@@ -288,6 +346,12 @@ def _ensure_start_route_point(user, duty, latitude, longitude) -> None:
             "event=duty_start_route_point duty_id=%s point_id=%s",
             duty.pk,
             point.pk,
+        )
+    elif lat is None or lng is None:
+        logger.warning(
+            "event=duty_start_route_point_skipped_no_coords duty_id=%s user_id=%s",
+            duty.pk,
+            user.pk,
         )
     _sync_live_location_on_duty_start(user, duty, latitude, longitude)
 

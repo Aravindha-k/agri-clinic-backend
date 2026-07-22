@@ -294,7 +294,13 @@ def _resolve_start_marker(
     duty: DutySession,
     route_rows: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    # Prefer explicit WORKDAY_START route point over duty lat/lng or inference.
+    """
+    Start marker comes only from Work Day start coordinates.
+
+    Prefer the persisted WORKDAY_START route point; otherwise DutySession
+    latitude/longitude. Never invent Start from GPS heartbeats, live location,
+    first visit, or the earliest route point.
+    """
     for row in route_rows:
         if row.get("source") == SOURCE_WORKDAY_START:
             return _marker(
@@ -316,17 +322,6 @@ def _resolve_start_marker(
             source=SOURCE_DUTY_START,
             inferred=False,
         )
-    if route_rows:
-        row = route_rows[0]
-        return _marker(
-            marker_id=row.get("id"),
-            latitude=row["latitude"],
-            longitude=row["longitude"],
-            captured_at=row.get("captured_at"),
-            source=SOURCE_EARLIEST_FALLBACK,
-            accuracy=row.get("accuracy"),
-            inferred=True,
-        )
     return None
 
 
@@ -334,6 +329,7 @@ def _resolve_end_marker(
     duty: DutySession,
     route_rows: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
+    """End marker only after duty ends; prefer WORKDAY_END point, never live GPS."""
     if duty.is_active:
         return None
     for row in reversed(route_rows):
@@ -347,18 +343,52 @@ def _resolve_end_marker(
                 accuracy=row.get("accuracy"),
                 inferred=False,
             )
-    if route_rows:
-        row = route_rows[-1]
-        return _marker(
-            marker_id=row.get("id"),
-            latitude=row["latitude"],
-            longitude=row["longitude"],
-            captured_at=row.get("captured_at"),
-            source=SOURCE_LAST_FALLBACK,
-            accuracy=row.get("accuracy"),
-            inferred=True,
-        )
     return None
+
+
+def _debug_day_map_selection(
+    duty: DutySession,
+    *,
+    start_marker: dict[str, Any] | None,
+    end_marker: dict[str, Any] | None,
+    visit_count: int,
+) -> None:
+    from django.conf import settings
+
+    if not settings.DEBUG:
+        return
+    logger.info(
+        "day_map_debug employee_user_id=%s business_date=%s duty_session_id=%s "
+        "start_latitude=%s start_longitude=%s visit_count=%s "
+        "end_latitude=%s end_longitude=%s start_marker=%s end_marker=%s",
+        duty.user_id,
+        duty.date,
+        duty.pk,
+        duty.latitude,
+        duty.longitude,
+        visit_count,
+        None if end_marker is None else end_marker.get("latitude"),
+        None if end_marker is None else end_marker.get("longitude"),
+        None if start_marker is None else start_marker.get("source"),
+        None if end_marker is None else end_marker.get("source"),
+    )
+    if (
+        duty.latitude is not None
+        and duty.longitude is not None
+        and start_marker is None
+    ):
+        logger.error(
+            "day_map_debug START_COORDS_LOST duty_session_id=%s has "
+            "latitude/longitude but start_marker is None",
+            duty.pk,
+        )
+    if duty.latitude is None or duty.longitude is None:
+        logger.warning(
+            "day_map_debug START_COORDS_NULL duty_session_id=%s — "
+            "Start Work Day did not persist coordinates (mobile omitted GPS "
+            "or start ran before a valid fix)",
+            duty.pk,
+        )
 
 
 def _load_visits_for_duty(duty: DutySession) -> list[Visit]:
@@ -516,6 +546,12 @@ def build_duty_day_map(
 
     start_marker = _resolve_start_marker(duty, route_rows)
     end_marker = _resolve_end_marker(duty, route_rows)
+    _debug_day_map_selection(
+        duty,
+        start_marker=start_marker,
+        end_marker=end_marker,
+        visit_count=len(visit_markers),
+    )
 
     distance_km = compute_route_distance_km(route_rows)
     distance_meters = round(distance_km * 1000.0, 2) if route_rows else None
@@ -601,13 +637,23 @@ def build_admin_route_compat_payload(
             "user_id": user_id,
             "employee_id": getattr(emp, "employee_id", None),
             "duty_session_id": None,
+            "business_date": str(target_date),
             "total_points": 0,
+            "marker_count": 0,
+            "has_start_marker": False,
+            "has_end_marker": False,
             "distance_km": 0.0,
             "polyline": [],
             "route": [],
             "stops": [],
+            "start_marker": None,
+            "visit_markers": [],
+            "end_marker": None,
+            "markers": {"start": None, "visits": [], "end": None},
             "duty_started_at": None,
             "duty_ended_at": None,
+            "start_latitude": None,
+            "start_longitude": None,
             "day_map": None,
             "deprecated_note": "No DutySession for date; empty compat payload.",
         }
@@ -625,35 +671,84 @@ def build_admin_route_compat_payload(
             "point_type": p.get("point_type") or "gps",
             "visit_id": p.get("visit_id"),
             "client_point_id": p.get("client_point_id"),
+            "source": p.get("source"),
         }
         for p in day_map["route_points"]
     ]
-    stops = [
-        {
-            "type": "visit",
-            "visit_id": m["visit_id"],
-            "timestamp": m.get("visited_at"),
-            "latitude": m["latitude"],
-            "longitude": m["longitude"],
-            "farmer_id": m.get("farmer_id"),
-            "farmer_name": m.get("farmer_name"),
-        }
-        for m in day_map["visit_markers"]
-    ]
+    start_marker = day_map.get("start_marker")
+    end_marker = day_map.get("end_marker")
+    visit_markers = day_map.get("visit_markers") or []
+
+    stops: list[dict[str, Any]] = []
+    if start_marker:
+        stops.append(
+            {
+                "type": "start",
+                "marker_type": "START",
+                "timestamp": start_marker.get("captured_at"),
+                "latitude": start_marker["latitude"],
+                "longitude": start_marker["longitude"],
+                "source": start_marker.get("source"),
+                "id": start_marker.get("id"),
+            }
+        )
+    for m in visit_markers:
+        stops.append(
+            {
+                "type": "visit",
+                "marker_type": "VISIT",
+                "visit_id": m["visit_id"],
+                "timestamp": m.get("visited_at"),
+                "latitude": m["latitude"],
+                "longitude": m["longitude"],
+                "farmer_id": m.get("farmer_id"),
+                "farmer_name": m.get("farmer_name"),
+            }
+        )
+    if end_marker:
+        stops.append(
+            {
+                "type": "end",
+                "marker_type": "END",
+                "timestamp": end_marker.get("captured_at"),
+                "latitude": end_marker["latitude"],
+                "longitude": end_marker["longitude"],
+                "source": end_marker.get("source"),
+                "id": end_marker.get("id"),
+            }
+        )
+
+    marker_count = (
+        (1 if start_marker else 0) + len(visit_markers) + (1 if end_marker else 0)
+    )
     return {
         "date": str(target_date),
         "user_id": user_id,
         "employee_id": getattr(emp, "employee_id", None),
         "duty_session_id": duty.pk,
+        "business_date": str(duty.date) if duty.date else str(target_date),
         "total_points": day_map["metadata"]["route_points_total"],
+        "marker_count": marker_count,
+        "has_start_marker": start_marker is not None,
+        "has_end_marker": end_marker is not None,
         "distance_km": day_map["summary"]["distance_km"],
         "polyline": build_route_polyline(
             [{"latitude": p["latitude"], "longitude": p["longitude"]} for p in route]
         ),
         "route": route,
         "stops": stops,
+        "start_marker": start_marker,
+        "visit_markers": visit_markers,
+        "end_marker": end_marker,
+        "markers": {
+            "start": start_marker,
+            "visits": visit_markers,
+            "end": end_marker,
+        },
         "duty_started_at": duty.start_time.isoformat() if duty.start_time else None,
         "duty_ended_at": duty.end_time.isoformat() if duty.end_time else None,
+        "start_latitude": float(duty.latitude) if duty.latitude is not None else None,
+        "start_longitude": float(duty.longitude) if duty.longitude is not None else None,
         "day_map": day_map,
         "route_source": day_map["metadata"]["route_source"],
     }

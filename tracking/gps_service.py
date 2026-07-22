@@ -308,6 +308,17 @@ def apply_gps_point(
         user, payload, reported_at=recorded_at, sync_live_location=False
     )
 
+    # If Start Work Day had no GPS, backfill DutySession start coords once from
+    # the first valid ping so Route History can emit a Start marker from duty.
+    from tracking.duty_service import (
+        _ensure_start_route_point,
+        _persist_duty_start_coords,
+    )
+
+    if _persist_duty_start_coords(duty, lat, lng):
+        duty.refresh_from_db(fields=["latitude", "longitude"])
+        _ensure_start_route_point(user, duty, lat, lng)
+
     # Persist route point when client id present (offline) or throttle allows (live).
     force_save = bool(client_point_id)
     save_route = force_save or should_save_route_point(

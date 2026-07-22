@@ -329,36 +329,41 @@ def _location_endpoints(
     route: list[dict],
     live: dict | None,
 ) -> dict:
+    """
+    Start/end endpoints for admin day report.
+
+    Start is only DutySession start coords — never first GPS heartbeat or visit.
+    """
     start = None
     if duty and duty.latitude is not None and duty.longitude is not None:
         start = {
             "latitude": float(duty.latitude),
             "longitude": float(duty.longitude),
             "source": "duty_start",
-        }
-    elif route:
-        start = {
-            "latitude": route[0]["latitude"],
-            "longitude": route[0]["longitude"],
-            "source": "route_first_point",
-            "recorded_at": route[0].get("recorded_at"),
+            "captured_at": duty.start_time.isoformat() if duty.start_time else None,
         }
 
     latest = live
-    if not latest and route:
-        last = route[-1]
-        latest = {
-            "latitude": last["latitude"],
-            "longitude": last["longitude"],
-            "recorded_at": last.get("recorded_at"),
-            "source": "route_last_point",
-        }
 
     end = None
-    if duty and duty.end_time and route:
-        end = latest
-    elif duty and not duty.is_active and latest:
-        end = latest
+    if duty and not duty.is_active:
+        end_point = (
+            EmployeeRoutePoint.objects.filter(
+                duty_session_id=duty.pk,
+                point_type=EmployeeRoutePoint.POINT_END,
+            )
+            .order_by("id")
+            .first()
+        )
+        if end_point is not None:
+            end = {
+                "latitude": float(end_point.latitude),
+                "longitude": float(end_point.longitude),
+                "source": "duty_end",
+                "recorded_at": (
+                    end_point.recorded_at.isoformat() if end_point.recorded_at else None
+                ),
+            }
 
     return {"start": start, "latest": latest, "end": end}
 
@@ -459,6 +464,12 @@ def build_employee_day_report(
     stops = build_visit_stops(user_id, target_date)
     locations = _location_endpoints(duty=duty, route=route, live=live)
 
+    day_map = None
+    if duty is not None:
+        from tracking.day_map_service import build_duty_day_map
+
+        day_map = build_duty_day_map(duty, include_live_location=False)
+
     offline_visit_count = sum(1 for v in visits_payload["visits"] if v.get("is_offline_sync"))
     tz = timezone.get_current_timezone()
     day_start = timezone.make_aware(datetime.combine(target_date, time.min), tz)
@@ -489,6 +500,15 @@ def build_employee_day_report(
             "stops": stops,
         },
         "locations": locations,
+        "day_map": day_map,
+        "start_marker": None if day_map is None else day_map.get("start_marker"),
+        "visit_markers": [] if day_map is None else day_map.get("visit_markers") or [],
+        "end_marker": None if day_map is None else day_map.get("end_marker"),
+        "markers": {
+            "start": None if day_map is None else day_map.get("start_marker"),
+            "visits": [] if day_map is None else day_map.get("visit_markers") or [],
+            "end": None if day_map is None else day_map.get("end_marker"),
+        },
         "visits": visits_payload,
         "summary": {
             "work_hours": summary["work_hours"],
