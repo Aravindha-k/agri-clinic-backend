@@ -132,7 +132,7 @@ def employee_me_payload(request, profile: EmployeeProfile) -> dict:
         "designation": profile.get_role_display(),
         "role": profile.role,
         "is_active_employee": profile.is_active_employee,
-        "can_login": user.is_active,
+        "can_login": profile.can_login,
         "workday_status": _workday_status_for_user(user),
         "active_device": active_device_payload(user),
         "device_status": device_status_payload(user),

@@ -22,6 +22,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _auth_failed(message: str, code: str) -> AuthenticationFailed:
+    """AuthenticationFailed whose detail carries a stable machine code."""
+    exc = AuthenticationFailed(detail=message, code=code)
+    # DRF may wrap string detail; attach code for custom exception handler / view.
+    exc.auth_code = code
+    return exc
+
+
 @extend_schema(
     tags=["Mobile", "Auth"],
     summary="Mobile profile",
@@ -65,7 +73,7 @@ class MobileBootstrapAPI(DeviceSessionRequiredMixin, APIView):
 
 class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
     # Accept employee_id OR username so mobile apps do not need to know Django usernames.
-    employee_id = serializers.CharField(required=False, write_only=True)
+    employee_id = serializers.CharField(required=False, write_only=True, allow_blank=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -75,6 +83,8 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         # Resolve employee_id → username before parent validation
         employee_id = attrs.pop("employee_id", None)
+        if isinstance(employee_id, str):
+            employee_id = employee_id.strip() or None
         if employee_id:
             try:
                 profile = EmployeeProfile.objects.select_related("user").get(
@@ -82,39 +92,127 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
                 )
             except EmployeeProfile.DoesNotExist:
                 logging.warning("LOGIN FAILED: employee_id=%s not found", employee_id)
-                raise ValidationError({"detail": "Invalid credentials"})
+                raise _auth_failed(
+                    "Incorrect username or password.",
+                    "INVALID_CREDENTIALS",
+                )
             attrs[self.username_field] = profile.user.username
 
-        if not attrs.get(self.username_field):
+        username = attrs.get(self.username_field)
+        if isinstance(username, str):
+            username = username.strip()
+            attrs[self.username_field] = username
+        if not username:
             raise ValidationError(
                 {self.username_field: "Either username or employee_id is required."}
             )
 
-        data = super().validate(attrs)
+        # When password is correct, surface account-state codes before JWT's
+        # generic "No active account" AuthenticationFailed for inactive users.
+        from django.contrib.auth import get_user_model
+
+        UserModel = get_user_model()
+        candidate = (
+            UserModel.objects.filter(username__iexact=username)
+            .select_related("employee_profile")
+            .first()
+        )
+        password = attrs.get("password")
+        if candidate is not None and candidate.check_password(password or ""):
+            if not candidate.is_active:
+                logging.warning("LOGIN FAILED: Disabled user %s", candidate.username)
+                raise _auth_failed(
+                    "Your account is inactive. Please contact the administrator.",
+                    "ACCOUNT_INACTIVE",
+                )
+            if not hasattr(candidate, "employee_profile"):
+                logging.warning(
+                    "LOGIN FAILED: No employee profile for %s", candidate.username
+                )
+                raise _auth_failed(
+                    "Your employee profile is incomplete. Please contact the administrator.",
+                    "EMPLOYEE_PROFILE_MISSING",
+                )
+            profile = candidate.employee_profile
+            if not profile.is_active_employee:
+                logging.warning(
+                    "LOGIN FAILED: Inactive employee %s",
+                    candidate.username,
+                )
+                raise _auth_failed(
+                    "Your account is inactive. Please contact the administrator.",
+                    "ACCOUNT_INACTIVE",
+                )
+            if not profile.can_login:
+                logging.warning(
+                    "LOGIN FAILED: can_login=false for %s",
+                    candidate.username,
+                )
+                raise _auth_failed(
+                    "Mobile login is disabled for this account. Please contact the administrator.",
+                    "LOGIN_DISABLED",
+                )
+            if candidate.is_staff:
+                logging.warning(
+                    "LOGIN FAILED: Admin user %s tried mobile login",
+                    candidate.username,
+                )
+                raise _auth_failed(
+                    "Incorrect username or password.",
+                    "INVALID_CREDENTIALS",
+                )
+
+        try:
+            data = super().validate(attrs)
+        except AuthenticationFailed:
+            logging.warning("LOGIN FAILED: invalid password for username=%s", username)
+            raise _auth_failed(
+                "Incorrect username or password.",
+                "INVALID_CREDENTIALS",
+            ) from None
+
         user = self.user
 
+        # Defense in depth (also covered above when password matched).
         if not user.is_active:
             logging.warning("LOGIN FAILED: Disabled user %s", user.username)
-            raise AuthenticationFailed("Invalid username or password")
+            raise _auth_failed(
+                "Your account is inactive. Please contact the administrator.",
+                "ACCOUNT_INACTIVE",
+            )
         if not hasattr(user, "employee_profile"):
             logging.warning("LOGIN FAILED: No employee profile for %s", user.username)
-            raise AuthenticationFailed("Invalid username or password")
-        profile = user.employee_profile
-        if not profile.is_active_employee or not profile.can_login:
-            logging.warning(
-                "LOGIN FAILED: Disabled employee %s (active=%s, can_login=%s)",
-                user.username,
-                profile.is_active_employee,
-                profile.can_login,
+            raise _auth_failed(
+                "Your employee profile is incomplete. Please contact the administrator.",
+                "EMPLOYEE_PROFILE_MISSING",
             )
-            raise AuthenticationFailed(
-                "Your account is currently disabled. Please contact your administrator."
+        profile = user.employee_profile
+        if not profile.is_active_employee:
+            logging.warning(
+                "LOGIN FAILED: Inactive employee %s",
+                user.username,
+            )
+            raise _auth_failed(
+                "Your account is inactive. Please contact the administrator.",
+                "ACCOUNT_INACTIVE",
+            )
+        if not profile.can_login:
+            logging.warning(
+                "LOGIN FAILED: can_login=false for %s",
+                user.username,
+            )
+            raise _auth_failed(
+                "Mobile login is disabled for this account. Please contact the administrator.",
+                "LOGIN_DISABLED",
             )
         if user.is_staff:
             logging.warning(
                 "LOGIN FAILED: Admin user %s tried mobile login", user.username
             )
-            raise AuthenticationFailed("Invalid username or password")
+            raise _auth_failed(
+                "Incorrect username or password.",
+                "INVALID_CREDENTIALS",
+            )
 
         request = self.context.get("request")
         device_session = register_device_session(
@@ -156,14 +254,51 @@ class MobileTokenObtainPairView(TokenObtainPairView):
     throttle_scope = "login"
 
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        if response.status_code == 200:
-            logging.info(
-                "Mobile login OK user_id=%s device_session=%s",
-                response.data.get("user", {}).get("id"),
-                bool(response.data.get("device_session_id")),
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError as exc:
+            detail = getattr(exc, "detail", None)
+            return error_response(
+                message="Please check the login details and try again.",
+                code="VALIDATION_ERROR",
+                errors=detail if isinstance(detail, dict) else {"detail": detail},
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
-        return response
+        except AuthenticationFailed as exc:
+            code = getattr(exc, "auth_code", None) or getattr(exc, "default_code", None)
+            if not code or code == "authentication_failed":
+                detail = getattr(exc, "detail", None)
+                if hasattr(detail, "code") and detail.code not in (None, "authentication_failed"):
+                    code = detail.code
+                elif isinstance(detail, dict) and isinstance(detail.get("code"), str):
+                    code = detail["code"]
+                else:
+                    code = "INVALID_CREDENTIALS"
+            message = str(getattr(exc, "detail", "") or "Authentication failed")
+            status_code = (
+                status.HTTP_403_FORBIDDEN
+                if code
+                in {
+                    "ACCOUNT_INACTIVE",
+                    "LOGIN_DISABLED",
+                    "EMPLOYEE_PROFILE_MISSING",
+                    "ACCOUNT_DISABLED",
+                }
+                else status.HTTP_401_UNAUTHORIZED
+            )
+            return error_response(
+                message=message,
+                code=code,
+                status_code=status_code,
+            )
+
+        logging.info(
+            "Mobile login OK user_id=%s device_session=%s",
+            serializer.validated_data.get("user", {}).get("id"),
+            bool(serializer.validated_data.get("device_session_id")),
+        )
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 class MobileTokenRefreshView(TokenRefreshView):

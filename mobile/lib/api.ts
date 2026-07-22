@@ -9,6 +9,11 @@ import {
 } from '@/lib/authStorage';
 import { notifySessionInvalidated } from '@/lib/authEvents';
 import { appLog } from '@/lib/logger';
+import {
+  loginErrorMessage,
+  normalizeLoginError,
+  type LoginError,
+} from '@/lib/loginErrors';
 
 const DEVICE_SESSION_HEADER = 'X-Device-Session';
 
@@ -21,6 +26,7 @@ export type ApiErrorOptions = {
   retryable?: boolean;
   validationErrors?: unknown;
   diagnosticMessage?: string;
+  loginError?: LoginError;
 };
 
 export class ApiError extends Error {
@@ -31,6 +37,7 @@ export class ApiError extends Error {
   retryable: boolean;
   validationErrors?: unknown;
   diagnosticMessage?: string;
+  loginError?: LoginError;
 
   constructor(message: string, status: number, body?: unknown, options: ApiErrorOptions = {}) {
     super(message);
@@ -42,6 +49,7 @@ export class ApiError extends Error {
     this.retryable = options.retryable ?? (status >= 500 || status === 408 || status === 429);
     this.validationErrors = options.validationErrors;
     this.diagnosticMessage = options.diagnosticMessage;
+    this.loginError = options.loginError;
   }
 }
 
@@ -77,13 +85,22 @@ function userMessageForStatus(
   status: number,
   code: string | undefined,
   backendMessage: string | undefined,
+  options: { skipAuth?: boolean } = {},
 ): { message: string; requiresReauth: boolean } {
+  const skipAuth = Boolean(options.skipAuth);
   if (
     status === 409 ||
     code === 'SESSION_REPLACED' ||
     (backendMessage || '').toLowerCase().includes('another device')
   ) {
     return { message: SESSION_INVALID_MESSAGE, requiresReauth: true };
+  }
+  // Login / anonymous requests: 401 means bad credentials, not an expired session.
+  if (status === 401 && skipAuth) {
+    return {
+      message: backendMessage || 'Incorrect username or password.',
+      requiresReauth: false,
+    };
   }
   if (status === 401) {
     return {
@@ -93,7 +110,7 @@ function userMessageForStatus(
   }
   if (status === 403) {
     return {
-      message: 'You do not have permission to do that.',
+      message: backendMessage || 'You do not have permission to do that.',
       requiresReauth: false,
     };
   }
@@ -204,13 +221,43 @@ export async function apiRequest<T = unknown>(
     });
   };
 
-  let res = await exec(token);
-  if (res.status === 401 && !skipAuth) {
-    const next = await refreshAccess();
-    if (next) {
-      token = next;
-      res = await exec(next);
+  let res: Response;
+  try {
+    res = await exec(token);
+    if (res.status === 401 && !skipAuth) {
+      const next = await refreshAccess();
+      if (next) {
+        token = next;
+        res = await exec(next);
+      }
     }
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    const isTimeout =
+      /timeout|timed out|abort/i.test(raw) ||
+      (err instanceof Error && err.name === 'AbortError');
+    const isNetwork =
+      isTimeout ||
+      /network request failed|failed to fetch|networkerror|internet|offline|unreachable/i.test(
+        raw,
+      );
+    appLog.error('api.transport_failed', {
+      path: pathForLog,
+      method: String(rest.method || 'GET'),
+      isTimeout,
+      isNetwork,
+    });
+    const loginError = normalizeLoginError({
+      networkError: isNetwork && !isTimeout,
+      timeout: isTimeout,
+    });
+    throw new ApiError(loginErrorMessage(loginError), 0, { transport: raw }, {
+      code: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+      requiresReauth: false,
+      retryable: true,
+      loginError,
+      diagnosticMessage: raw,
+    });
   }
 
   const text = await res.text();
@@ -223,7 +270,9 @@ export async function apiRequest<T = unknown>(
 
   if (!res.ok) {
     const envelope = extractErrorEnvelope(parsed);
-    const mapped = userMessageForStatus(res.status, envelope.code, envelope.message);
+    const mapped = userMessageForStatus(res.status, envelope.code, envelope.message, {
+      skipAuth: Boolean(skipAuth),
+    });
     appLog.error('api.request_failed', {
       path: pathForLog,
       status: res.status,
@@ -242,13 +291,28 @@ export async function apiRequest<T = unknown>(
       }
     }
 
-    throw new ApiError(mapped.message, res.status, parsed, {
-      code: envelope.code,
-      requiresReauth: mapped.requiresReauth,
-      retryable: res.status >= 500 || res.status === 408 || res.status === 429,
-      validationErrors: envelope.errors,
-      diagnosticMessage: envelope.message,
-    });
+    const loginError = skipAuth
+      ? normalizeLoginError({
+          status: res.status,
+          code: envelope.code,
+          message: envelope.message,
+          errors: envelope.errors,
+        })
+      : undefined;
+
+    throw new ApiError(
+      loginError ? loginErrorMessage(loginError) : mapped.message,
+      res.status,
+      parsed,
+      {
+        code: envelope.code,
+        requiresReauth: mapped.requiresReauth,
+        retryable: res.status >= 500 || res.status === 408 || res.status === 429,
+        validationErrors: envelope.errors,
+        diagnosticMessage: envelope.message,
+        loginError,
+      },
+    );
   }
 
   return parsed as T;

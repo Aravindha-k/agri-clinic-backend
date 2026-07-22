@@ -353,7 +353,12 @@ class LoginAPI(APIView):
     responses={
         201: success_schema(
             "CreateEmployeeResponse",
-            {"employee_id": drf_serializers.IntegerField()},
+            {
+                "employee_id": drf_serializers.CharField(),
+                "username": drf_serializers.CharField(),
+                "can_login": drf_serializers.BooleanField(),
+                "mobile_login_enabled": drf_serializers.BooleanField(),
+            },
         ),
         400: error_schema("CreateEmployeeError"),
     },
@@ -363,23 +368,34 @@ class CreateEmployeeAPI(APIView):
 
     def post(self, request):
         serializer = EmployeeCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        if not serializer.is_valid():
+            return error_response(
+                errors=serializer.errors,
+                message="Please correct the employee details.",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        from accounts.serializers import employee_create_success_payload
+
+        profile = serializer.save()
 
         # ✅ AUDIT LOG (MUST BE BEFORE RETURN)
         create_audit_log(
             actor=request.user,
             module="ACCOUNTS",
             action="CREATE",
-            object_id=user.id,
+            object_id=profile.user_id,
             description="Employee created",
-            metadata={"username": user.username},
+            metadata={
+                "username": profile.user.username,
+                "employee_id": profile.employee_id,
+            },
             request=request,
         )
 
         return success_response(
-            data={"employee_id": user.id},
-            message="Employee created successfully",
+            data=employee_create_success_payload(profile),
+            message="Employee created successfully. Mobile login is enabled.",
             status_code=status.HTTP_201_CREATED,
         )
 
@@ -524,15 +540,20 @@ class ToggleEmployeeStatusAPI(APIView):
         )
 
         employee.is_active_employee = not employee.is_active_employee
+        employee.can_login = employee.is_active_employee
         employee.user.is_active = employee.is_active_employee
 
         employee.user.save(update_fields=["is_active"])
-        employee.save(update_fields=["is_active_employee"])
+        employee.save(update_fields=["is_active_employee", "can_login"])
 
         return success_response(
             data={
                 "employee_id": employee.employee_id,
                 "is_active_employee": employee.is_active_employee,
+                "can_login": employee.can_login,
+                "mobile_login_enabled": bool(
+                    employee.can_login and employee.is_active_employee
+                ),
             }
         )
 
@@ -807,6 +828,8 @@ class AdminEmployeeManagementAPI(APIView):
         except Exception as e:
             return error_response(message=str(e))
 
+        from accounts.serializers import employee_create_success_payload
+
         create_audit_log(
             actor=request.user,
             module="ACCOUNTS",
@@ -818,14 +841,8 @@ class AdminEmployeeManagementAPI(APIView):
         )
 
         return success_response(
-            data={
-                "id": profile.id,
-                "username": profile.user.username,
-                "employee_id": profile.employee_id,
-                "role": profile.role,
-                "is_active_employee": profile.is_active_employee,
-            },
-            message="Employee created (admin management)",
+            data=employee_create_success_payload(profile),
+            message="Employee created. Mobile login is enabled.",
             status_code=status.HTTP_201_CREATED,
         )
 
@@ -915,9 +932,10 @@ class AdminEmployeeToggleStatusAPI(APIView):
             pk=pk,
         )
         emp.is_active_employee = not emp.is_active_employee
+        emp.can_login = emp.is_active_employee
         emp.user.is_active = emp.is_active_employee
         emp.user.save(update_fields=["is_active"])
-        emp.save(update_fields=["is_active_employee"])
+        emp.save(update_fields=["is_active_employee", "can_login"])
 
         new_status = "activated" if emp.is_active_employee else "deactivated"
         logger.info(

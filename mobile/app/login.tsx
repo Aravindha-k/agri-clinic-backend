@@ -38,8 +38,11 @@ export default function LoginScreen() {
       await signIn(employeeId, password);
       router.replace('/(tabs)');
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Sign-in failed.';
-      setError(msg);
+      if (e instanceof ApiError) {
+        setError(e.message);
+      } else {
+        setError('Unable to connect. Check your internet connection and try again.');
+      }
     } finally {
       setLoading(false);
     }

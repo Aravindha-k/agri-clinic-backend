@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers
@@ -16,6 +17,26 @@ def _validate_password_field(value):
     return value
 
 
+def employee_create_success_payload(profile: EmployeeProfile) -> dict:
+    """Canonical admin create/list success fields for mobile-capable accounts."""
+    return {
+        "id": profile.id,
+        "user_id": profile.user_id,
+        "username": profile.user.username,
+        "employee_id": profile.employee_id,
+        "role": profile.role,
+        "is_active_employee": profile.is_active_employee,
+        "can_login": profile.can_login,
+        "mobile_login_enabled": bool(
+            profile.can_login
+            and profile.is_active_employee
+            and profile.user.is_active
+            and not profile.user.is_staff
+        ),
+        "account_active": bool(profile.user.is_active and profile.is_active_employee),
+    }
+
+
 # =========================
 # EMPLOYEE CREATE (ADMIN)
 # =========================
@@ -28,6 +49,14 @@ class EmployeeCreateSerializer(serializers.Serializer):
 
     phone = serializers.CharField()
 
+    def validate_username(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Username is required")
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Username already exists")
+        return value
+
     def validate_phone(self, value):
         if not value.isdigit():
             raise serializers.ValidationError("Phone must contain only digits")
@@ -35,18 +64,9 @@ class EmployeeCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Phone must be exactly 10 digits")
         return value
 
+    @transaction.atomic
     def create(self, validated_data):
-        # Check if user already exists
-        if User.objects.filter(username=validated_data["username"]).exists():
-            raise serializers.ValidationError({"username": "User already created"})
-
-        last_emp = EmployeeProfile.objects.order_by("-id").first()
-        if last_emp and last_emp.employee_id.startswith("KAC-"):
-            last_number = int(last_emp.employee_id.split("-")[1])
-        else:
-            last_number = 0
-
-        new_employee_id = f"KAC-{last_number + 1:04d}"
+        from .utils import generate_employee_id
 
         user = User.objects.create_user(
             username=validated_data["username"],
@@ -55,15 +75,16 @@ class EmployeeCreateSerializer(serializers.Serializer):
             is_active=True,
         )
 
-        EmployeeProfile.objects.create(
+        profile = EmployeeProfile.objects.create(
             user=user,
-            employee_id=new_employee_id,
+            employee_id=generate_employee_id(),
             phone=validated_data["phone"],
             is_active_employee=True,
-            role="FieldAgent",  # Always set to FieldAgent
+            can_login=True,
+            role="FieldAgent",
         )
-
-        return user
+        # Return profile so API can expose the real employee_id string.
+        return profile
 
 
 # =========================
@@ -199,7 +220,8 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
     username = serializers.CharField(source="user.username", read_only=True)
     first_name = serializers.CharField(source="user.first_name", read_only=True)
     last_name = serializers.CharField(source="user.last_name", read_only=True)
-    can_login = serializers.BooleanField(source="user.is_active", read_only=True)
+    can_login = serializers.BooleanField(read_only=True)
+    mobile_login_enabled = serializers.SerializerMethodField()
     device_status = serializers.SerializerMethodField()
     district_id = serializers.IntegerField(
         source="district.id", read_only=True, allow_null=True
@@ -223,6 +245,7 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             "district_name",
             "is_active_employee",
             "can_login",
+            "mobile_login_enabled",
             "profile_photo_url",
             "profile_photo_updated_at",
             "device_status",
@@ -234,6 +257,16 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             "created_at",
             "profile_photo_url",
             "profile_photo_updated_at",
+            "can_login",
+            "mobile_login_enabled",
+        )
+
+    def get_mobile_login_enabled(self, obj):
+        return bool(
+            obj.can_login
+            and obj.is_active_employee
+            and obj.user.is_active
+            and not obj.user.is_staff
         )
 
     def get_device_status(self, obj):
@@ -249,7 +282,7 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
     phone = serializers.CharField(required=False, allow_blank=True, default="")
-    employee_id = serializers.CharField()
+    employee_id = serializers.CharField(required=False, allow_blank=True)
     role = serializers.ChoiceField(
         choices=EmployeeProfile.ROLE_CHOICES,
     )
@@ -260,11 +293,17 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
         return _validate_password_field(value)
 
     def validate_username(self, value):
-        if User.objects.filter(username=value).exists():
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Username is required")
+        if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("Username already exists")
         return value
 
     def validate_phone(self, value):
+        value = (value or "").strip()
+        if not value:
+            return ""
         if not value.isdigit():
             raise serializers.ValidationError("Phone must contain only digits")
         if len(value) != 10:
@@ -272,14 +311,22 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
         return value
 
     def validate_employee_id(self, value):
-        if value and EmployeeProfile.objects.filter(employee_id=value).exists():
+        value = (value or "").strip()
+        if not value:
+            return value
+        if EmployeeProfile.objects.filter(employee_id__iexact=value).exists():
             raise serializers.ValidationError("Employee ID already exists")
         return value
 
+    @transaction.atomic
     def create(self, validated_data):
         from .utils import generate_employee_id
 
-        emp_id = validated_data.get("employee_id") or generate_employee_id()
+        emp_id = (validated_data.get("employee_id") or "").strip() or generate_employee_id()
+        if EmployeeProfile.objects.filter(employee_id__iexact=emp_id).exists():
+            raise serializers.ValidationError(
+                {"employee_id": "Employee ID already exists"}
+            )
 
         user = User.objects.create_user(
             username=validated_data["username"],
@@ -290,11 +337,12 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
         profile = EmployeeProfile.objects.create(
             user=user,
             employee_id=emp_id,
-            phone=validated_data["phone"],
+            phone=validated_data.get("phone") or "",
             role=validated_data.get("role", "FieldAgent"),
             district_id=validated_data.get("district"),
             village_id=validated_data.get("village"),
             is_active_employee=True,
+            can_login=True,
         )
         return profile
 
@@ -310,19 +358,21 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=EmployeeProfile.ROLE_CHOICES, required=False)
     district = serializers.IntegerField(required=False, allow_null=True)
     is_active_employee = serializers.BooleanField(required=False)
+    can_login = serializers.BooleanField(required=False)
 
     def validate_phone(self, value):
         if value and (not value.isdigit() or len(value) != 10):
             raise serializers.ValidationError("Phone must be exactly 10 digits")
         return value
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         user = instance.user
         user_fields_to_save = []
 
         username = validated_data.get("username")
         if username and username != user.username:
-            if User.objects.exclude(id=user.id).filter(username=username).exists():
+            if User.objects.exclude(id=user.id).filter(username__iexact=username).exists():
                 raise serializers.ValidationError(
                     {"username": "Username already exists"}
                 )
@@ -336,8 +386,19 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
             user.last_name = validated_data["last_name"]
             user_fields_to_save.append("last_name")
 
+        if "is_active_employee" in validated_data:
+            instance.is_active_employee = validated_data["is_active_employee"]
+            user.is_active = validated_data["is_active_employee"]
+            user_fields_to_save.append("is_active")
+            # Keep mobile login flag aligned unless can_login is set explicitly.
+            if "can_login" not in validated_data:
+                instance.can_login = validated_data["is_active_employee"]
+
+        if "can_login" in validated_data:
+            instance.can_login = validated_data["can_login"]
+
         if user_fields_to_save:
-            user.save(update_fields=user_fields_to_save)
+            user.save(update_fields=list(dict.fromkeys(user_fields_to_save)))
 
         if "phone" in validated_data:
             instance.phone = validated_data["phone"]
@@ -345,10 +406,6 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
             instance.role = validated_data["role"]
         if "district" in validated_data:
             instance.district_id = validated_data["district"]
-        if "is_active_employee" in validated_data:
-            instance.is_active_employee = validated_data["is_active_employee"]
-            user.is_active = validated_data["is_active_employee"]
-            user.save(update_fields=["is_active"])
 
         instance.save()
         return instance

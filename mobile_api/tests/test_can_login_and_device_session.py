@@ -36,7 +36,8 @@ class CanLoginEnforcementTests(TestCase):
         self.profile.can_login = False
         self.profile.save(update_fields=["can_login"])
         r = self._mobile_login()
-        self.assertIn(r.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(r.data.get("code"), "LOGIN_DISABLED")
 
     def test_web_login_blocked_when_can_login_false(self):
         self.profile.can_login = False
