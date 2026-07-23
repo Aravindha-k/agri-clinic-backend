@@ -295,13 +295,16 @@ def _live_location_block_from_model(live: EmployeeLiveLocation | None) -> dict |
     if not live:
         return None
     return {
-        "latitude": float(live.latitude),
-        "longitude": float(live.longitude),
+        "latitude": float(live.latitude) if live.latitude is not None else None,
+        "longitude": float(live.longitude) if live.longitude is not None else None,
         "accuracy": live.accuracy,
         "speed": live.speed,
         "battery_level": live.battery_level,
         "recorded_at": live.recorded_at.isoformat() if live.recorded_at else None,
         "duty_session_id": live.duty_session_id,
+        "last_heartbeat_at": (
+            live.last_heartbeat_at.isoformat() if live.last_heartbeat_at else None
+        ),
     }
 
 

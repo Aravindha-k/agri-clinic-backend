@@ -61,6 +61,12 @@ def complete_duty_as_auto_expired(
         ]
     )
     _sync_workday_auto_complete(duty, ended_at)
+    try:
+        from tracking.live_tracking_service import finalize_live_state_on_duty_end
+
+        finalize_live_state_on_duty_end(duty.user, duty)
+    except Exception:
+        logger.exception("live_state finalize failed after auto-complete")
     clear_live_tracking_for_user(duty.user_id)
     try:
         from dashboard.services import invalidate_dashboard_caches

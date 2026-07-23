@@ -253,23 +253,24 @@ def apply_gps_point(
     lat_dec, lng_dec = _quantize(lat, lng)
     gps_defaults = gps_state_defaults_from_payload(payload)
 
-    # Idempotent replay: return existing route point, still refresh live location.
+    # Idempotent replay: return existing route point, still refresh live presence.
     if client_point_id:
         existing = _find_existing_by_client_id(duty, client_point_id)
         if existing is not None:
-            live, _ = EmployeeLiveLocation.objects.update_or_create(
+            from tracking.live_tracking_service import update_live_state_from_gps
+
+            live, _ = update_live_state_from_gps(
                 user=user,
-                defaults={
-                    "duty_session": duty,
-                    "latitude": lat_dec,
-                    "longitude": lng_dec,
-                    "accuracy": accuracy,
-                    "speed": speed,
-                    "heading": heading,
-                    "battery_level": battery,
-                    "recorded_at": recorded_at,
-                    **gps_defaults,
-                },
+                duty=duty,
+                latitude=lat,
+                longitude=lng,
+                recorded_at=recorded_at,
+                accuracy=accuracy,
+                speed=speed,
+                heading=heading,
+                battery_level=battery,
+                client_point_id=client_point_id,
+                gps_defaults=gps_defaults,
             )
             upsert_employee_gps_state(
                 user, payload, reported_at=recorded_at, sync_live_location=False
@@ -290,19 +291,20 @@ def apply_gps_point(
                 client_point_id=client_point_id,
             )
 
-    live, _created = EmployeeLiveLocation.objects.update_or_create(
+    from tracking.live_tracking_service import update_live_state_from_gps
+
+    live, _location_updated = update_live_state_from_gps(
         user=user,
-        defaults={
-            "duty_session": duty,
-            "latitude": lat_dec,
-            "longitude": lng_dec,
-            "accuracy": accuracy,
-            "speed": speed,
-            "heading": heading,
-            "battery_level": battery,
-            "recorded_at": recorded_at,
-            **gps_defaults,
-        },
+        duty=duty,
+        latitude=lat,
+        longitude=lng,
+        recorded_at=recorded_at,
+        accuracy=accuracy,
+        speed=speed,
+        heading=heading,
+        battery_level=battery,
+        client_point_id=client_point_id,
+        gps_defaults=gps_defaults,
     )
     upsert_employee_gps_state(
         user, payload, reported_at=recorded_at, sync_live_location=False

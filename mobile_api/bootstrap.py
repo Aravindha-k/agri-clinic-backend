@@ -89,10 +89,63 @@ def build_mobile_bootstrap(*, request) -> dict[str, Any]:
     min_version = getattr(settings, "MINIMUM_SUPPORTED_APP_VERSION", None)
     force_update = bool(getattr(settings, "FORCE_APP_UPDATE", False))
 
+    live_tracking = None
+    if current_duty.get("duty_session_id") and current_duty.get("is_active"):
+        from tracking.live_tracking_service import resolve_tracking_status
+        from tracking.models import EmployeeLiveLocation
+
+        live = EmployeeLiveLocation.objects.filter(user=user).first()
+        hb = None
+        if live and live.last_heartbeat_at:
+            hb = live.last_heartbeat_at
+        elif current_duty.get("last_heartbeat"):
+            from django.utils.dateparse import parse_datetime
+
+            hb = parse_datetime(current_duty["last_heartbeat"]) or None
+        live_tracking = {
+            "duty_session_id": current_duty.get("duty_session_id"),
+            "last_heartbeat_at": hb.isoformat() if hb else None,
+            "location_recorded_at": (
+                live.recorded_at.isoformat()
+                if live and live.recorded_at
+                else None
+            ),
+            "latitude": float(live.latitude) if live and live.latitude is not None else None,
+            "longitude": (
+                float(live.longitude) if live and live.longitude is not None else None
+            ),
+            "gps_enabled": live.gps_enabled if live else None,
+            "permission_granted": (
+                True
+                if live and live.location_permission_status == "granted"
+                else False
+                if live and live.location_permission_status in {"denied", "services_disabled"}
+                else None
+            ),
+            "tracking_service_active": (
+                live.background_tracking_enabled if live else None
+            ),
+            "tracking_status": resolve_tracking_status(
+                has_active_duty=True,
+                last_heartbeat_at=hb,
+                latitude=live.latitude if live else None,
+                longitude=live.longitude if live else None,
+                gps_enabled=live.gps_enabled if live else None,
+                location_permission_status=(
+                    live.location_permission_status if live else None
+                ),
+                background_tracking_enabled=(
+                    live.background_tracking_enabled if live else None
+                ),
+            ),
+            "expected_end_at": current_duty.get("expected_end_at"),
+        }
+
     return {
         "user": user_block,
         "device_session": device_session,
         "current_duty": current_duty if current_duty.get("duty_session_id") else None,
+        "live_tracking": live_tracking,
         "day_map": day_map_summary,
         "server_now": timezone.now().isoformat(),
         "feature_flags": {
@@ -101,6 +154,7 @@ def build_mobile_bootstrap(*, request) -> dict[str, Any]:
             "canonical_visits": True,
             "canonical_day_map": True,
             "duty_start_end_route_points": True,
+            "heartbeat_live_tracking": True,
         },
         "minimum_supported_app_version": min_version,
         "force_update": force_update,

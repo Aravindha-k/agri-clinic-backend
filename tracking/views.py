@@ -157,8 +157,13 @@ def _employee_location_tuple(user_id, last_locations, active_workdays, now):
         recorded = loc.get("recorded_at") if isinstance(loc, dict) else loc.recorded_at
         lat = loc.get("latitude") if isinstance(loc, dict) else loc.latitude
         lng = loc.get("longitude") if isinstance(loc, dict) else loc.longitude
-        last_seen = recorded.isoformat() if hasattr(recorded, "isoformat") else str(recorded)
-        return float(lat), float(lng), last_seen
+        if lat is not None and lng is not None:
+            last_seen = (
+                recorded.isoformat()
+                if hasattr(recorded, "isoformat")
+                else (str(recorded) if recorded is not None else None)
+            )
+            return float(lat), float(lng), last_seen
 
     live = get_last_known_location(user_id)
     if live and live.get("latitude") is not None:
@@ -288,26 +293,60 @@ class EndWorkDayAPI(DeviceSessionRequiredMixin, APIView):
 @extend_schema(
     tags=["Tracking"],
     summary="Send heartbeat",
-    description="Updates the last heartbeat timestamp for the employee's active work day. Used to detect online/offline status.",
-    request=None,
+    description=(
+        "Updates last_heartbeat_at for the employee's active duty. "
+        "Coordinates optional. Does not create Route History points. "
+        "Keeps stationary employees Online while the duty is active."
+    ),
+    request=HeartbeatSerializer,
     responses={200: SIMPLE_SUCCESS},
 )
 class HeartbeatAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        from tracking.live_tracking_service import LiveTrackingError, apply_heartbeat
+        from utils.response import error_response, success_response
+
         if request.user.is_staff:
-            return Response({"detail": "Admin heartbeat not allowed"}, status=403)
+            return error_response(
+                message="Admin heartbeat not allowed",
+                code="FORBIDDEN",
+                status_code=403,
+            )
 
         expire_overlong_workdays_for_user(request.user)
-
         serializer = HeartbeatSerializer(
             data=request.data if request.data else {"gps_enabled": True},
             context={"request": request},
         )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({"message": "Heartbeat received"}, status=200)
+        if not serializer.is_valid():
+            errors = serializer.errors
+            code = "VALIDATION_ERROR"
+            message = "Invalid heartbeat payload"
+            if isinstance(errors, dict):
+                detail = errors.get("detail")
+                if isinstance(detail, list) and detail:
+                    message = str(detail[0])
+                elif isinstance(detail, str):
+                    message = detail
+                nested = errors.get("non_field_errors") or errors.get("code")
+                if isinstance(errors.get("detail"), dict) and errors["detail"].get("code"):
+                    code = errors["detail"]["code"]
+            return error_response(
+                message=message,
+                code=code,
+                errors=errors,
+                status_code=400,
+            )
+        try:
+            result = apply_heartbeat(request.user, serializer.validated_data)
+        except LiveTrackingError as exc:
+            status_code = 403 if exc.code == "FORBIDDEN" else 400
+            return error_response(
+                message=exc.message, code=exc.code, status_code=status_code
+            )
+        return success_response(data=result, message="Heartbeat received")
 
 
 # ──────────────────────────────────────────────

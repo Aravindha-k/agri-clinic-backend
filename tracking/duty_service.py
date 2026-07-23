@@ -275,13 +275,20 @@ def _resolve_duty_start_coords(duty, latitude, longitude):
 
 def _sync_live_location_on_duty_start(user, duty, latitude, longitude) -> None:
     """
-    Upsert EmployeeLiveLocation + Redis so admin Live Tracking reflects Start
-    Work Day immediately (without waiting for a later GPS ping).
+    Upsert EmployeeLiveLocation so admin Live Tracking reflects Start Work Day
+    immediately (coords optional → NO_LOCATION_YET until first GPS).
     """
+    from tracking.live_tracking_service import ensure_live_row_for_duty
+
+    now = timezone.now()
     lat, lng = _resolve_duty_start_coords(duty, latitude, longitude)
+    live = ensure_live_row_for_duty(user, duty)
+
     if lat is None or lng is None:
-        # Keep admin duty_session_id current even when start has no coords.
-        EmployeeLiveLocation.objects.filter(user=user).update(duty_session=duty)
+        EmployeeLiveLocation.objects.filter(pk=live.pk).update(
+            duty_session=duty,
+            last_heartbeat_at=now,
+        )
         return
 
     try:
@@ -292,20 +299,20 @@ def _sync_live_location_on_duty_start(user, duty, latitude, longitude) -> None:
             user.pk,
             duty.pk,
         )
-        EmployeeLiveLocation.objects.filter(user=user).update(duty_session=duty)
+        EmployeeLiveLocation.objects.filter(pk=live.pk).update(
+            duty_session=duty,
+            last_heartbeat_at=now,
+        )
         return
 
     lat_dec = Decimal(str(lat)).quantize(Decimal("0.000001"))
     lng_dec = Decimal(str(lng)).quantize(Decimal("0.000001"))
-    recorded_at = timezone.now()
-    EmployeeLiveLocation.objects.update_or_create(
-        user=user,
-        defaults={
-            "duty_session": duty,
-            "latitude": lat_dec,
-            "longitude": lng_dec,
-            "recorded_at": recorded_at,
-        },
+    EmployeeLiveLocation.objects.filter(pk=live.pk).update(
+        duty_session=duty,
+        latitude=lat_dec,
+        longitude=lng_dec,
+        recorded_at=now,
+        last_heartbeat_at=now,
     )
     if duty.workday_id:
         workday = duty.workday
@@ -317,7 +324,7 @@ def _sync_live_location_on_duty_start(user, duty, latitude, longitude) -> None:
                 workday=workday,
                 latitude=float(lat_dec),
                 longitude=float(lng_dec),
-                recorded_at=recorded_at,
+                recorded_at=now,
             )
 
 
@@ -579,6 +586,9 @@ def end_duty(
         )
 
     _ensure_end_route_point(user, duty, latitude, longitude)
+    from tracking.live_tracking_service import finalize_live_state_on_duty_end
+
+    finalize_live_state_on_duty_end(user, duty)
     clear_live_tracking_for_user(user.pk)
     logger.info(
         "event=duty_manual_completed user_id=%s duty_id=%s end_time=%s",

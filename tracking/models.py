@@ -231,7 +231,12 @@ class DutySession(models.Model):
 
 
 class EmployeeLiveLocation(models.Model):
-    """Latest GPS fix per employee (one row, update_or_create)."""
+    """Canonical per-employee live tracking state (not Route History).
+
+    One row per user. Coordinates may be null when duty is active but no
+    valid GPS fix has arrived yet (NO_LOCATION_YET). Online/Stale/Offline
+    is driven primarily by last_heartbeat_at, not by GPS movement.
+    """
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -245,26 +250,37 @@ class EmployeeLiveLocation(models.Model):
         blank=True,
         related_name="live_snapshots",
     )
-    latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
     accuracy = models.FloatField(null=True, blank=True)
     speed = models.FloatField(null=True, blank=True)
     heading = models.FloatField(null=True, blank=True)
     battery_level = models.IntegerField(null=True, blank=True)
-    recorded_at = models.DateTimeField(db_index=True)
+    recorded_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True, db_index=True)
     gps_enabled = models.BooleanField(null=True, blank=True)
     location_permission_status = models.CharField(max_length=32, null=True, blank=True)
     background_tracking_enabled = models.BooleanField(null=True, blank=True)
+    app_state = models.CharField(max_length=32, null=True, blank=True)
+    network_available = models.BooleanField(null=True, blank=True)
+    last_client_point_id = models.CharField(max_length=64, null=True, blank=True)
+    last_client_heartbeat_id = models.CharField(max_length=64, null=True, blank=True)
     gps_reported_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["recorded_at"]),
+            models.Index(fields=["last_heartbeat_at"]),
+            models.Index(fields=["duty_session", "last_heartbeat_at"]),
         ]
 
     def __str__(self):
-        return f"Live {self.user_id} @ {self.recorded_at}"
+        return f"Live {self.user_id} @ {self.last_heartbeat_at or self.recorded_at}"
 
 
 class EmployeeGpsState(models.Model):

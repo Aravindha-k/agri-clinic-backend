@@ -1,16 +1,25 @@
-"""Canonical employee duty + GPS status for admin APIs."""
+"""Canonical employee duty + GPS + heartbeat tracking status for admin APIs."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from django.utils import timezone
 
 from tracking.gps_state import is_mobile_gps_off
+from tracking.live_tracking_service import (
+    TRACKING_NO_LOCATION,
+    TRACKING_OFFLINE,
+    TRACKING_ONLINE,
+    TRACKING_STALE,
+    online_seconds,
+    resolve_tracking_status,
+    stale_seconds,
+)
 from utils.gps import validate_latitude, validate_longitude
 
-# GPS freshness thresholds (minutes)
+# GPS fix freshness (location age) — separate from Online/Stale/Offline.
 GPS_ACTIVE_MINUTES = 3
 GPS_DELAYED_MINUTES = 10
 
@@ -80,18 +89,14 @@ def resolve_gps_status(
     return GPS_LOST
 
 
-def last_seen_minutes(last_gps_at: datetime | None, *, now=None) -> int | None:
-    if not last_gps_at:
+def last_seen_minutes(last_at: datetime | None, *, now=None) -> int | None:
+    if not last_at:
         return None
     now = now or timezone.now()
     try:
-        return max(int((now - last_gps_at).total_seconds() // 60), 0)
+        return max(int((now - last_at).total_seconds() // 60), 0)
     except (TypeError, ValueError):
         return None
-
-
-def _legacy_connection(gps_status: str) -> str:
-    return "ONLINE" if gps_status in (GPS_ACTIVE, GPS_DELAYED) else "OFFLINE"
 
 
 def _legacy_gps_signal(gps_status: str) -> str:
@@ -101,23 +106,16 @@ def _legacy_gps_signal(gps_status: str) -> str:
 def _legacy_tracking_health(
     *,
     duty_status: str,
-    gps_status: str,
-    last_heartbeat_at: datetime | None,
-    now=None,
+    tracking_status: str,
 ) -> str:
     if duty_status != DUTY_ON_DUTY:
         return "STOPPED"
-    if gps_status == GPS_ACTIVE:
+    if tracking_status == TRACKING_ONLINE:
         return "OK"
-    if gps_status == GPS_DELAYED:
+    if tracking_status == TRACKING_STALE:
         return "STALE"
-    if last_heartbeat_at:
-        now = now or timezone.now()
-        diff = (now - last_heartbeat_at).total_seconds() / 60
-        if diff <= GPS_ACTIVE_MINUTES:
-            return "OK"
-        if diff <= GPS_DELAYED_MINUTES:
-            return "STALE"
+    if tracking_status == TRACKING_NO_LOCATION:
+        return "OK"
     return "STOPPED"
 
 
@@ -135,7 +133,7 @@ def build_employee_status_fields(
     last_heartbeat_at: datetime | None = None,
     now=None,
 ) -> dict[str, Any]:
-    """New canonical status fields plus legacy aliases for admin clients."""
+    """Canonical status fields plus legacy aliases for admin clients."""
     now = now or timezone.now()
     duty_status = resolve_duty_status(
         has_active_duty=has_active_duty,
@@ -150,33 +148,60 @@ def build_employee_status_fields(
         longitude=longitude,
         now=now,
     )
-    seen_minutes = last_seen_minutes(last_gps_at, now=now)
+    # Presence: prefer heartbeat; fall back to last GPS for pre-migration rows.
+    presence_at = last_heartbeat_at or last_gps_at
+    tracking_status = resolve_tracking_status(
+        has_active_duty=has_active_duty,
+        last_heartbeat_at=presence_at,
+        latitude=latitude,
+        longitude=longitude,
+        gps_enabled=False if gps_off else gps_enabled,
+        location_permission_status=location_permission_status,
+        background_tracking_enabled=background_tracking_enabled,
+        now=now,
+    )
+    seen_minutes = last_seen_minutes(presence_at, now=now)
     last_gps_iso = (
         last_gps_at.isoformat()
         if last_gps_at and hasattr(last_gps_at, "isoformat")
         else None
     )
+    last_hb_iso = (
+        last_heartbeat_at.isoformat()
+        if last_heartbeat_at and hasattr(last_heartbeat_at, "isoformat")
+        else None
+    )
+    permission_granted = None
+    if location_permission_status == "granted":
+        permission_granted = True
+    elif location_permission_status in {"denied", "services_disabled"}:
+        permission_granted = False
 
     return {
         "duty_status": duty_status,
         "gps_status": gps_status,
+        "tracking_status": tracking_status,
         "gps_enabled": gps_enabled,
+        "permission_granted": permission_granted,
+        "tracking_service_active": background_tracking_enabled,
         "location_permission_status": location_permission_status,
         "background_tracking_enabled": background_tracking_enabled,
         "last_gps_update": last_gps_iso,
+        "last_heartbeat_at": last_hb_iso,
+        "location_recorded_at": last_gps_iso,
         "last_seen_minutes": seen_minutes,
-        # Legacy aliases
+        "online_threshold_seconds": online_seconds(),
+        "stale_threshold_seconds": stale_seconds(),
+        # Legacy aliases — connection now mirrors heartbeat-based tracking_status
         "is_on_duty": duty_status == DUTY_ON_DUTY,
-        "last_update": last_gps_iso,
+        "last_update": last_hb_iso or last_gps_iso,
         "last_update_age_minutes": seen_minutes,
-        "connection": _legacy_connection(gps_status),
+        "connection": tracking_status,
         "gps_signal": _legacy_gps_signal(gps_status),
         "legacy_gps_status": _legacy_gps_signal(gps_status),
         "tracking_health": _legacy_tracking_health(
             duty_status=duty_status,
-            gps_status=gps_status,
-            last_heartbeat_at=last_heartbeat_at,
-            now=now,
+            tracking_status=tracking_status,
         ),
     }
 
@@ -197,8 +222,13 @@ def build_status_for_live_employee(
 
     stored = resolve_stored_gps_state(gps_state_row=gps_state_row, live_row=live_row)
     last_gps_at = live_row.recorded_at if live_row else None
-    latitude = float(live_row.latitude) if live_row else None
-    longitude = float(live_row.longitude) if live_row else None
+    latitude = float(live_row.latitude) if live_row and live_row.latitude is not None else None
+    longitude = (
+        float(live_row.longitude) if live_row and live_row.longitude is not None else None
+    )
+    hb = last_heartbeat_at
+    if hb is None and live_row is not None:
+        hb = getattr(live_row, "last_heartbeat_at", None)
     return build_employee_status_fields(
         has_active_duty=has_active_duty,
         has_active_device_session=bool(device_status and device_status.get("is_active")),
@@ -209,7 +239,7 @@ def build_status_for_live_employee(
         location_permission_status=stored.get("location_permission_status"),
         background_tracking_enabled=stored.get("background_tracking_enabled"),
         gps_off=gps_off,
-        last_heartbeat_at=last_heartbeat_at,
+        last_heartbeat_at=hb,
         now=now,
     )
 

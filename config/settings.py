@@ -304,6 +304,11 @@ FORCE_APP_UPDATE = os.getenv("FORCE_APP_UPDATE", "false").lower() in (
     "yes",
 )
 
+# Admin Live Tracking: Online / Stale / Offline based on heartbeat freshness.
+# Defaults: Online ≤ 7m, Stale ≤ 15m, then Offline.
+LIVE_TRACKING_ONLINE_SECONDS = int(os.getenv("LIVE_TRACKING_ONLINE_SECONDS", str(7 * 60)))
+LIVE_TRACKING_STALE_SECONDS = int(os.getenv("LIVE_TRACKING_STALE_SECONDS", str(15 * 60)))
+
 # --------------------------------------------------
 # TEMPLATES (REQUIRED FOR ADMIN)
 # --------------------------------------------------

@@ -243,14 +243,16 @@ class EmployeeStatusAPITest(APITestCase):
 
     def test_live_api_gps_delayed(self):
         self._start_duty()
-        t0 = timezone.now() - timedelta(minutes=5)
-        self._location_update(recorded_at=t0.isoformat())
+        # Age the live fix directly — older recorded_at payloads must not
+        # overwrite a newer live coordinate (stale-guard contract).
+        EmployeeLiveLocation.objects.filter(user=self.employee).update(
+            recorded_at=timezone.now() - timedelta(minutes=5)
+        )
         row = self._live_row()
         self.assertEqual(row["gps_status"], GPS_DELAYED)
 
     def test_live_api_gps_lost(self):
         self._start_duty()
-        # Backdate duty start so a 20-minute-old fix is still inside the duty window.
         from tracking.models import DutySession, WorkDay
 
         started = timezone.now() - timedelta(hours=1)
@@ -260,11 +262,14 @@ class EmployeeStatusAPITest(APITestCase):
         WorkDay.objects.filter(user=self.employee, is_active=True).update(
             start_time=started
         )
-        t0 = timezone.now() - timedelta(minutes=20)
-        self._location_update(recorded_at=t0.isoformat())
+        EmployeeLiveLocation.objects.filter(user=self.employee).update(
+            recorded_at=timezone.now() - timedelta(minutes=20),
+            last_heartbeat_at=timezone.now(),
+        )
         row = self._live_row()
         self.assertEqual(row["gps_status"], GPS_LOST)
-        self.assertEqual(row["connection"], "OFFLINE")
+        self.assertEqual(row["tracking_status"], "ONLINE")
+        self.assertEqual(row["connection"], "ONLINE")
 
     def test_live_api_gps_off_permission_denied(self):
         self._start_duty()
@@ -329,15 +334,17 @@ class EmployeeStatusAPITest(APITestCase):
         self.assertEqual(row["gps_status"], GPS_OFF)
 
     def test_off_duty_logged_in_status(self):
+        # Active-duty-only live list: off-duty employees are excluded.
         EmployeeLiveLocation.objects.create(
             user=self.employee,
             latitude=12.9716,
             longitude=77.5946,
             recorded_at=timezone.now() - timedelta(hours=1),
         )
-        row = self._live_row()
-        self.assertEqual(row["duty_status"], DUTY_OFF_DUTY)
-        self.assertEqual(row["gps_status"], GPS_LOST)
+        r = self.admin_client.get("/api/admin/tracking/live/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        ids = [e["user_id"] for e in r.data["data"]["employees"]]
+        self.assertNotIn(self.employee.id, ids)
 
     def test_logged_out_status_on_day_summary(self):
         EmployeeDeviceSession.objects.filter(user=self.employee).update(is_active=False)

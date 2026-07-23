@@ -220,54 +220,31 @@ class LocationLogSerializer(serializers.ModelSerializer):
 
 
 class HeartbeatSerializer(serializers.Serializer):
+    """Mobile heartbeat during active duty. Coordinates optional; no route points."""
+
+    duty_session_id = serializers.IntegerField(required=False, allow_null=True)
+    recorded_at = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    client_heartbeat_id = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=64
+    )
     gps_enabled = serializers.BooleanField(required=False, allow_null=True)
+    permission_granted = serializers.BooleanField(required=False, allow_null=True)
     location_permission_status = serializers.CharField(
         required=False, allow_null=True, allow_blank=True, max_length=32
     )
+    tracking_service_active = serializers.BooleanField(required=False, allow_null=True)
     background_tracking_enabled = serializers.BooleanField(required=False, allow_null=True)
+    app_state = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=32
+    )
+    network_available = serializers.BooleanField(required=False, allow_null=True)
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
+    accuracy = serializers.FloatField(required=False, allow_null=True)
+    latest_accuracy = serializers.FloatField(required=False, allow_null=True)
 
     def validate(self, attrs):
-        if "gps_enabled" not in attrs and not attrs.get("location_permission_status"):
-            attrs["gps_enabled"] = True
+        # Preserve legacy clients that POST {} — treat as gps_enabled=True heartbeat.
+        if not attrs:
+            attrs = {"gps_enabled": True}
         return attrs
-
-    def save(self, **kwargs):
-        user = self.context["request"].user
-
-        if user.is_staff:
-            raise serializers.ValidationError("Admin heartbeat not allowed")
-
-        expire_overlong_workdays_for_user(user)
-
-        try:
-            workday = WorkDay.objects.get(user=user, is_active=True)
-        except WorkDay.DoesNotExist:
-            raise serializers.ValidationError("No active workday")
-
-        now = timezone.now()
-
-        workday.last_heartbeat = now
-        workday.save(update_fields=["last_heartbeat"])
-
-        from tracking.gps_state import upsert_employee_gps_state
-
-        upsert_employee_gps_state(user, self.validated_data, reported_at=now)
-
-        gps_enabled = self.validated_data.get("gps_enabled")
-        if gps_enabled is False:
-            AvailabilityEvent.objects.get_or_create(
-                user=user,
-                workday=workday,
-                event_type="GPS_OFF",
-                end_time__isnull=True,
-                defaults={"start_time": now},
-            )
-        elif gps_enabled is True:
-            AvailabilityEvent.objects.filter(
-                user=user,
-                workday=workday,
-                event_type="GPS_OFF",
-                end_time__isnull=True,
-            ).update(end_time=now)
-
-        return workday

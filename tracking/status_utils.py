@@ -354,14 +354,18 @@ def build_admin_tracking_row(
     last_accuracy = None
     last_battery = None
     if last_location:
-        last_lat = float(last_location["latitude"])
-        last_lng = float(last_location["longitude"])
+        raw_lat = last_location.get("latitude")
+        raw_lng = last_location.get("longitude")
+        # Live rows may exist without coordinates (No Location Yet).
+        last_lat = float(raw_lat) if raw_lat is not None else None
+        last_lng = float(raw_lng) if raw_lng is not None else None
         last_loc_at = last_location.get("recorded_at")
-        last_seen = (
-            last_loc_at.isoformat()
-            if hasattr(last_loc_at, "isoformat")
-            else str(last_loc_at)
-        )
+        if last_loc_at is not None:
+            last_seen = (
+                last_loc_at.isoformat()
+                if hasattr(last_loc_at, "isoformat")
+                else str(last_loc_at)
+            )
         last_speed = last_location.get("speed")
         last_accuracy = last_location.get("accuracy")
         last_battery = last_location.get("battery_level")

@@ -354,6 +354,7 @@ class RouteTrackingAPITest(APITestCase):
     def test_poor_accuracy_accepted_by_canonical_path(self):
         """Accuracy flags are not rejection criteria on the GPS service path."""
         self._start_workday()
+        duty = DutySession.objects.get(user=self.employee, is_active=True)
         r1 = self.emp_client.post(
             "/api/v1/tracking/location/push/",
             {
@@ -376,9 +377,28 @@ class RouteTrackingAPITest(APITestCase):
             format="json",
         )
         self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(
-            EmployeeRoutePoint.objects.filter(user=self.employee).count(), 2
+
+        points = list(
+            EmployeeRoutePoint.objects.filter(user=self.employee).order_by("id")
         )
+        # Two client GPS pings plus one WORKDAY_START backfill when duty
+        # started without coordinates (Route History start marker contract).
+        self.assertEqual(len(points), 3)
+        gps_points = [p for p in points if p.point_type == EmployeeRoutePoint.POINT_GPS]
+        self.assertEqual(len(gps_points), 2)
+        self.assertEqual(
+            {p.client_point_id for p in gps_points},
+            {"acc-1", "acc-2"},
+        )
+        start_points = [
+            p for p in points if p.point_type == EmployeeRoutePoint.POINT_START
+        ]
+        self.assertEqual(len(start_points), 1)
+        self.assertEqual(
+            start_points[0].client_point_id,
+            f"duty-start:{duty.pk}",
+        )
+        self.assertEqual(start_points[0].accuracy, None)
 
     def test_duplicate_client_point_replay_idempotent(self):
         """Coordinate equality is not replay protection; client_point_id is."""
