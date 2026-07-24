@@ -67,8 +67,9 @@ jobs:
              python manage.py migrate --noinput
              python manage.py collectstatic --noinput
              sudo systemctl restart '${SERVICE_NAME}'
+             sleep 3
              sudo systemctl is-active --quiet '${SERVICE_NAME}'
              sudo systemctl status '${SERVICE_NAME}' --no-pager | head -n 20
-             curl -fsS --retry 10 --retry-delay 3 '${HEALTH_URL}'
+             curl -fsS --retry 10 --retry-delay 3 --retry-connrefused '${HEALTH_URL}'
              echo
              echo \"[deploy] success commit=\$(git rev-parse HEAD)\""
