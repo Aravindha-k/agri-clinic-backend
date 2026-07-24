@@ -1,26 +1,25 @@
-# Automatic backend deployment — Render (no GitHub EC2 SSH secrets)
+# OBSOLETE for production — AWS EC2 is the production backend.
 #
-# This repository's historical automatic production deploy path is Render Blueprint.
-# Render watches `main` and deploys on each commit (`autoDeployTrigger: commit`).
-# No GitHub Actions secrets (EC2_HOST / SSH keys) are required for this path.
+# This Blueprint previously auto-deployed to Render on every `main` commit.
+# That path connected to Render Postgres
+# (dpg-*.singapore-postgres.render.com) and is no longer the production system.
 #
-# The GitHub Actions "Backend Deploy" SSH-to-EC2 workflow was introduced on
-# 2026-07-12 (commit 55e1e58) and has been removed so it is not a competing
-# production deployment path.
+# Production:
+#   - Django + Gunicorn on AWS EC2 (13.207.17.117 / configured DNS)
+#   - PostgreSQL on the same EC2 (127.0.0.1) via server `.env`
+#   - Deploy via scripts/deploy_production.sh and
+#     .github/workflows/backend-deploy.yml
 #
-# EC2 host 13.207.17.117 is a separate Git checkout and was never driven by
-# GitHub Actions auto-deploy in this repository's history. Updating that host
-# requires an on-server git pull + service restart (or a future self-hosted
-# runner registered on that machine — not present in prior workflows).
-#
-# PostgreSQL: set DATABASE_URL in the Render dashboard (do not commit secrets).
+# Keep this file only as an archived reference. autoDeployTrigger is OFF.
+# Do not re-enable unless intentionally running a non-production Render sandbox.
+# Do not set production DATABASE_URL to any *.render.com / dpg-* host.
 
 services:
   - type: web
     name: agri-clinic-backend
     runtime: python
     branch: main
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
     healthCheckPath: /healthz/
     buildCommand: chmod +x build.sh && ./build.sh
     preDeployCommand: python manage.py migrate --noinput && python manage.py verify_production_db
@@ -34,18 +33,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      - key: RENDER_POSTGRES_HOST_SUFFIX
-        value: singapore-postgres.render.com
       - key: DB_SSL_REQUIRE
         value: "false"
-      - key: ALLOWED_HOSTS
-        value: agri-clinic-backend.onrender.com,.onrender.com
-      - key: CSRF_TRUSTED_ORIGINS
-        value: https://agri-clinic-backend.onrender.com
-      - key: CORS_ALLOW_ALL_ORIGINS
-        value: "false"
-      - key: CORS_ALLOWED_ORIGINS
-        value: https://agri-clinic-frontend.onrender.com
       - key: USE_S3
         value: "false"
       - key: LOG_LEVEL

@@ -1,42 +1,45 @@
-# Backend deployment — restored automatic path
+# Backend deployment — AWS EC2 is production
 
-## What Git history proves
+## Production architecture (current)
 
-| Path | Evidence | Automatic on `main` push? | GitHub EC2 secrets? |
-|------|----------|---------------------------|---------------------|
-| **Render** (`render.yaml`) | Added in `2f7b63f` (2026-04-10) with `autoDeployTrigger: commit` | **Yes** (Render GitHub integration) | **None** |
-| **Backend CI** (`.github/workflows/backend-ci.yml`) | Added in `770e1c5` (2026-07-12) | Validates only — does not deploy | None for deploy |
-| **Backend Deploy SSH** (`.github/workflows/backend-deploy.yml`) | Added in `55e1e58` (2026-07-12) | No (manual `workflow_dispatch` only) | Requires `EC2_HOST`, `EC2_USER`, `EC2_SSH_PRIVATE_KEY`, … |
+| Component | Location |
+|-----------|----------|
+| Django / Gunicorn | AWS EC2 (`/var/www/agri-backend/agri-clinic-backend`) |
+| PostgreSQL | Same EC2 host (`127.0.0.1:5432`) via server `.env` |
+| Media files | Persistent EC2 path (`MEDIA_ROOT`, e.g. `/var/www/agri-backend/media`) |
+| Admin + mobile API | Same AWS backend |
+| Deploy | `scripts/deploy_production.sh` + `.github/workflows/backend-deploy.yml` |
 
-There is **no** prior workflow in this repository that used:
+Public health probe (example): `http://13.207.17.117/healthz/` → `{"status":"ok","database":"ok"}`.
 
-- `runs-on: self-hosted`
-- EC2 webhooks
-- AWS CodeDeploy
-- cron / systemd git-pull units (not in repo)
+## What was wrong
 
-EC2 at `/var/www/agri-backend/agri-clinic-backend` was documented as **manual Git** (`BACKEND_CICD_AUDIT.md`). The SSH Actions workflow was a **new** method, not a replacement of an older Actions auto-deploy.
+`render.yaml` had `autoDeployTrigger: commit`, so every push to `main` also
+deployed on **Render**. Render Dashboard `DATABASE_URL` pointed at:
 
-## Restored primary automatic deploy
+`dpg-d84t75d7vvec73fhlpfg-a.singapore-postgres.render.com`
 
-- **Platform:** Render service `agri-clinic-backend`
-- **Trigger:** push / commit on `main` (`autoDeployTrigger: commit`)
-- **URL:** `https://agri-clinic-backend.onrender.com`
-- **Secrets:** only in Render dashboard (`DATABASE_URL`, `SECRET_KEY`) — not GitHub Actions EC2 secrets
+That produced deploy logs like `DATABASE_URL host=…render.com` and SSL failures.
+That path is **not** AWS production.
 
-The SSH `Backend Deploy` workflow file has been **removed** so it is not a competing production path and cannot fail with `EC2_HOST secret is required`.
+## Fix applied in repo
 
-`scripts/deploy_production.sh` remains for **optional on-server** EC2 deploys when an operator already has SSH access to the machine (not via GitHub secrets).
+- `render.yaml` → `autoDeployTrigger: off` (archived; do not re-enable for prod)
+- Restored `.github/workflows/backend-deploy.yml` (manual `workflow_dispatch`)
+- `scripts/deploy_production.sh` refuses Render DB hosts, probes DB readiness,
+  ensures `MEDIA_ROOT`, migrates, restarts systemd, reloads Nginx
+- Production settings refuse Render Postgres unless `RENDER=true` / `APP_ENV=render`
 
-## EC2 public IP (`13.207.17.117`)
+## Required on the EC2 server (operator)
 
-That host is **not** Render. Restoring Render auto-deploy does **not** update the EC2 checkout. Live OpenAPI on that IP matches a pre-`55f368e` tree (no `/api/v1/mobile/bootstrap/`). Updating it requires an on-server:
+1. Ensure `.env` uses local Postgres (`127.0.0.1`), **not** Render.
+2. Prefer `DB_*` components or `DATABASE_URL=…@127.0.0.1:5432/…` with `DB_SSL_REQUIRE=false`.
+3. Set `MEDIA_ROOT` to a persistent directory (not deleted by git).
+4. Nginx `location /media/ { alias …; }` pointing at that directory.
+5. Run deploy (Actions **Backend Deploy** or on-server `deploy_production.sh`).
 
-```bash
-cd /var/www/agri-backend/agri-clinic-backend
-git fetch origin main
-git merge --ff-only origin/main   # or exact SHA
-# activate .venv, migrate, collectstatic, restart systemd unit
-```
+## Obsolete
 
-Do not point the mobile app at Render unless product owners intentionally switch production hosts.
+- Render Blueprint auto-deploy
+- `docs/RENDER_DEPLOYMENT.md` (historical only)
+- Render Dashboard `DATABASE_URL` for production traffic

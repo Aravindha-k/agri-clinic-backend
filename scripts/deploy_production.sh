@@ -168,6 +168,63 @@ PY
 
 optional_db_backup
 
+log "Verifying production database is not Render"
+"$PYTHON" <<'PY'
+import os
+import sys
+from urllib.parse import urlsplit
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+raw = (os.getenv("DATABASE_URL") or "").strip()
+host = ""
+if raw:
+    host = (urlsplit(raw).hostname or "").strip().lower()
+else:
+    host = (os.getenv("DB_HOST") or "").strip().lower()
+
+markers = ("render.com",)
+if host.startswith("dpg-") or any(m in host for m in markers):
+    print(
+        f"[deploy] ERROR: database host '{host}' is Render. "
+        "Update EC2 .env to AWS PostgreSQL (typically 127.0.0.1) "
+        "and remove DATABASE_URL pointing at *.render.com.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+print(f"[deploy] database host ok: {host or '(components/unknown)'}")
+PY
+
+log "Database readiness probe (AWS Postgres)"
+READY_ATTEMPTS=8
+READY_SLEEP=3
+ready=0
+for attempt in $(seq 1 "$READY_ATTEMPTS"); do
+  if "$PYTHON" manage.py check --database default; then
+    ready=1
+    break
+  fi
+  log "Database not ready (attempt ${attempt}/${READY_ATTEMPTS}) — retrying in ${READY_SLEEP}s"
+  sleep "$READY_SLEEP"
+done
+[ "$ready" = "1" ] || fail "Database readiness check failed against AWS Postgres"
+
+log "Ensuring persistent media directory exists"
+"$PYTHON" <<'PY'
+import os
+from pathlib import Path
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+import django
+
+django.setup()
+from django.conf import settings
+
+media = Path(settings.MEDIA_ROOT)
+media.mkdir(parents=True, exist_ok=True)
+print(f"[deploy] MEDIA_ROOT={media}")
+PY
+
 log "Running Django system check"
 "$PYTHON" manage.py check
 
@@ -187,6 +244,15 @@ log "Restarting service: ${SERVICE_NAME}"
 sudo systemctl restart "$SERVICE_NAME"
 sudo systemctl is-active --quiet "$SERVICE_NAME" \
   || fail "Service ${SERVICE_NAME} is not active after restart"
+
+if command -v nginx >/dev/null 2>&1; then
+  log "Validating Nginx configuration"
+  if sudo nginx -t; then
+    sudo systemctl reload nginx || log "WARNING: nginx reload failed"
+  else
+    log "WARNING: nginx -t failed — skipping reload"
+  fi
+fi
 
 log "Health check: ${BACKEND_HEALTH_URL}"
 curl --fail --silent --show-error --retry 10 --retry-delay 3 "$BACKEND_HEALTH_URL" >/dev/null \

@@ -1,6 +1,10 @@
 # Render Deployment Setup
 
-## Service model
+> **OBSOLETE for production.** Production is AWS EC2. See `BACKEND_DEPLOYMENT_RESTORED.md`.
+> Render auto-deploy is disabled (`autoDeployTrigger: off`). Do not point production
+> `DATABASE_URL` at `*.render.com` / `dpg-*` hosts.
+
+## Service model (historical sandbox only)
 
 This repo uses a Render Blueprint file at [render.yaml](../render.yaml).
 

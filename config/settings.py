@@ -20,6 +20,12 @@ def _is_production_env():
     return os.getenv("RENDER", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _is_render_env():
+    """True only when explicitly running on Render (legacy sandbox)."""
+    if os.getenv("RENDER", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    return os.getenv("APP_ENV", "").strip().lower() == "render"
+
 # Load .env when present; existing shell/platform env vars take precedence.
 load_dotenv(override=False)
 
@@ -138,6 +144,7 @@ def env_origin_list(name, default=None, *, csrf=False):
 
 
 def normalize_database_url(raw_url):
+    """Normalize DATABASE_URL. Do not invent Render host suffixes for AWS."""
     if not raw_url:
         return raw_url
 
@@ -146,12 +153,15 @@ def normalize_database_url(raw_url):
         return raw_url
 
     host = parsed.hostname or ""
+    # Legacy Render short hosts (dpg-xxx without domain) only expand when
+    # explicitly running on Render (RENDER=true) and a suffix is configured.
     if not (host.startswith("dpg-") and "." not in host):
         return raw_url
 
+    if not _is_render_env():
+        return raw_url
+
     host_suffix = os.getenv("RENDER_POSTGRES_HOST_SUFFIX", "").strip()
-    if not host_suffix and _is_production_env():
-        host_suffix = "singapore-postgres.render.com"
     if not host_suffix:
         return raw_url
 
@@ -195,8 +205,9 @@ if IS_PRODUCTION and SECRET_KEY in _INSECURE_SECRET_KEYS:
 
 # Hosts are env-driven. Local LAN IPs belong in `.env` (see LOCAL_NETWORK_CONFIGURATION.md).
 # EXTRA_ALLOWED_HOSTS is merged so developers can append a LAN IP without rewriting the full list.
+# Production defaults are intentionally empty — set ALLOWED_HOSTS on the AWS EC2 .env.
 DEFAULT_ALLOWED_HOSTS = (
-    ["agri-clinic-backend.onrender.com", ".onrender.com"]
+    []
     if IS_PRODUCTION
     else ["localhost", "127.0.0.1"]
 )
@@ -207,7 +218,7 @@ for _host in _extra_hosts:
         ALLOWED_HOSTS.append(_host)
 
 DEFAULT_CSRF_TRUSTED_ORIGINS = (
-    ["https://agri-clinic-backend.onrender.com"]
+    []
     if IS_PRODUCTION
     else ["http://localhost:8000", "http://127.0.0.1:8000"]
 )
@@ -352,7 +363,6 @@ X_FRAME_OPTIONS = "DENY"
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", not IS_PRODUCTION)
 DEFAULT_CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://agri-clinic-frontend.onrender.com",
 ]
 CORS_ALLOWED_ORIGINS = env_origin_list(
     "CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ALLOWED_ORIGINS, csrf=False
@@ -436,13 +446,29 @@ ROOT_URLCONF = "config.urls"
 # --------------------------------------------------
 # DATABASE CONFIG
 # --------------------------------------------------
-# Retired Render Postgres (suspended) — refuse if still set in Render env.
+# Render Postgres is obsolete for production. AWS EC2 uses local/private Postgres.
 _BLOCKED_RENDER_DB_HOSTS = frozenset(
     {
         "dpg-d7ckj7dckfvc739s0frg-a",
         "dpg-d7ckj7dckfvc739s0frg-a.singapore-postgres.render.com",
+        "dpg-d84t75d7vvec73fhlpfg-a",
+        "dpg-d84t75d7vvec73fhlpfg-a.singapore-postgres.render.com",
     }
 )
+
+
+def _is_render_database_host(host: str) -> bool:
+    host = (host or "").strip().lower()
+    if not host:
+        return False
+    short = host.split(".")[0]
+    if host in _BLOCKED_RENDER_DB_HOSTS or short in _BLOCKED_RENDER_DB_HOSTS:
+        return True
+    if host.endswith(".render.com") or "postgres.render.com" in host:
+        return True
+    if host.startswith("dpg-"):
+        return True
+    return False
 
 
 def _database_from_components() -> dict | None:
@@ -473,39 +499,49 @@ def _configure_databases() -> dict:
     database_url = normalize_database_url(os.getenv("DATABASE_URL", "").strip())
     if database_url:
         db_host = (urlsplit(database_url).hostname or "").strip().lower()
-        default_ssl_require = bool(db_host) and not (
-            db_host == "localhost"
+        # Local / same-host Postgres: do not force SSL.
+        # Remote private hosts: require SSL only when DB_SSL_REQUIRE=true (or default
+        # true for non-local, non-Render hosts). Never force Render SSL on AWS.
+        is_local = (
+            db_host in {"localhost", "127.0.0.1", "::1"}
             or db_host.startswith("127.")
-            or db_host.startswith("dpg-")
         )
+        default_ssl_require = bool(db_host) and not is_local and not _is_render_database_host(
+            db_host
+        )
+        if IS_PRODUCTION and not _is_render_env() and _is_render_database_host(db_host):
+            raise RuntimeError(
+                "DATABASE_URL points to Render Postgres "
+                f"({db_host}). Production runs on AWS EC2 — set DATABASE_URL "
+                "(or DB_HOST=127.0.0.1) to the AWS PostgreSQL instance in the "
+                "EC2 .env / systemd EnvironmentFile. Do not use *.render.com."
+            )
         databases = {
             "default": dj_database_url.parse(
                 database_url,
                 conn_max_age=600,
-                ssl_require=env_bool("DB_SSL_REQUIRE", default_ssl_require),
+                ssl_require=env_bool("DB_SSL_REQUIRE", default_ssl_require if not is_local else False),
             )
         }
         databases["default"]["CONN_HEALTH_CHECKS"] = True
         if databases["default"].get("ENGINE") == "django.db.backends.postgresql":
             databases["default"].setdefault("OPTIONS", {})
             databases["default"]["OPTIONS"].setdefault("connect_timeout", 10)
-
-        if IS_PRODUCTION:
-            resolved_host = (urlsplit(database_url).hostname or "").strip().lower()
-            short_host = resolved_host.split(".")[0] if resolved_host else ""
-            if resolved_host in _BLOCKED_RENDER_DB_HOSTS or short_host in _BLOCKED_RENDER_DB_HOSTS:
-                raise RuntimeError(
-                    "DATABASE_URL points to a retired Render Postgres instance "
-                    f"({short_host or resolved_host}). Update Render Dashboard → "
-                    "agri-clinic-backend → Environment: set DATABASE_URL to the "
-                    "agri_clinic_db instance (dpg-d84t75d7vvec73fhlpfg-a) and "
-                    "RENDER_POSTGRES_HOST_SUFFIX=singapore-postgres.render.com, "
-                    "then clear build cache and redeploy."
-                )
+            if is_local:
+                # Ensure local EC2 Postgres is not stuck on sslmode=require from URL query.
+                databases["default"]["OPTIONS"].setdefault("sslmode", "prefer")
+                if not env_bool("DB_SSL_REQUIRE", False):
+                    databases["default"]["OPTIONS"]["sslmode"] = "disable"
         return databases
 
     component_db = _database_from_components()
     if component_db:
+        host = (component_db.get("HOST") or "").strip().lower()
+        if IS_PRODUCTION and not _is_render_env() and _is_render_database_host(host):
+            raise RuntimeError(
+                "DB_HOST points to Render Postgres. Use the AWS EC2 PostgreSQL host "
+                "(typically 127.0.0.1) instead."
+            )
         return {"default": component_db}
 
     if IS_PRODUCTION:
@@ -587,7 +623,8 @@ MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
 _default_media_root = BASE_DIR / (".test_media" if "test" in sys.argv else "media")
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(_default_media_root)))
 # Profile photos: employee_photos/ and farmer_photos/ under MEDIA_ROOT.
-# On Render without S3, files live on ephemeral disk — use a persistent disk or S3 for production.
+# AWS EC2: set MEDIA_ROOT to a persistent path (e.g. /var/www/agri-backend/media)
+# that survives git deploy. Do not use Render ephemeral disk.
 
 if USE_S3:
     DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
