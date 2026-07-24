@@ -49,7 +49,7 @@ log "Branch: ${DEPLOY_BRANCH}"
 cd "$DEPLOY_PATH"
 
 [ -d .git ] || fail "Not a Git repository: $DEPLOY_PATH"
-[ -f .env ] || fail ".env not found â€” refusing to deploy without production environment"
+[ -f .env ] || fail ".env not found - refusing to deploy without production environment"
 [ -x .venv/bin/python ] || fail ".venv/bin/python not found or not executable"
 
 PREVIOUS_COMMIT="$(git rev-parse HEAD)"
@@ -95,7 +95,7 @@ git cat-file -e "${DEPLOY_COMMIT}^{commit}" \
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [ "$CURRENT_BRANCH" = "HEAD" ]; then
-  fail "Detached HEAD state â€” checkout ${DEPLOY_BRANCH} before deploying"
+  fail "Detached HEAD state - checkout ${DEPLOY_BRANCH} before deploying"
 fi
 
 if [ "$CURRENT_BRANCH" != "$DEPLOY_BRANCH" ]; then
@@ -126,7 +126,7 @@ optional_db_backup() {
     return 0
   fi
   log "Creating optional pre-migration database backup"
-  "$PYTHON" <<'PY' || log "WARNING: backup step failed â€” continuing (set RUN_DB_BACKUP=false to skip)"
+  "$PYTHON" <<'PY' || log "WARNING: backup step failed - continuing (set RUN_DB_BACKUP=false to skip)"
 import datetime
 import os
 import subprocess
@@ -215,7 +215,7 @@ for attempt in $(seq 1 "$READY_ATTEMPTS"); do
     ready=1
     break
   fi
-  log "Database not ready (attempt ${attempt}/${READY_ATTEMPTS}) â€” retrying in ${READY_SLEEP}s"
+  log "Database not ready (attempt ${attempt}/${READY_ATTEMPTS}) - retrying in ${READY_SLEEP}s"
   sleep "$READY_SLEEP"
 done
 [ "$ready" = "1" ] || fail "Database readiness check failed"
@@ -289,7 +289,7 @@ if command -v nginx >/dev/null 2>&1; then
   sudo nginx -t || fail "nginx -t failed"
   sudo systemctl reload nginx || fail "nginx reload failed"
 else
-  log "WARNING: nginx binary not found on PATH â€” skipping nginx reload"
+  log "WARNING: nginx binary not found on PATH - skipping nginx reload"
 fi
 
 log "Health check: ${BACKEND_HEALTH_URL}"

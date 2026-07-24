@@ -97,18 +97,28 @@ jobs:
 
           echo "SSH deploy host=${EC2_HOST} path=${DEPLOY_PATH} commit=${DEPLOY_COMMIT}"
 
+          # Run this commit's deploy script from a temp file so the worktree stays clean
+          # for deploy_production.sh safety checks; the script then fast-forwards the tree.
           ssh -i ~/.ssh/deploy_key \
             -p "$PORT" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             "${EC2_USER}@${EC2_HOST}" \
-            "DEPLOY_COMMIT='${DEPLOY_COMMIT}' \
+            "set -euo pipefail
+             cd '${DEPLOY_PATH}'
+             git fetch origin '${BRANCH}'
+             git cat-file -e '${DEPLOY_COMMIT}^{commit}'
+             TMP_SCRIPT=\$(mktemp /tmp/agri-deploy-XXXXXX.sh)
+             git show '${DEPLOY_COMMIT}:scripts/deploy_production.sh' > \"\$TMP_SCRIPT\"
+             chmod +x \"\$TMP_SCRIPT\"
+             DEPLOY_COMMIT='${DEPLOY_COMMIT}' \
              DEPLOY_PATH='${DEPLOY_PATH}' \
              SERVICE_NAME='${SERVICE_NAME}' \
              BACKEND_HEALTH_URL='${HEALTH_URL}' \
              DEPLOY_BRANCH='${BRANCH}' \
-             bash '${DEPLOY_PATH}/scripts/deploy_production.sh'"
+             bash \"\$TMP_SCRIPT\"
+             rm -f \"\$TMP_SCRIPT\""
 
       - name: Deployment summary
         if: success()
