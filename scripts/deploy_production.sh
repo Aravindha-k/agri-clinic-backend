@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Safe production deploy for Kavya Agri Clinic Django backend (EC2 Git checkout).
+# Safe production deploy for Kavya Agri Clinic Django backend (AWS EC2 Git checkout).
 #
 # Required environment variables:
 #   DEPLOY_COMMIT      - exact Git commit SHA to deploy
@@ -12,7 +12,7 @@
 #   PYTHON_BIN         - override python binary path
 #   RUN_DB_BACKUP      - true|false (default: true) pre-migration pg_dump when Postgres
 #
-# Never prints .env contents, DATABASE_URL, SECRET_KEY, or SSH material.
+# Never prints .env contents, DATABASE_URL passwords, SECRET_KEY, or SSH material.
 set -Eeuo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:-/var/www/agri-backend/agri-clinic-backend}"
@@ -39,7 +39,7 @@ require_var() {
 require_var DEPLOY_COMMIT
 require_var SERVICE_NAME
 
-log "Starting deployment"
+log "Starting AWS EC2 deployment"
 log "Target commit: ${DEPLOY_COMMIT}"
 log "Deploy path: ${DEPLOY_PATH}"
 log "Service: ${SERVICE_NAME}"
@@ -49,7 +49,7 @@ log "Branch: ${DEPLOY_BRANCH}"
 cd "$DEPLOY_PATH"
 
 [ -d .git ] || fail "Not a Git repository: $DEPLOY_PATH"
-[ -f .env ] || fail ".env not found — refusing to deploy without production environment"
+[ -f .env ] || fail ".env not found â€” refusing to deploy without production environment"
 [ -x .venv/bin/python ] || fail ".venv/bin/python not found or not executable"
 
 PREVIOUS_COMMIT="$(git rev-parse HEAD)"
@@ -64,7 +64,7 @@ check_worktree() {
     path="${line:3}"
 
     case "$path" in
-      .env|.env.*|media/*|staticfiles/*|backups/*|db.sqlite3|*.log|*.pyc|*.sql|*.dump)
+      .env|.env.*|media|media/*|staticfiles|staticfiles/*|backups|backups/*|db.sqlite3|*.log|*.pyc|*.sql|*.dump)
         continue
         ;;
     esac
@@ -74,12 +74,10 @@ check_worktree() {
         ;;
     esac
 
-    # Tracked modifications outside allow-list are blocking.
     if [[ "$status_xy" =~ [MADRCU] ]]; then
       fail "Unexpected tracked change: $path (status: $status_xy). Resolve on server before deploy."
     fi
 
-    # Unexpected untracked files (not in allow-list).
     if [[ "$status_xy" == "??" ]]; then
       fail "Unexpected untracked path: $path. Move or commit intentionally before deploy."
     fi
@@ -97,7 +95,7 @@ git cat-file -e "${DEPLOY_COMMIT}^{commit}" \
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [ "$CURRENT_BRANCH" = "HEAD" ]; then
-  fail "Detached HEAD state — checkout ${DEPLOY_BRANCH} before deploying"
+  fail "Detached HEAD state â€” checkout ${DEPLOY_BRANCH} before deploying"
 fi
 
 if [ "$CURRENT_BRANCH" != "$DEPLOY_BRANCH" ]; then
@@ -111,6 +109,9 @@ git merge --ff-only "$DEPLOY_COMMIT" \
 
 DEPLOYED_COMMIT="$(git rev-parse HEAD)"
 log "Active tree commit: ${DEPLOYED_COMMIT}"
+if [ "$DEPLOYED_COMMIT" != "$(git rev-parse "${DEPLOY_COMMIT}^{commit}")" ]; then
+  fail "Deployed HEAD ${DEPLOYED_COMMIT} does not match requested ${DEPLOY_COMMIT}"
+fi
 
 PYTHON="${PYTHON_BIN:-./.venv/bin/python}"
 log "Using Python: ${PYTHON}"
@@ -125,7 +126,7 @@ optional_db_backup() {
     return 0
   fi
   log "Creating optional pre-migration database backup"
-  "$PYTHON" <<'PY' || log "WARNING: backup step failed — continuing (set RUN_DB_BACKUP=false to skip)"
+  "$PYTHON" <<'PY' || log "WARNING: backup step failed â€” continuing (set RUN_DB_BACKUP=false to skip)"
 import datetime
 import os
 import subprocess
@@ -168,34 +169,44 @@ PY
 
 optional_db_backup
 
-log "Verifying production database is not Render"
+log "Verifying AWS PostgreSQL configuration (no credentials printed)"
 "$PYTHON" <<'PY'
 import os
 import sys
-from urllib.parse import urlsplit
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+import django
 
-raw = (os.getenv("DATABASE_URL") or "").strip()
-host = ""
-if raw:
-    host = (urlsplit(raw).hostname or "").strip().lower()
-else:
-    host = (os.getenv("DB_HOST") or "").strip().lower()
+django.setup()
+from django.conf import settings
 
-markers = ("render.com",)
-if host.startswith("dpg-") or any(m in host for m in markers):
+db = settings.DATABASES["default"]
+engine = db.get("ENGINE", "")
+host = (db.get("HOST") or "").strip().lower()
+port = str(db.get("PORT") or "")
+name = str(db.get("NAME") or "")
+
+if "postgresql" not in engine:
+    print(f"[deploy] ERROR: expected PostgreSQL, got {engine}", file=sys.stderr)
+    raise SystemExit(1)
+
+# Reject known non-AWS hosted Postgres patterns.
+if host.startswith("dpg-") or host.endswith(".render.com") or "postgres.render.com" in host:
     print(
-        f"[deploy] ERROR: database host '{host}' is Render. "
-        "Update EC2 .env to AWS PostgreSQL (typically 127.0.0.1) "
-        "and remove DATABASE_URL pointing at *.render.com.",
+        f"[deploy] ERROR: database host '{host}' is not the AWS production database. "
+        "Set EC2 .env DB_HOST/DATABASE_URL to the AWS Postgres host (typically 127.0.0.1).",
         file=sys.stderr,
     )
     raise SystemExit(1)
-print(f"[deploy] database host ok: {host or '(components/unknown)'}")
+
+if not host:
+    print("[deploy] ERROR: database HOST is empty", file=sys.stderr)
+    raise SystemExit(1)
+
+print(f"[deploy] database engine=postgresql host={host} port={port} name={name}")
 PY
 
-log "Database readiness probe (AWS Postgres)"
+log "Database readiness probe"
 READY_ATTEMPTS=8
 READY_SLEEP=3
 ready=0
@@ -204,10 +215,10 @@ for attempt in $(seq 1 "$READY_ATTEMPTS"); do
     ready=1
     break
   fi
-  log "Database not ready (attempt ${attempt}/${READY_ATTEMPTS}) — retrying in ${READY_SLEEP}s"
+  log "Database not ready (attempt ${attempt}/${READY_ATTEMPTS}) â€” retrying in ${READY_SLEEP}s"
   sleep "$READY_SLEEP"
 done
-[ "$ready" = "1" ] || fail "Database readiness check failed against AWS Postgres"
+[ "$ready" = "1" ] || fail "Database readiness check failed"
 
 log "Ensuring persistent media directory exists"
 "$PYTHON" <<'PY'
@@ -223,6 +234,9 @@ from django.conf import settings
 media = Path(settings.MEDIA_ROOT)
 media.mkdir(parents=True, exist_ok=True)
 print(f"[deploy] MEDIA_ROOT={media}")
+print(f"[deploy] MEDIA_URL={settings.MEDIA_URL}")
+print(f"[deploy] STATIC_ROOT={settings.STATIC_ROOT}")
+print(f"[deploy] STATIC_URL={settings.STATIC_URL}")
 PY
 
 log "Running Django system check"
@@ -237,6 +251,29 @@ log "Migration plan"
 log "Applying migrations"
 "$PYTHON" manage.py migrate --noinput
 
+log "Verifying visits.0029_visitmedia_canonical_metadata is applied"
+"$PYTHON" <<'PY'
+import os
+import sys
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+import django
+
+django.setup()
+from django.db.migrations.recorder import MigrationRecorder
+
+applied = MigrationRecorder.Migration.objects.filter(
+    app="visits", name="0029_visitmedia_canonical_metadata"
+).exists()
+if not applied:
+    print(
+        "[deploy] ERROR: visits.0029_visitmedia_canonical_metadata is not applied",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+print("[deploy] visits.0029_visitmedia_canonical_metadata applied")
+PY
+
 log "Collecting static files"
 "$PYTHON" manage.py collectstatic --noinput
 
@@ -244,14 +281,15 @@ log "Restarting service: ${SERVICE_NAME}"
 sudo systemctl restart "$SERVICE_NAME"
 sudo systemctl is-active --quiet "$SERVICE_NAME" \
   || fail "Service ${SERVICE_NAME} is not active after restart"
+sudo systemctl --no-pager --full status "$SERVICE_NAME" | head -n 20 \
+  || true
 
 if command -v nginx >/dev/null 2>&1; then
-  log "Validating Nginx configuration"
-  if sudo nginx -t; then
-    sudo systemctl reload nginx || log "WARNING: nginx reload failed"
-  else
-    log "WARNING: nginx -t failed — skipping reload"
-  fi
+  log "Validating and reloading Nginx"
+  sudo nginx -t || fail "nginx -t failed"
+  sudo systemctl reload nginx || fail "nginx reload failed"
+else
+  log "WARNING: nginx binary not found on PATH â€” skipping nginx reload"
 fi
 
 log "Health check: ${BACKEND_HEALTH_URL}"
