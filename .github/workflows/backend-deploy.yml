@@ -1,10 +1,6 @@
 name: Backend Deploy
 
-# AWS EC2 production deploy only (no Render).
-#
-# Triggers:
-# 1) Manual: Actions -> Backend Deploy -> Run workflow
-# 2) Automatic: after Backend CI succeeds on a push to main
+# Manual AWS EC2 deploy (same script as Backend CI deploy job).
 on:
   workflow_dispatch:
     inputs:
@@ -20,11 +16,6 @@ on:
         options:
           - production
 
-  workflow_run:
-    workflows: [Backend CI]
-    types: [completed]
-    branches: [main]
-
 concurrency:
   group: backend-deploy-production
   cancel-in-progress: false
@@ -32,11 +23,6 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to EC2
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -46,15 +32,11 @@ jobs:
         id: commit
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            SHA="${{ github.event.workflow_run.head_sha }}"
+          INPUT_SHA="${{ github.event.inputs.commit_sha }}"
+          if [ -n "${INPUT_SHA}" ]; then
+            SHA="${INPUT_SHA}"
           else
-            INPUT_SHA="${{ github.event.inputs.commit_sha }}"
-            if [ -n "${INPUT_SHA}" ]; then
-              SHA="${INPUT_SHA}"
-            else
-              SHA="${{ github.sha }}"
-            fi
+            SHA="${{ github.sha }}"
           fi
           echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
           echo "Deploy commit: ${SHA}"
@@ -123,5 +105,5 @@ jobs:
         if: success()
         run: |
           echo "Deployed commit: ${{ steps.commit.outputs.sha }}"
-          echo "Trigger: ${{ github.event_name }}"
+          echo "Trigger: workflow_dispatch"
           echo "Environment: production"

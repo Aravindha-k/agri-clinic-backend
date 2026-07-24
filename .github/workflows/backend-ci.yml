@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 concurrency:
-  group: backend-tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: backend-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   validate:
@@ -79,3 +79,71 @@ jobs:
           path: |
             **/test*.log
           if-no-files-found: ignore
+
+  deploy:
+    name: Deploy to AWS EC2
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          : "${{ secrets.EC2_SSH_PRIVATE_KEY:?EC2_SSH_PRIVATE_KEY secret is required }}"
+          : "${{ secrets.EC2_KNOWN_HOSTS:?EC2_KNOWN_HOSTS secret is required }}"
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
+          SERVICE_NAME: ${{ secrets.BACKEND_SERVICE_NAME }}
+          HEALTH_URL: ${{ secrets.BACKEND_HEALTH_URL }}
+          DEPLOY_BRANCH: ${{ secrets.DEPLOY_BRANCH }}
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          : "${EC2_HOST:?EC2_HOST secret is required}"
+          : "${EC2_USER:?EC2_USER secret is required}"
+          : "${DEPLOY_PATH:?BACKEND_DEPLOY_PATH secret is required}"
+          : "${SERVICE_NAME:?BACKEND_SERVICE_NAME secret is required}"
+          : "${HEALTH_URL:?BACKEND_HEALTH_URL secret is required}"
+
+          PORT="${EC2_PORT:-22}"
+          BRANCH="${DEPLOY_BRANCH:-main}"
+
+          echo "SSH deploy host=${EC2_HOST} path=${DEPLOY_PATH} commit=${DEPLOY_COMMIT}"
+
+          ssh -i ~/.ssh/deploy_key \
+            -p "$PORT" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "${EC2_USER}@${EC2_HOST}" \
+            "DEPLOY_COMMIT='${DEPLOY_COMMIT}' \
+             DEPLOY_PATH='${DEPLOY_PATH}' \
+             SERVICE_NAME='${SERVICE_NAME}' \
+             BACKEND_HEALTH_URL='${HEALTH_URL}' \
+             DEPLOY_BRANCH='${BRANCH}' \
+             bash '${DEPLOY_PATH}/scripts/deploy_production.sh'"
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "Deployed commit: ${{ github.sha }}"
+          echo "Environment: production"
