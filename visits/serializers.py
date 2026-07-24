@@ -16,34 +16,88 @@ from .visit_response import (
 
 class VisitMediaSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField(read_only=True)
+    url = serializers.SerializerMethodField(read_only=True)
+    media_url = serializers.SerializerMethodField(read_only=True)
+    created_at = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = VisitMedia
-        fields = ["id", "file", "media_type", "caption", "uploaded_at", "file_url"]
+        fields = [
+            "id",
+            "file",
+            "media_type",
+            "caption",
+            "uploaded_at",
+            "created_at",
+            "file_url",
+            "url",
+            "media_url",
+            "mime_type",
+            "original_filename",
+            "file_size",
+            "duration_seconds",
+            "client_upload_id",
+            "processing_status",
+        ]
         extra_kwargs = {"file": {"write_only": True}}
+        read_only_fields = (
+            "id",
+            "uploaded_at",
+            "created_at",
+            "mime_type",
+            "original_filename",
+            "file_size",
+            "duration_seconds",
+            "client_upload_id",
+            "processing_status",
+        )
+
+    def _url(self, obj):
+        from visits.media_response import build_absolute_media_url
+
+        return build_absolute_media_url(obj, self.context.get("request"))
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_file_url(self, obj):
-        request = self.context.get("request")
-        if request and obj.file:
-            return request.build_absolute_uri(obj.file.url)
-        return None
+        return self._url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_url(self, obj):
+        return self._url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_media_url(self, obj):
+        return self._url(obj)
+
+    @extend_schema_field(OpenApiTypes.DATETIME)
+    def get_created_at(self, obj):
+        dt = obj.created_at or obj.uploaded_at
+        return dt.isoformat() if dt else None
+
+    def to_representation(self, instance):
+        from visits.media_response import serialize_visit_media
+
+        return serialize_visit_media(instance, self.context.get("request"))
 
 
 class VisitMediaUploadSerializer(serializers.ModelSerializer):
+    duration_seconds = serializers.FloatField(required=False, allow_null=True)
+
     class Meta:
         model = VisitMedia
-        fields = ["file", "media_type", "caption"]
+        fields = ["file", "media_type", "caption", "duration_seconds"]
 
     def validate(self, attrs):
-        from visits.media_validation import validate_visit_media_file
+        from visits.media_validation import MediaValidationError, validate_visit_media_file_detailed
 
-        errors = validate_visit_media_file(
-            file_obj=attrs.get("file"),
-            media_type=attrs.get("media_type", ""),
-        )
-        if errors:
-            raise serializers.ValidationError(errors)
+        try:
+            validate_visit_media_file_detailed(
+                file_obj=attrs.get("file"),
+                media_type=attrs.get("media_type", ""),
+                client_duration_seconds=attrs.get("duration_seconds"),
+            )
+        except MediaValidationError as exc:
+            raise serializers.ValidationError(exc.errors or {"file": exc.message}) from exc
         return attrs
 
 

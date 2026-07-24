@@ -293,7 +293,7 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
             farmer, employee=employee
         )
         data["visit_history"] = build_farmer_visit_history(
-            farmer, employee=employee, limit=20
+            farmer, employee=employee, limit=20, request=request
         )
         return success_response(data=data)
 
@@ -705,6 +705,18 @@ class VisitMediaUploadAPI(DeviceSessionRequiredMixin, APIView):
 
         from visits.services.media_service import VisitMediaServiceError, upload_visit_media
 
+        raw_duration = request.data.get("duration_seconds")
+        duration_seconds = None
+        if raw_duration not in (None, ""):
+            try:
+                duration_seconds = float(raw_duration)
+            except (TypeError, ValueError):
+                return error_response(
+                    message="Invalid duration_seconds.",
+                    code="INVALID_MEDIA",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             result = upload_visit_media(
                 visit=visit,
@@ -713,10 +725,13 @@ class VisitMediaUploadAPI(DeviceSessionRequiredMixin, APIView):
                 caption=request.data.get("caption", ""),
                 client_upload_id=(request.data.get("client_upload_id") or "").strip()
                 or None,
+                uploaded_by=request.user,
+                duration_seconds=duration_seconds,
             )
         except VisitMediaServiceError as exc:
             return error_response(
                 message=exc.message,
+                code=exc.code or "MEDIA_ERROR",
                 errors=exc.errors or None,
                 status_code=status.HTTP_400_BAD_REQUEST,
             )

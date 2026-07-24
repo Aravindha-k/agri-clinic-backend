@@ -306,8 +306,24 @@ class AdminFarmerFieldSerializer(serializers.ModelSerializer):
 class AdminVisitMediaSerializer(serializers.ModelSerializer):
     class Meta:
         model = VisitMedia
-        fields = ["id", "file", "media_type", "uploaded_at"]
-        read_only_fields = ("id", "uploaded_at")
+        fields = [
+            "id",
+            "media_type",
+            "uploaded_at",
+            "mime_type",
+            "original_filename",
+            "file_size",
+            "duration_seconds",
+            "client_upload_id",
+            "processing_status",
+            "caption",
+        ]
+        read_only_fields = fields
+
+    def to_representation(self, instance):
+        from visits.media_response import serialize_visit_media
+
+        return serialize_visit_media(instance, self.context.get("request"))
 
 
 class AdminVisitSerializer(serializers.ModelSerializer):
@@ -352,6 +368,11 @@ class AdminVisitSerializer(serializers.ModelSerializer):
         if problem:
             data["field_visit"] = problem
             data.update(problem)
+        # Grouped media for admin UIs (images / audio / videos / documents).
+        from visits.media_response import group_visit_media
+
+        media_list = data.get("media_files") or []
+        data["media"] = group_visit_media(media_list)
         return data
 
     @extend_schema_field(OpenApiTypes.OBJECT)

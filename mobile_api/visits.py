@@ -104,6 +104,11 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
                 employee=request.user, local_sync_id=sync_id
             ).first()
             if existing:
+                # Offline replay: still accept newly attached media for this visit.
+                # Do not recreate the visit; media attach is idempotent via client_upload_id.
+                media_error = attach_visit_media_files(request, existing)
+                if media_error:
+                    return media_error
                 visit = reload_visit(existing.pk)
                 return success_response(
                     data={
@@ -233,6 +238,17 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
             )
 
         client_upload_id = (request.data.get("client_upload_id") or "").strip()
+        raw_duration = request.data.get("duration_seconds")
+        duration_seconds = None
+        if raw_duration not in (None, ""):
+            try:
+                duration_seconds = float(raw_duration)
+            except (TypeError, ValueError):
+                return error_response(
+                    message="Invalid duration_seconds",
+                    code="INVALID_MEDIA",
+                    status_code=400,
+                )
         from visits.services.media_service import VisitMediaServiceError, upload_visit_media
 
         try:
@@ -242,10 +258,14 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
                 media_type=media_type,
                 caption=request.data.get("caption", ""),
                 client_upload_id=client_upload_id or None,
+                uploaded_by=request.user,
+                duration_seconds=duration_seconds,
             )
         except VisitMediaServiceError as exc:
             return error_response(
                 message=exc.message,
+                code=exc.code or "MEDIA_ERROR",
+                errors=exc.errors or None,
                 status_code=400,
             )
 

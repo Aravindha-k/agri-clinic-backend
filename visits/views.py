@@ -373,6 +373,18 @@ class VisitMediaUploadAPIView(DeviceSessionRequiredMixin, APIView):
 
         from visits.services.media_service import VisitMediaServiceError, upload_visit_media
 
+        raw_duration = request.data.get("duration_seconds")
+        duration_seconds = None
+        if raw_duration not in (None, ""):
+            try:
+                duration_seconds = float(raw_duration)
+            except (TypeError, ValueError):
+                return error_response(
+                    message="Invalid duration_seconds.",
+                    code="INVALID_MEDIA",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             result = upload_visit_media(
                 visit=visit,
@@ -381,10 +393,13 @@ class VisitMediaUploadAPIView(DeviceSessionRequiredMixin, APIView):
                 caption=caption,
                 client_upload_id=(request.data.get("client_upload_id") or "").strip()
                 or None,
+                uploaded_by=request.user,
+                duration_seconds=duration_seconds,
             )
         except VisitMediaServiceError as exc:
             return error_response(
                 message=exc.message,
+                code=exc.code or "MEDIA_ERROR",
                 errors=exc.errors or None,
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
@@ -516,12 +531,14 @@ class VisitPhotoUploadAPI(DeviceSessionRequiredMixin, APIView):
                 caption="",
                 client_upload_id=(request.data.get("client_upload_id") or "").strip()
                 or None,
+                uploaded_by=request.user,
             )
         except VisitMediaServiceError as exc:
-            return api_response(
-                success=False,
+            return error_response(
                 message=exc.message,
-                status=status.HTTP_400_BAD_REQUEST,
+                code=exc.code or "MEDIA_ERROR",
+                errors=exc.errors or None,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         return api_response(

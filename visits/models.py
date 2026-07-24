@@ -175,21 +175,53 @@ class Visit(models.Model):
 
 
 class VisitMedia(models.Model):
+    """Canonical visit media row (image / audio / video / bill document)."""
 
+    MEDIA_TYPE_IMAGE = "image"
+    MEDIA_TYPE_BILL = "bill"
+    MEDIA_TYPE_AUDIO = "audio"
+    MEDIA_TYPE_VIDEO = "video"
     MEDIA_TYPE_CHOICES = [
-        ("image", "Image"),
-        ("bill", "Bill"),
-        ("audio", "Audio"),
-        ("video", "Video"),
+        (MEDIA_TYPE_IMAGE, "Image"),
+        (MEDIA_TYPE_BILL, "Bill"),
+        (MEDIA_TYPE_AUDIO, "Audio"),
+        (MEDIA_TYPE_VIDEO, "Video"),
     ]
+
+    STATUS_READY = "ready"
+    STATUS_PENDING = "pending"
+    STATUS_FAILED = "failed"
+    PROCESSING_STATUS_CHOICES = [
+        (STATUS_READY, "Ready"),
+        (STATUS_PENDING, "Pending"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
     visit = models.ForeignKey(
         Visit, on_delete=models.CASCADE, related_name="media_files"
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_visit_media",
     )
     client_upload_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     file = models.FileField(upload_to="visit_media/")
     media_type = models.CharField(max_length=20, choices=MEDIA_TYPE_CHOICES)
+    mime_type = models.CharField(max_length=100, blank=True, default="")
+    original_filename = models.CharField(max_length=255, blank=True, default="")
+    file_size = models.PositiveBigIntegerField(null=True, blank=True)
+    duration_seconds = models.FloatField(null=True, blank=True)
     caption = models.CharField(max_length=255, blank=True)
+    processing_status = models.CharField(
+        max_length=20,
+        choices=PROCESSING_STATUS_CHOICES,
+        default=STATUS_READY,
+    )
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
         ordering = ["-uploaded_at"]

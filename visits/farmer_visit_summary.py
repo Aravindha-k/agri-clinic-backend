@@ -33,8 +33,13 @@ def farmer_visits_qs(farmer: Farmer, *, employee: User | None = None) -> QuerySe
     )
 
 
-def _visit_history_row(visit: Visit) -> dict:
+def _visit_history_row(visit: Visit, *, request=None) -> dict:
+    from visits.media_response import serialize_visit_media
+
     problem = build_field_visit_problem_block(visit) or {}
+    media_rows = [
+        serialize_visit_media(m, request) for m in visit.media_files.all()
+    ]
     return {
         "id": visit.id,
         "visit_date": str(visit.visit_date) if visit.visit_date else None,
@@ -50,7 +55,8 @@ def _visit_history_row(visit: Visit) -> dict:
         "action_taken": visit.action_taken or None,
         "latitude": visit.latitude,
         "longitude": visit.longitude,
-        "media_count": visit.media_files.count(),
+        "media_count": len(media_rows),
+        "media_files": media_rows,
     }
 
 
@@ -100,9 +106,10 @@ def build_farmer_visit_history(
     *,
     employee: User | None = None,
     limit: int = 20,
+    request=None,
 ) -> list[dict]:
     qs = farmer_visits_qs(farmer, employee=employee).prefetch_related("media_files")
-    return [_visit_history_row(v) for v in qs[:limit]]
+    return [_visit_history_row(v, request=request) for v in qs[:limit]]
 
 
 def count_farmers_covered_today(employee: User, *, today) -> int:

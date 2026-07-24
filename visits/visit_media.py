@@ -10,7 +10,7 @@ from visits.services.media_service import VisitMediaServiceError, attach_request
 
 def attach_visit_media_files(request, visit) -> error_response | None:
     """
-    Process multipart ``media_files`` / ``media`` lists on request.
+    Process multipart media lists on request.
     Returns an error_response on validation failure, else None.
     """
     try:
@@ -19,6 +19,7 @@ def attach_visit_media_files(request, visit) -> error_response | None:
         return error_response(
             message=exc.message,
             errors=exc.errors or None,
+            code=exc.code or "MEDIA_ERROR",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     return None

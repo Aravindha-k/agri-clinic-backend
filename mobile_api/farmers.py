@@ -79,6 +79,6 @@ class MobileFarmerDetailAPI(MobileEmployeeAPIView):
             farmer, employee=request.user
         )
         data["visit_history"] = build_farmer_visit_history(
-            farmer, employee=request.user, limit=20
+            farmer, employee=request.user, limit=20, request=request
         )
         return success_response(data=data, message="Farmer fetched")

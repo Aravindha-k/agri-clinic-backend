@@ -309,6 +309,21 @@ FORCE_APP_UPDATE = os.getenv("FORCE_APP_UPDATE", "false").lower() in (
 LIVE_TRACKING_ONLINE_SECONDS = int(os.getenv("LIVE_TRACKING_ONLINE_SECONDS", str(7 * 60)))
 LIVE_TRACKING_STALE_SECONDS = int(os.getenv("LIVE_TRACKING_STALE_SECONDS", str(15 * 60)))
 
+# Visit media upload limits (images / voice notes / short videos).
+VISIT_MEDIA_IMAGE_MAX_BYTES = int(
+    os.getenv("VISIT_MEDIA_IMAGE_MAX_BYTES", str(10 * 1024 * 1024))
+)
+VISIT_MEDIA_AUDIO_MAX_BYTES = int(
+    os.getenv("VISIT_MEDIA_AUDIO_MAX_BYTES", str(15 * 1024 * 1024))
+)
+VISIT_MEDIA_VIDEO_MAX_BYTES = int(
+    os.getenv("VISIT_MEDIA_VIDEO_MAX_BYTES", str(75 * 1024 * 1024))
+)
+VISIT_MEDIA_BILL_MAX_BYTES = int(
+    os.getenv("VISIT_MEDIA_BILL_MAX_BYTES", str(15 * 1024 * 1024))
+)
+VISIT_MEDIA_VIDEO_MAX_SECONDS = int(os.getenv("VISIT_MEDIA_VIDEO_MAX_SECONDS", "60"))
+
 # --------------------------------------------------
 # TEMPLATES (REQUIRED FOR ADMIN)
 # --------------------------------------------------
