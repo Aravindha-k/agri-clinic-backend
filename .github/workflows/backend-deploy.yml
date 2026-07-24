@@ -1,20 +1,10 @@
 name: Backend Deploy
 
-# Manual AWS EC2 deploy (same script as Backend CI deploy job).
+# Automatic AWS EC2 deploy on push to main (plus manual dispatch).
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      commit_sha:
-        description: Git commit SHA to deploy (defaults to selected branch HEAD)
-        required: false
-        type: string
-      environment:
-        description: Target environment
-        required: true
-        default: production
-        type: choice
-        options:
-          - production
 
 concurrency:
   group: backend-deploy-production
@@ -25,104 +15,60 @@ jobs:
     name: Deploy to EC2
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
 
     steps:
-      - name: Resolve deploy commit
-        id: commit
-        run: |
-          set -euo pipefail
-          INPUT_SHA="${{ github.event.inputs.commit_sha }}"
-          if [ -n "${INPUT_SHA}" ]; then
-            SHA="${INPUT_SHA}"
-          else
-            SHA="${{ github.sha }}"
-          fi
-          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
-          echo "Deploy commit: ${SHA}"
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ steps.commit.outputs.sha }}
-
-      - name: Verify commit exists
-        run: |
-          set -euo pipefail
-          git cat-file -e "${{ steps.commit.outputs.sha }}^{commit}"
-          echo "Verified commit $(git rev-parse ${{ steps.commit.outputs.sha }})"
-
-      - name: Configure SSH
+      - name: Deploy over SSH
         env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [ -z "${EC2_SSH_PRIVATE_KEY}" ]; then
-            echo "EC2_SSH_PRIVATE_KEY secret is required" >&2
-            exit 1
-          fi
-          if [ -z "${EC2_KNOWN_HOSTS}" ]; then
-            echo "EC2_KNOWN_HOSTS secret is required" >&2
-            exit 1
-          fi
+
+          : "${EC2_HOST:?EC2_HOST secret is required}"
+          : "${EC2_USER:?EC2_USER secret is required}"
+          : "${EC2_SSH_PRIVATE_KEY:?EC2_SSH_PRIVATE_KEY secret is required}"
+
+          PORT="${EC2_PORT:-22}"
+          DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
+          SERVICE_NAME="agri-backend.service"
+          HEALTH_URL="http://127.0.0.1:8000/healthz/"
+
+          echo "Deploying commit ${EXPECTED_SHA}"
+          echo "Host=${EC2_HOST} path=${DEPLOY_PATH} service=${SERVICE_NAME}"
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "${EC2_KNOWN_HOSTS}" > ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
 
-      - name: Deploy over SSH
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_PORT: ${{ secrets.EC2_PORT }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
-          SERVICE_NAME: ${{ secrets.BACKEND_SERVICE_NAME }}
-          HEALTH_URL: ${{ secrets.BACKEND_HEALTH_URL }}
-          DEPLOY_BRANCH: ${{ secrets.DEPLOY_BRANCH }}
-          DEPLOY_COMMIT: ${{ steps.commit.outputs.sha }}
-        run: |
-          set -euo pipefail
-          : "${EC2_HOST:?EC2_HOST secret is required}"
-          : "${EC2_USER:?EC2_USER secret is required}"
-          : "${DEPLOY_PATH:?BACKEND_DEPLOY_PATH secret is required}"
-          : "${SERVICE_NAME:?BACKEND_SERVICE_NAME secret is required}"
-          : "${HEALTH_URL:?BACKEND_HEALTH_URL secret is required}"
-
-          PORT="${EC2_PORT:-22}"
-          BRANCH="${DEPLOY_BRANCH:-main}"
-
-          echo "SSH deploy host=${EC2_HOST} path=${DEPLOY_PATH} commit=${DEPLOY_COMMIT}"
-
-          # Run this commit's deploy script from a temp file so the worktree stays clean
-          # for deploy_production.sh safety checks; the script then fast-forwards the tree.
           ssh -i ~/.ssh/deploy_key \
-            -p "$PORT" \
+            -p "${PORT}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o StrictHostKeyChecking=accept-new \
             "${EC2_USER}@${EC2_HOST}" \
             "set -euo pipefail
              cd '${DEPLOY_PATH}'
-             git fetch origin '${BRANCH}'
-             git cat-file -e '${DEPLOY_COMMIT}^{commit}'
-             TMP_SCRIPT=\$(mktemp /tmp/agri-deploy-XXXXXX.sh)
-             git show '${DEPLOY_COMMIT}:scripts/deploy_production.sh' > \"\$TMP_SCRIPT\"
-             chmod +x \"\$TMP_SCRIPT\"
-             DEPLOY_COMMIT='${DEPLOY_COMMIT}' \
-             DEPLOY_PATH='${DEPLOY_PATH}' \
-             SERVICE_NAME='${SERVICE_NAME}' \
-             BACKEND_HEALTH_URL='${HEALTH_URL}' \
-             DEPLOY_BRANCH='${BRANCH}' \
-             bash \"\$TMP_SCRIPT\"
-             rm -f \"\$TMP_SCRIPT\""
-
-      - name: Deployment summary
-        if: success()
-        run: |
-          echo "Deployed commit: ${{ steps.commit.outputs.sha }}"
-          echo "Trigger: workflow_dispatch"
-          echo "Environment: production"
+             echo '[deploy] fetching origin/main'
+             git fetch origin main
+             echo '[deploy] resetting to origin/main (preserves .env, media/, .venv)'
+             git checkout main
+             git reset --hard origin/main
+             DEPLOYED=\$(git rev-parse HEAD)
+             echo \"[deploy] HEAD=\${DEPLOYED}\"
+             if [ \"\${DEPLOYED}\" != '${EXPECTED_SHA}' ]; then
+               echo \"[deploy] ERROR: EC2 HEAD \${DEPLOYED} != github.sha ${EXPECTED_SHA}\" >&2
+               exit 1
+             fi
+             source .venv/bin/activate
+             pip install -r requirements.txt
+             python manage.py migrate --noinput
+             python manage.py collectstatic --noinput
+             sudo systemctl restart '${SERVICE_NAME}'
+             sudo systemctl is-active --quiet '${SERVICE_NAME}'
+             sudo systemctl status '${SERVICE_NAME}' --no-pager | head -n 20
+             curl -fsS --retry 10 --retry-delay 3 '${HEALTH_URL}'
+             echo
+             echo \"[deploy] success commit=\$(git rev-parse HEAD)\""
