@@ -54,15 +54,24 @@ jobs:
           echo "Verified commit $(git rev-parse ${{ steps.commit.outputs.sha }})"
 
       - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          if [ -z "${EC2_SSH_PRIVATE_KEY}" ]; then
+            echo "EC2_SSH_PRIVATE_KEY secret is required" >&2
+            exit 1
+          fi
+          if [ -z "${EC2_KNOWN_HOSTS}" ]; then
+            echo "EC2_KNOWN_HOSTS secret is required" >&2
+            exit 1
+          fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          : "${{ secrets.EC2_SSH_PRIVATE_KEY:?EC2_SSH_PRIVATE_KEY secret is required }}"
-          : "${{ secrets.EC2_KNOWN_HOSTS:?EC2_KNOWN_HOSTS secret is required }}"
-          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "${EC2_KNOWN_HOSTS}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy over SSH
