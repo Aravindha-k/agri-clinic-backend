@@ -228,6 +228,42 @@ class ChangePasswordTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.json()["success"])
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.check_password(OLD_EMP_PASSWORD))
+
+    def test_cannot_change_another_employee_password(self):
+        other = make_employee(
+            username="other_field",
+            password=OLD_EMP_PASSWORD,
+            employee_id="KAC-OTHER",
+        )
+        resp = self.client.post(
+            self.url,
+            {
+                "employee_id": other.employee_profile.employee_id,
+                "current_password": OLD_EMP_PASSWORD,
+                "new_password": NEW_EMP_PASSWORD,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        other.refresh_from_db()
+        self.assertTrue(other.check_password(OLD_EMP_PASSWORD))
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.check_password(OLD_EMP_PASSWORD))
+
+    def test_password_change_without_employee_id_uses_request_user(self):
+        resp = self.client.post(
+            self.url,
+            {
+                "current_password": OLD_EMP_PASSWORD,
+                "new_password": NEW_EMP_PASSWORD,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.check_password(NEW_EMP_PASSWORD))
 
     def test_password_not_exposed_in_response(self):
         resp = self.client.post(

@@ -162,9 +162,10 @@ class LoginAPI(APIView):
                     logger.warning(
                         "Login failed: employee_id=%s not found", employee_id
                     )
+                    # Uniform message — do not reveal whether employee_id exists.
                     return error_response(
-                        message="Employee not found",
-                        code="NOT_FOUND",
+                        message="Invalid credentials",
+                        code="INVALID_CREDENTIALS",
                         status_code=status.HTTP_401_UNAUTHORIZED,
                     )
 
@@ -702,7 +703,21 @@ class LogoutAPI(APIView):
         if refresh_token and HAS_SJWT:
             try:
                 token = RefreshToken(refresh_token)
-                token.blacklist()
+                from rest_framework_simplejwt.settings import (
+                    api_settings as jwt_settings,
+                )
+
+                token_user_id = token.get(jwt_settings.USER_ID_CLAIM)
+                if token_user_id is not None and int(token_user_id) != int(
+                    request.user.pk
+                ):
+                    logger.warning(
+                        "Web logout rejected foreign refresh user_id=%s token_user=%s",
+                        request.user.pk,
+                        token_user_id,
+                    )
+                else:
+                    token.blacklist()
             except Exception as exc:
                 logger.warning(
                     "Web logout blacklist failed user_id=%s err=%s",
@@ -973,13 +988,18 @@ class AdminEmployeeToggleStatusAPI(APIView):
 class ChangePasswordAPI(DeviceSessionRequiredMixin, APIView):
     """
     POST /api/v1/employees/change-password/
-    Body: { employee_id, current_password, new_password }
+    Body: { current_password, new_password, employee_id? }
+    Password always changes for request.user; employee_id must match if sent.
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_change"
 
     def post(self, request):
-        serializer = ChangePasswordSerializer(data=request.data)
+        serializer = ChangePasswordSerializer(
+            data=request.data, context={"request": request}
+        )
         if not serializer.is_valid():
             return error_response(
                 errors=serializer.errors,

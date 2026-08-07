@@ -133,14 +133,11 @@ def log_location_saved(
     distance_km = workday_distance_km(workday_id)
     logger.info(
         "LocationReceived source=%s employee_id=%s workday_id=%s "
-        "location_log_id=%s lat=%s lng=%s timestamp=%s "
-        "total_points=%s distance_km=%s",
+        "location_log_id=%s timestamp=%s total_points=%s distance_km=%s",
         source,
         user_id,
         workday_id,
         location.id,
-        location.latitude,
-        location.longitude,
         recorded_at,
         total,
         distance_km,

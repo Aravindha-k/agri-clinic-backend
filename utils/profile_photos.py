@@ -5,6 +5,11 @@ import os
 MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB
 
 ALLOWED_PROFILE_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_PROFILE_PHOTO_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
 
 
 def file_extension(filename: str) -> str:
@@ -28,8 +33,8 @@ def validate_profile_photo(file_obj) -> dict[str, str]:
             "Allowed photo types: jpg, jpeg, png, webp."
         )
 
-    content_type = (getattr(file_obj, "content_type", "") or "").lower()
-    if content_type and not content_type.startswith("image/"):
+    content_type = (getattr(file_obj, "content_type", "") or "").lower().strip()
+    if content_type and content_type not in ALLOWED_PROFILE_PHOTO_MIME_TYPES:
         errors["profile_photo"] = f"Invalid image MIME type: {content_type}"
 
     return errors

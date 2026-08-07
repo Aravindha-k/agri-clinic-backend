@@ -140,7 +140,9 @@ class AdminResetPasswordSerializer(serializers.Serializer):
 # SELF-SERVICE PASSWORD CHANGE
 # =========================
 class ChangePasswordSerializer(serializers.Serializer):
-    employee_id = serializers.CharField()
+    # Optional for backward compatibility with mobile/admin clients; ignored for
+    # identity — password always changes for request.user only.
+    employee_id = serializers.CharField(required=False, allow_blank=True)
     current_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True)
 
@@ -148,22 +150,37 @@ class ChangePasswordSerializer(serializers.Serializer):
         return _validate_password_field(value)
 
     def validate(self, data):
-        employee_id = data.get("employee_id")
-        current_password = data.get("current_password")
-
-        try:
-            profile = EmployeeProfile.objects.select_related("user").get(
-                employee_id=employee_id
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request is not None else None
+        if user is None or not getattr(user, "is_authenticated", False):
+            raise serializers.ValidationError(
+                {"detail": "Authentication required."}
             )
-        except EmployeeProfile.DoesNotExist:
-            raise serializers.ValidationError({"employee_id": "Employee not found"})
 
-        if not profile.user.check_password(current_password):
+        employee_id = (data.get("employee_id") or "").strip()
+        if employee_id:
+            profile = (
+                EmployeeProfile.objects.filter(user=user)
+                .only("employee_id")
+                .first()
+            )
+            own_id = getattr(profile, "employee_id", None) or ""
+            if employee_id.casefold() != str(own_id).casefold():
+                raise serializers.ValidationError(
+                    {
+                        "employee_id": (
+                            "You can only change your own password."
+                        )
+                    }
+                )
+
+        current_password = data.get("current_password")
+        if not user.check_password(current_password):
             raise serializers.ValidationError(
                 {"current_password": "Current password is incorrect"}
             )
 
-        self._user = profile.user
+        self._user = user
         return data
 
     def save(self):

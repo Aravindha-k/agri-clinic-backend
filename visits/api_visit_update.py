@@ -118,12 +118,19 @@ class VisitDetailUpdateAPI(DeviceSessionRequiredMixin, APIView):
             return Response(strip_visit_status_from_representation(data))
         except Http404:
             raise
-        except Exception as e:
-            print("ERROR:", e)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "Visit update failed visit_id=%s", id
+            )
             return Response(
                 {
                     "success": False,
-                    "error": {"code": "INTERNAL_ERROR", "message": str(e)},
+                    "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "An unexpected error occurred.",
+                    },
                 },
                 status=500,
             )

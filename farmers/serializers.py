@@ -535,7 +535,14 @@ class FarmerDetailSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("id", "farmer_code", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "farmer_code",
+            "assigned_employee",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -592,7 +599,6 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
             "total_land_area",
             "irrigation_type",
             "soil_type",
-            "assigned_employee",
         ]
 
     def validate_gps_location(self, value):
@@ -627,7 +633,6 @@ class FarmerUpdateSerializer(serializers.ModelSerializer):
             "total_land_area",
             "irrigation_type",
             "soil_type",
-            "assigned_employee",
         ]
 
     def validate_gps_location(self, value):

@@ -4,6 +4,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
 
+from rest_framework.permissions import IsAdminUser
+
 from accounts.views import LogoutAPI, LoginAPI
 from accounts.token_refresh import AgriWebTokenRefreshView
 from tracking.views import StartWorkDayAPI, EndWorkDayAPI
@@ -19,6 +21,18 @@ from masters.problem_item_views import (
     CropProblemItemListAPI,
     ProblemItemListAPI,
 )
+
+
+class StaffSpectacularAPIView(SpectacularAPIView):
+    permission_classes = [IsAdminUser]
+
+
+class StaffSpectacularSwaggerView(SpectacularSwaggerView):
+    permission_classes = [IsAdminUser]
+
+
+class StaffSpectacularRedocView(SpectacularRedocView):
+    permission_classes = [IsAdminUser]
 
 
 def health_check(_request):
@@ -132,26 +146,22 @@ urlpatterns = [
     path("api/v1/notifications/", include("notifications.urls")),
     path("api/v1/system/", include("system_settings.urls")),
     path("api/v1/audit/", include("audit_logs.urls")),
-    # ── OpenAPI schema + documentation ─────────────────────────
-    # Raw OpenAPI schema (JSON/YAML)
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    # Swagger UI
+    # ── OpenAPI schema + documentation (staff-only) ─────────────
+    path("api/schema/", StaffSpectacularAPIView.as_view(), name="schema"),
     path(
         "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
+        StaffSpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
     ),
-    # ReDoc UI
     path(
         "api/redoc/",
-        SpectacularRedocView.as_view(url_name="schema"),
+        StaffSpectacularRedocView.as_view(url_name="schema"),
         name="redoc",
     ),
-    # Legacy v1 aliases (kept for backwards-compat)
-    path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema-v1"),
+    path("api/v1/schema/", StaffSpectacularAPIView.as_view(), name="schema-v1"),
     path(
         "api/v1/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
+        StaffSpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui-v1",
     ),
     # Admin dashboard ViewSets (router: fields/, dashboard/stats/, etc.)
@@ -160,8 +170,9 @@ urlpatterns = [
     path("api/v1/mobile/", include("mobile_api.urls")),
 ]
 
-# Serve uploaded media from disk when not using S3 (local dev + Render disk).
-if not settings.USE_S3:
+# Serve uploaded media from Django only in DEBUG. Production must use Nginx
+# (with auth / private access) or signed S3 URLs — never anonymous public /media/.
+if settings.DEBUG and not settings.USE_S3:
     urlpatterns += static(
         settings.MEDIA_URL,
         document_root=settings.MEDIA_ROOT,

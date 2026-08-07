@@ -105,9 +105,14 @@ class AgriTokenRefreshSerializer(TokenRefreshSerializer):
 
         user = _user_from_refresh(refresh)
 
-        # 2) Device session validation (mobile) — before account checks / new tokens
+        # 2) Device session validation — before account checks / new tokens.
+        # Mobile tokens embed device_session_id; enforce that claim on ANY refresh
+        # path (including /api/v1/auth/refresh/) so stolen mobile refresh tokens
+        # cannot strip device binding via the web endpoint.
         device_session_id = _resolve_device_session_id(request, refresh, attrs)
-        if require_device:
+        claim_device = refresh.get(DEVICE_SESSION_CLAIM)
+        must_check_device = require_device or bool(claim_device)
+        if must_check_device:
             result = check_device_session(user, device_session_id)
             if result != SessionCheckResult.OK:
                 logger.info(
@@ -131,23 +136,22 @@ class AgriTokenRefreshSerializer(TokenRefreshSerializer):
         except TokenError:
             raise InvalidToken("Token is blacklisted")
 
-        active_device = device_session_id if require_device else refresh.get(
-            DEVICE_SESSION_CLAIM
-        )
-        if not require_device:
-            active_device = refresh.get(DEVICE_SESSION_CLAIM)
+        active_device = None
+        if must_check_device:
+            active_device = device_session_id or claim_device
 
         data = issue_rotated_tokens(
             user,
-            device_session_id=str(active_device) if active_device and require_device else None,
+            device_session_id=str(active_device) if active_device else None,
         )
-        if require_device and active_device:
+        if active_device:
             data["device_session_id"] = str(active_device)
 
         logger.info(
-            "Token refresh OK user_id=%s require_device=%s",
+            "Token refresh OK user_id=%s require_device=%s device_bound=%s",
             user.pk,
             require_device,
+            bool(active_device),
         )
         return data
 
@@ -158,11 +162,21 @@ def attach_device_session_claim(refresh: RefreshToken, session_key) -> RefreshTo
 
 
 class AgriWebTokenRefreshView(TokenRefreshView):
-    """Web/admin refresh: account-active checks; no device session requirement."""
+    """Web/admin refresh: account-active checks; no device session requirement.
+
+    Refresh tokens that already carry a mobile ``device_session_id`` claim are
+    still validated against the active device session (see serializer).
+    """
 
     permission_classes = [AllowAny]
     serializer_class = AgriTokenRefreshSerializer
     require_device_session = False
+    throttle_scope = "refresh"
+
+    def get_throttles(self):
+        from rest_framework.throttling import ScopedRateThrottle
+
+        return [ScopedRateThrottle()]
 
     def post(self, request, *args, **kwargs):
         from rest_framework.response import Response
@@ -180,6 +194,12 @@ class AgriWebTokenRefreshView(TokenRefreshView):
                 return error_response(
                     message=msg, code="ACCOUNT_DISABLED", status_code=403
                 )
+            if code == "SESSION_REPLACED":
+                return error_response(
+                    message=msg,
+                    code="SESSION_REPLACED",
+                    status_code=401,
+                )
             return error_response(
                 message="Token refresh failed",
                 code=code or "UNAUTHORIZED",
@@ -191,4 +211,6 @@ class AgriWebTokenRefreshView(TokenRefreshView):
                 code="UNAUTHORIZED",
                 status_code=401,
             )
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+        response["Cache-Control"] = "no-store"
+        return response

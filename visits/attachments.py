@@ -101,16 +101,35 @@ def validate_attachment_payload(
     name = getattr(file_obj, "name", "") or ""
     ext = file_extension(name)
     allowed = EXTENSIONS_BY_TYPE.get(attachment_type, set())
-    if ext and ext not in allowed:
-        errors["file"] = (
-            f"File type '{ext}' is not allowed for attachment_type '{attachment_type}'."
-        )
+    if attachment_type != ATTACHMENT_TYPE_TEXT:
+        if not ext:
+            errors["file"] = (
+                f"File extension is required for attachment_type '{attachment_type}'."
+            )
+        elif ext not in allowed:
+            errors["file"] = (
+                f"File type '{ext}' is not allowed for attachment_type '{attachment_type}'."
+            )
 
-    content_type = getattr(file_obj, "content_type", "") or ""
-    if content_type and not content_type.startswith(
-        ("image/", "audio/", "application/", "text/")
-    ):
-        errors["file"] = f"MIME type '{content_type}' is not allowed."
+    content_type = (getattr(file_obj, "content_type", "") or "").lower().strip()
+    if content_type:
+        allowed_prefixes = {
+            ATTACHMENT_TYPE_IMAGE: ("image/jpeg", "image/png", "image/webp"),
+            ATTACHMENT_TYPE_PDF: ("application/pdf",),
+            ATTACHMENT_TYPE_AUDIO: ("audio/",),
+            ATTACHMENT_TYPE_OTHER: (
+                "application/msword",
+                "application/vnd.",
+                "text/plain",
+                "text/csv",
+                "application/pdf",
+            ),
+        }
+        prefixes = allowed_prefixes.get(attachment_type, ())
+        if prefixes and not any(
+            content_type == p or content_type.startswith(p) for p in prefixes
+        ):
+            errors["file"] = f"MIME type '{content_type}' is not allowed."
 
     return errors
 

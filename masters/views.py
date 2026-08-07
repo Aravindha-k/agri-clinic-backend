@@ -193,7 +193,7 @@ class FieldCropViewSet(BaseMasterViewSet):
     },
 )
 class ProblemCategoryListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminWriteEmployeeReadOnly]
 
     def get(self, request):
         categories = ProblemCategory.objects.filter(is_active=True).order_by("name")

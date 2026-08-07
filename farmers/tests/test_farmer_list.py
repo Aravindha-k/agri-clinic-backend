@@ -81,6 +81,8 @@ class FarmerListAPITest(TestCase):
         self.assertNotIn("is_active", row)
 
     def test_update_rejects_duplicate_phone(self):
+        self.zero_visits.assigned_employee = self.employee
+        self.zero_visits.save(update_fields=["assigned_employee"])
         self.client.force_authenticate(user=self.employee)
         response = self.client.put(
             f"/api/v1/farmers/{self.zero_visits.id}/",

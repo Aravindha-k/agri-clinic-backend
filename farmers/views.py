@@ -304,6 +304,13 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
             )
         self.request = request
         farmer = self._get_farmer(pk)
+        from farmers.access import farmer_writable_by
+
+        if not farmer_writable_by(request.user, farmer):
+            return forbidden_response(
+                "You can only update farmers assigned to you, created by you, "
+                "or that you have visited."
+            )
         serializer = FarmerUpdateSerializer(farmer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -356,6 +363,13 @@ class FarmerFieldListCreateAPI(DeviceSessionRequiredMixin, APIView):
                 "Admin users cannot create fields. Employee access only."
             )
         farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
+        from farmers.access import farmer_writable_by
+
+        if not farmer_writable_by(request.user, farmer):
+            return forbidden_response(
+                "You can only add fields for farmers assigned to you, created by "
+                "you, or that you have visited."
+            )
         serializer = FarmerFieldCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         field = serializer.save(farmer=farmer, created_by_employee=request.user)
@@ -391,6 +405,13 @@ class FieldCropCreateAPI(DeviceSessionRequiredMixin, APIView):
             farmer__in=_farmers_queryset_for_user(request.user),
             is_active=True,
         )
+        from farmers.access import farmer_writable_by
+
+        if not farmer_writable_by(request.user, field.farmer):
+            return forbidden_response(
+                "You can only add crops for farmers assigned to you, created by "
+                "you, or that you have visited."
+            )
         serializer = FieldCropCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         crop = serializer.save(land=field)

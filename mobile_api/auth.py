@@ -307,6 +307,10 @@ class MobileTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
     serializer_class = AgriTokenRefreshSerializer
     require_device_session = True
+    throttle_scope = "refresh"
+
+    def get_throttles(self):
+        return [ScopedRateThrottle()]
 
     def post(self, request, *args, **kwargs):
         try:
@@ -338,7 +342,9 @@ class MobileTokenRefreshView(TokenRefreshView):
                     code=code or "UNAUTHORIZED",
                     status_code=401,
                 )
-            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+            response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+            response["Cache-Control"] = "no-store"
+            return response
         except Exception:
             return error_response(message="Token refresh failed", status_code=401)
 
@@ -369,7 +375,21 @@ class MobileLogoutAPI(APIView):
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
-                token.blacklist()
+                from rest_framework_simplejwt.settings import (
+                    api_settings as jwt_settings,
+                )
+
+                token_user_id = token.get(jwt_settings.USER_ID_CLAIM)
+                if token_user_id is not None and int(token_user_id) != int(
+                    request.user.pk
+                ):
+                    logger.warning(
+                        "Mobile logout rejected foreign refresh user_id=%s token_user=%s",
+                        request.user.pk,
+                        token_user_id,
+                    )
+                else:
+                    token.blacklist()
             except Exception as exc:
                 logger.warning(
                     "Mobile logout blacklist failed user_id=%s err=%s",

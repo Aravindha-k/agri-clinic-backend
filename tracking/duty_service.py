@@ -210,13 +210,12 @@ def start_duty(
         _ensure_start_route_point(user, existing, latitude, longitude)
         return DutyStartResult(duty=existing, created=False)
     logger.info(
-        "DutyStart user_id=%s duty_id=%s workday_id=%s date=%s lat=%s lng=%s",
+        "DutyStart user_id=%s duty_id=%s workday_id=%s date=%s has_coords=%s",
         user.pk,
         duty.pk,
         workday.pk,
         business_date,
-        duty.latitude,
-        duty.longitude,
+        duty.latitude is not None and duty.longitude is not None,
     )
     _ensure_start_route_point(user, duty, latitude, longitude)
     return DutyStartResult(duty=duty, created=True)

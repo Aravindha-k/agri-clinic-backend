@@ -269,7 +269,15 @@ def validate_visit_media_file_detailed(
 
     ext = _file_extension(original_filename)
     allowed_ext = EXTENSIONS_BY_MEDIA_TYPE.get(media_type, set())
-    if ext and ext not in allowed_ext:
+    if not ext:
+        raise MediaValidationError(
+            f"File extension is required for media_type '{media_type}'.",
+            code=CODE_UNSUPPORTED_MEDIA_TYPE,
+            errors={
+                "file": f"File extension is required for media_type '{media_type}'."
+            },
+        )
+    if ext not in allowed_ext:
         raise MediaValidationError(
             f"File type '{ext}' is not allowed for media_type '{media_type}'.",
             code=CODE_UNSUPPORTED_MEDIA_TYPE,

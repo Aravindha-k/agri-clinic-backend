@@ -525,6 +525,12 @@ def bulk_update_gps_points(
                 }
             )
         except Exception as exc:
+            logger.exception(
+                "GPS bulk point error user_id=%s duty_id=%s index=%s",
+                user.pk,
+                duty.pk,
+                original_index,
+            )
             failed_count += 1
             failed_items.append(
                 {
@@ -532,7 +538,7 @@ def bulk_update_gps_points(
                     "client_point_id": client_point_id,
                     "local_point_id": client_point_id,
                     "code": "POINT_ERROR",
-                    "message": str(exc),
+                    "message": "Unable to save GPS point.",
                     "retryable": True,
                 }
             )

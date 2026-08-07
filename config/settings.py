@@ -358,8 +358,18 @@ CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
+# Cap request body roughly above the largest visit media upload (video).
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.getenv("DATA_UPLOAD_MAX_MEMORY_SIZE", str(80 * 1024 * 1024))
+)
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.getenv("FILE_UPLOAD_MAX_MEMORY_SIZE", str(10 * 1024 * 1024))
+)
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", not IS_PRODUCTION)
 DEFAULT_CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -401,6 +411,8 @@ REST_FRAMEWORK = {
         "anon": "60/minute",
         "user": "300/minute",
         "login": "10/minute",
+        "refresh": "30/minute",
+        "password_change": "5/hour",
     },
 }
 
@@ -409,6 +421,8 @@ if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["login"] = "1000/minute"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["anon"] = "1000/minute"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user"] = "1000/minute"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["refresh"] = "1000/minute"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["password_change"] = "1000/minute"
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),

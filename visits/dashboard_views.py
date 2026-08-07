@@ -66,16 +66,29 @@ class MapFarmersAPI(APIView):
     GET /api/v1/map/farmers/
     Returns farmer markers with id, name, lat, lng, current crop.
     Only farmers with GPS data are returned.
+    Staff see all markers; field employees see assigned / created / visited only.
     """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from django.db.models import Exists, OuterRef
         from farmers.helpers import parse_gps_location
+        from visits.access import is_privileged_user
 
         qs = Farmer.objects.exclude(
             Q(gps_location="") | Q(gps_location__isnull=True)
         ).select_related("village")
+
+        user = request.user
+        if not (user.is_staff or is_privileged_user(user)):
+            qs = qs.filter(
+                Q(assigned_employee=user)
+                | Q(created_by_employee=user)
+                | Exists(
+                    Visit.objects.filter(employee=user, farmer_id=OuterRef("pk"))
+                )
+            )
 
         farmers = list(qs)
         farmer_ids = [f.id for f in farmers]
