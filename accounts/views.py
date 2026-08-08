@@ -3,12 +3,14 @@ from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
 
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, FormParser
 from utils.response import success_response, error_response
+from utils.permissions import IsStaffAdmin, IsSuperuserOnly
 from rest_framework import status
 
+from .admin_guards import assert_can_mutate_employee_account
 from .models import EmployeeProfile
 from .serializers import (
     EmployeeCreateSerializer,
@@ -365,7 +367,7 @@ class LoginAPI(APIView):
     },
 )
 class CreateEmployeeAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def post(self, request):
         serializer = EmployeeCreateSerializer(data=request.data)
@@ -429,11 +431,25 @@ class MeAPI(APIView):
     responses={200: SIMPLE_SUCCESS, 400: error_schema("ResetPasswordError")},
 )
 class AdminResetPasswordAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def post(self, request):
         serializer = AdminResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # Resolve target before mutating so owner accounts stay protected.
+        from accounts.models import EmployeeProfile as _EP
+
+        try:
+            target = _EP.objects.select_related("user").get(
+                employee_id=serializer.validated_data["employee_id"]
+            )
+        except _EP.DoesNotExist:
+            return error_response(
+                message="Employee not found",
+                errors={"employee_id": "Employee not found"},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        assert_can_mutate_employee_account(actor=request.user, target_user=target.user)
         user = serializer.save()
 
         from audit_logs.utils import create_audit_log
@@ -482,7 +498,7 @@ class AdminResetPasswordAPI(APIView):
     },
 )
 class EmployeeListAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         from django.db.models import Q
@@ -532,7 +548,7 @@ class EmployeeListAPI(APIView):
     responses={200: SIMPLE_SUCCESS, 404: error_schema("ToggleNotFound")},
 )
 class ToggleEmployeeStatusAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def post(self, request, employee_id):
         employee = get_object_or_404(
@@ -574,7 +590,7 @@ class ToggleEmployeeStatusAPI(APIView):
     },
 )
 class AdminEmployeeUpdateDeleteAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def _get_employee(self, pk):
         return get_object_or_404(
@@ -585,6 +601,9 @@ class AdminEmployeeUpdateDeleteAPI(APIView):
     # FULL UPDATE
     def put(self, request, employee_id):
         employee = self._get_employee(employee_id)
+        assert_can_mutate_employee_account(
+            actor=request.user, target_user=employee.user
+        )
         serializer = AdminEmployeeUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
@@ -607,6 +626,9 @@ class AdminEmployeeUpdateDeleteAPI(APIView):
     # PARTIAL UPDATE
     def patch(self, request, employee_id):
         employee = self._get_employee(employee_id)
+        assert_can_mutate_employee_account(
+            actor=request.user, target_user=employee.user
+        )
         serializer = AdminEmployeeUpdateSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return error_response(
@@ -629,6 +651,9 @@ class AdminEmployeeUpdateDeleteAPI(APIView):
     # DELETE (SOFT)
     def delete(self, request, employee_id):
         employee = self._get_employee(employee_id)
+        assert_can_mutate_employee_account(
+            actor=request.user, target_user=employee.user
+        )
         employee.is_active_employee = False
         employee.user.is_active = False
         employee.user.save(update_fields=["is_active"])
@@ -651,15 +676,9 @@ class CreateAdminAPI(APIView):
     Only SUPER ADMIN can create ADMIN users
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperuserOnly]
 
     def post(self, request):
-        if not request.user.is_superuser:
-            return error_response(
-                message="Super Admin only",
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
-
         serializer = AdminCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         admin = serializer.save()
@@ -772,7 +791,7 @@ class AdminEmployeeManagementAPI(APIView):
     POST /api/accounts/admin/employees/          → create
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         qs = EmployeeProfile.objects.select_related(
@@ -889,7 +908,7 @@ class AdminEmployeeDetailAPI(APIView):
     GET   /api/accounts/admin/employees/{id}/   → single detail
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def _get_employee(self, pk):
         return get_object_or_404(
@@ -903,6 +922,7 @@ class AdminEmployeeDetailAPI(APIView):
 
     def put(self, request, pk):
         emp = self._get_employee(pk)
+        assert_can_mutate_employee_account(actor=request.user, target_user=emp.user)
         serializer = AdminEmployeeUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.update(emp, serializer.validated_data)
@@ -914,6 +934,7 @@ class AdminEmployeeDetailAPI(APIView):
 
     def patch(self, request, pk):
         emp = self._get_employee(pk)
+        assert_can_mutate_employee_account(actor=request.user, target_user=emp.user)
         serializer = AdminEmployeeUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.update(emp, serializer.validated_data)
@@ -921,6 +942,19 @@ class AdminEmployeeDetailAPI(APIView):
         return success_response(
             data={"employee": AdminEmployeeListSerializer(emp).data},
             message="Employee updated",
+        )
+
+    def delete(self, request, pk):
+        emp = self._get_employee(pk)
+        assert_can_mutate_employee_account(actor=request.user, target_user=emp.user)
+        emp.is_active_employee = False
+        emp.can_login = False
+        emp.user.is_active = False
+        emp.user.save(update_fields=["is_active"])
+        emp.save(update_fields=["is_active_employee", "can_login"])
+        return success_response(
+            data={"employee": AdminEmployeeListSerializer(emp).data},
+            message="Employee deactivated",
         )
 
 
@@ -939,13 +973,14 @@ class AdminEmployeeToggleStatusAPI(APIView):
     PATCH /api/accounts/admin/employees/{id}/toggle-status/
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def patch(self, request, pk):
         emp = get_object_or_404(
             EmployeeProfile.objects.select_related("user", "district"),
             pk=pk,
         )
+        assert_can_mutate_employee_account(actor=request.user, target_user=emp.user)
         emp.is_active_employee = not emp.is_active_employee
         emp.can_login = emp.is_active_employee
         emp.user.is_active = emp.is_active_employee
@@ -1026,7 +1061,7 @@ class ChangePasswordAPI(DeviceSessionRequiredMixin, APIView):
     responses={200: SIMPLE_SUCCESS},
 )
 class AdminSecurityMonitoringAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         from django.conf import settings

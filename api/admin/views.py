@@ -1,19 +1,22 @@
 from rest_framework import status as http_status
-from rest_framework.permissions import IsAdminUser
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.mixins import (
     CreateModelMixin,
+    DestroyModelMixin,
     ListModelMixin,
     RetrieveModelMixin,
+    UpdateModelMixin,
 )
 from rest_framework.viewsets import GenericViewSet
 from drf_spectacular.utils import extend_schema
 from django.db.models import OuterRef, Prefetch, Subquery
+from django.db.models.deletion import ProtectedError
 
 from utils.response import success_response, error_response
 from utils.schema import SIMPLE_SUCCESS
+from utils.permissions import IsStaffAdmin
 
 from masters.models import (
     Farmer,
@@ -70,7 +73,7 @@ class AdminPagination(PageNumberPagination):
 
 
 class AdminModelViewSet(ModelViewSet):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
     pagination_class = AdminPagination
 
 
@@ -111,7 +114,7 @@ ISSUE_QS = (
 class ReadOnlyViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """View-only ViewSet — list + detail, no create/update/delete."""
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
     pagination_class = AdminPagination
 
 
@@ -131,9 +134,21 @@ class FarmerViewSet(AdminModelViewSet):
         .order_by("-created_at")
     )
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            self.perform_destroy(instance)
+        except ProtectedError:
+            return error_response(
+                message="Cannot delete farmer while protected related records exist.",
+                code="DELETE_PROTECTED",
+                status_code=http_status.HTTP_409_CONFLICT,
+            )
+        return success_response(message="Farmer deleted")
 
-class FarmerFieldViewSet(ReadOnlyViewSet):
-    """Admin can only view fields. Fields are created by employees during visits."""
+
+class FarmerFieldViewSet(AdminModelViewSet):
+    """Admin CRUD for farmer fields."""
 
     serializer_class = AdminFarmerFieldSerializer
     search_fields = ["land_name", "farmer__name", "farmer__phone"]
@@ -142,15 +157,17 @@ class FarmerFieldViewSet(ReadOnlyViewSet):
     queryset = (
         FarmerField.objects.select_related("farmer", "created_by_employee")
         .prefetch_related("crops__crop")
-        .filter(is_active=True)
         .order_by("-created_at")
     )
 
 
-class VisitViewSet(CreateModelMixin, ReadOnlyViewSet):
-    """
-    Admin visit list/detail plus field-visit create (same payload as mobile).
-    """
+class VisitViewSet(
+    CreateModelMixin,
+    UpdateModelMixin,
+    DestroyModelMixin,
+    ReadOnlyViewSet,
+):
+    """Admin visit list/detail/create/update/delete."""
 
     serializer_class = AdminVisitSerializer
     queryset = (
@@ -199,9 +216,21 @@ class VisitViewSet(CreateModelMixin, ReadOnlyViewSet):
             status_code=http_status.HTTP_201_CREATED,
         )
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            instance.delete()
+        except ProtectedError:
+            return error_response(
+                message="Cannot delete visit while protected related records exist.",
+                code="DELETE_PROTECTED",
+                status_code=http_status.HTTP_409_CONFLICT,
+            )
+        return success_response(message="Visit deleted")
 
-class CropIssueViewSet(ReadOnlyViewSet):
-    """Admin can only view issues. Issues are created by employees."""
+
+class CropIssueViewSet(AdminModelViewSet):
+    """Admin CRUD for crop issues."""
 
     serializer_class = AdminCropIssueSerializer
     search_fields = [
@@ -221,7 +250,6 @@ class CropIssueViewSet(ReadOnlyViewSet):
     ]
     ordering_fields = ["created_at", "status", "severity"]
     queryset = ISSUE_QS
-
 
 class CropViewSet(AdminModelViewSet):
     serializer_class = AdminCropSerializer
@@ -339,7 +367,7 @@ class ProblemMasterViewSet(AdminModelViewSet):
     responses={200: SIMPLE_SUCCESS},
 )
 class DashboardStatsAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         data = {
@@ -370,7 +398,7 @@ class DashboardStatsAPI(APIView):
     responses={200: SIMPLE_SUCCESS},
 )
 class FarmerVisitAuditAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         orphan_limit = _bounded_int(request.query_params.get("orphan_limit"), 50, maximum=200)
@@ -386,7 +414,7 @@ class FarmerVisitAuditAPI(APIView):
 
 
 class DashboardOverviewAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         recent_limit = _bounded_int(request.query_params.get("recent_limit"), 5)

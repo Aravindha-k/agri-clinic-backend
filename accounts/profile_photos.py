@@ -6,6 +6,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from accounts.admin_guards import assert_can_mutate_employee_account
 from accounts.employee_photo import employee_me_payload, save_employee_profile_photo
 from accounts.models import EmployeeProfile
 from accounts.serializers import AdminEmployeeListSerializer
@@ -36,6 +37,9 @@ class AdminEmployeePhotoAPI(APIView):
     def patch(self, request, pk):
         profile = get_object_or_404(
             EmployeeProfile.objects.select_related("user"), pk=pk
+        )
+        assert_can_mutate_employee_account(
+            actor=request.user, target_user=profile.user
         )
         file_obj = request.FILES.get("profile_photo") or request.FILES.get("file")
         errors = validate_profile_photo(file_obj)

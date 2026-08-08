@@ -84,8 +84,18 @@ class AdminRecommendationSerializer(serializers.ModelSerializer):
 
 class AdminCropIssueSerializer(serializers.ModelSerializer):
     farmer_id = serializers.SerializerMethodField()
-    crop_id = serializers.IntegerField(read_only=True)
-    visit_id = serializers.IntegerField(read_only=True)
+    # Writable FKs (IDs on write); nested SMFs below keep read payload shape.
+    crop_id = serializers.PrimaryKeyRelatedField(
+        source="crop",
+        queryset=Crop.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    visit_id = serializers.PrimaryKeyRelatedField(
+        source="visit",
+        queryset=Visit.objects.all(),
+        required=False,
+    )
     reported_by = serializers.SerializerMethodField()
     issue_title = serializers.SerializerMethodField()
     visit = serializers.SerializerMethodField()
@@ -116,6 +126,12 @@ class AdminCropIssueSerializer(serializers.ModelSerializer):
             "recommendations",
         ]
         read_only_fields = ("id", "created_at")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is None and not attrs.get("visit"):
+            raise serializers.ValidationError({"visit_id": "This field is required."})
+        return attrs
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_farmer_id(self, obj):

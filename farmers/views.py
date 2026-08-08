@@ -206,16 +206,19 @@ class FarmerListCreateAPI(DeviceSessionRequiredMixin, APIView):
         return paginator.get_paginated_response(data)
 
     def post(self, request):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot create farmers. Employee access only."
-            )
         serializer = FarmerCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        farmer = serializer.save(
-            created_by_employee=request.user,
-            assigned_employee=request.user,
-        )
+        if request.user.is_staff:
+            assigned = request.data.get("assigned_employee")
+            save_kwargs = {"created_by_employee": request.user}
+            if assigned not in (None, ""):
+                save_kwargs["assigned_employee_id"] = assigned
+            farmer = serializer.save(**save_kwargs)
+        else:
+            farmer = serializer.save(
+                created_by_employee=request.user,
+                assigned_employee=request.user,
+            )
         invalidate_farmers_list_cache()
         farmer = _farmers_queryset_with_visit_counts(request.user).get(pk=farmer.pk)
         return created_response(
@@ -298,10 +301,6 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
         return success_response(data=data)
 
     def put(self, request, pk):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot edit farmers. Employee access only."
-            )
         self.request = request
         farmer = self._get_farmer(pk)
         from farmers.access import farmer_writable_by
@@ -313,6 +312,17 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
             )
         serializer = FarmerUpdateSerializer(farmer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        # Staff may reassign ownership; field employees may not.
+        if request.user.is_staff and "assigned_employee" in request.data:
+            assigned = request.data.get("assigned_employee")
+            if assigned in (None, ""):
+                serializer.validated_data["assigned_employee"] = None
+            else:
+                from django.contrib.auth import get_user_model
+
+                serializer.validated_data["assigned_employee"] = (
+                    get_user_model().objects.filter(pk=assigned).first()
+                )
         serializer.save()
         farmer.refresh_from_db()
         return success_response(
@@ -358,10 +368,6 @@ class FarmerFieldListCreateAPI(DeviceSessionRequiredMixin, APIView):
         return success_response(data=serializer.data)
 
     def post(self, request, farmer_id):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot create fields. Employee access only."
-            )
         farmer = _get_scoped_farmer_or_404(request.user, pk=farmer_id)
         from farmers.access import farmer_writable_by
 
@@ -395,10 +401,6 @@ class FieldCropCreateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, field_id):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot add crops. Employee access only."
-            )
         field = get_object_or_404(
             FarmerField,
             pk=field_id,
@@ -501,10 +503,6 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot create visits. Employee access only."
-            )
         from visits.field_visit_serializers import FieldVisitSubmitSerializer
         from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE
 
@@ -602,10 +600,6 @@ class VisitIssueCreateAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, visit_id):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot report issues. Employee access only."
-            )
         visit = get_object_or_404(_scoped_visits_for_user(request.user), pk=visit_id)
         serializer = CropIssueCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -710,10 +704,6 @@ class VisitMediaUploadAPI(DeviceSessionRequiredMixin, APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, visit_id):
-        if request.user.is_staff:
-            return forbidden_response(
-                "Admin users cannot upload media. Employee access only."
-            )
         visit = get_visit_for_user(request.user, visit_id)
 
         file = request.FILES.get("file")

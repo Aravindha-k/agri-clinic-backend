@@ -7,14 +7,40 @@ Reusable DRF permission classes for role-based access control.
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
-class IsAdmin(BasePermission):
-    """Only Django staff users (is_staff=True)."""
+class IsStaffAdmin(BasePermission):
+    """
+    Authenticated Django staff user (is_staff=True).
+
+    Covers both:
+    - owner / superuser (is_staff + is_superuser)
+    - operational admin (is_staff, not necessarily superuser)
+
+    Does NOT require is_superuser.
+    """
 
     message = "Admin access required."
 
     def has_permission(self, request, view):
         return bool(
             request.user and request.user.is_authenticated and request.user.is_staff
+        )
+
+
+# Backward-compatible aliases
+IsAdmin = IsStaffAdmin
+IsAdminUser = IsStaffAdmin
+
+
+class IsSuperuserOnly(BasePermission):
+    """Owner / superuser-only actions (create admin users, etc.)."""
+
+    message = "Super Admin access required."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.is_superuser
         )
 
 

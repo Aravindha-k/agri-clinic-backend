@@ -2,7 +2,8 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from utils.permissions import IsStaffAdmin
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
@@ -125,7 +126,7 @@ class ProblemItemViewSet(ModelViewSet):
     """Admin CRUD for Problem Items (ProblemMaster rows)."""
 
     serializer_class = ProblemItemSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
     pagination_class = ProblemItemPagination
     queryset = ProblemMaster.objects.select_related("category", "crop").order_by(
         "category__name", "name"
@@ -243,7 +244,7 @@ class ProblemMasterImportAPI(APIView):
     summary="Import problem items from Excel",
 )
 class ProblemItemImportAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def post(self, request):
         return _import_problem_items_from_upload(request)

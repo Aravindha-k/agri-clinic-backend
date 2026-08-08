@@ -1,10 +1,10 @@
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status, serializers
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 
+from utils.permissions import IsStaffAdmin, IsSuperuserOnly
 from utils.schema import SIMPLE_SUCCESS, error_schema
 
 from .models import SystemSetting, SystemConfig
@@ -24,7 +24,10 @@ from .models import SystemSetting, SystemConfig
     responses={200: SIMPLE_SUCCESS, 400: error_schema("SettingError")},
 )
 class SystemSettingsAPI(APIView):
-    permission_classes = [IsAdminUser]
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsStaffAdmin()]
+        return [IsSuperuserOnly()]
 
     def get(self, request):
         settings = SystemSetting.objects.all()
@@ -82,7 +85,10 @@ class SystemConfigSerializer(serializers.ModelSerializer):
     responses={200: SystemConfigSerializer, 400: error_schema("SystemConfigError")},
 )
 class SystemConfigAPI(APIView):
-    permission_classes = [IsAdminUser]
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsStaffAdmin()]
+        return [IsSuperuserOnly()]
 
     def get(self, request):
         config = SystemConfig.load()

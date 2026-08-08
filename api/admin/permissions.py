@@ -1,6 +1,9 @@
 from rest_framework.permissions import BasePermission
 
+from utils.permissions import IsStaffAdmin
 
-class IsAdminUser(BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_staff
+
+class IsAdminUser(IsStaffAdmin):
+    """Admin Panel access: any authenticated staff user (not superuser-only)."""
+
+    pass

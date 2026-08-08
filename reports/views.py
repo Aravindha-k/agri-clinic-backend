@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAdminUser
+from utils.permissions import IsStaffAdmin
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -31,7 +31,7 @@ _DATE_PARAMS = [
     responses={200: SIMPLE_SUCCESS},
 )
 class EmployeeVisitReportAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         start = request.GET.get("start_date")
@@ -48,7 +48,7 @@ class EmployeeVisitReportAPI(APIView):
     responses={200: SIMPLE_SUCCESS},
 )
 class VillageVisitReportAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         start = request.GET.get("start_date")
@@ -65,7 +65,7 @@ class VillageVisitReportAPI(APIView):
     responses={200: SIMPLE_SUCCESS},
 )
 class CropProblemReportAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         start = request.GET.get("start_date")

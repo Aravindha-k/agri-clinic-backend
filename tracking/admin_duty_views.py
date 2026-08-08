@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from drf_spectacular.types import OpenApiTypes
-from rest_framework.permissions import IsAdminUser
+from utils.permissions import IsStaffAdmin
 from rest_framework.views import APIView
 
 from accounts.device_sessions import batch_device_status_map
@@ -75,7 +75,7 @@ def _build_route_payload(*, emp, user_id: int, target_date, request) -> dict:
     responses={200: SIMPLE_SUCCESS},
 )
 class AdminTrackingLiveAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request):
         expire_old_workdays()
@@ -285,7 +285,7 @@ class AdminTrackingLiveAPI(APIView):
     responses={200: SIMPLE_SUCCESS, 404: error_schema("EmployeeNotFound")},
 )
 class AdminEmployeeTodayRouteAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request, user_id):
         expire_old_workdays()
@@ -308,7 +308,7 @@ class AdminEmployeeTodayRouteAPI(APIView):
     responses={200: SIMPLE_SUCCESS, 404: error_schema("EmployeeNotFound")},
 )
 class AdminEmployeeRouteByDateAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def get(self, request, user_id):
         expire_old_workdays()
@@ -345,7 +345,7 @@ class AdminEmployeeRouteByDateAPI(APIView):
     responses={200: SIMPLE_SUCCESS, 403: error_schema("Forbidden"), 404: error_schema("EmployeeNotFound")},
 )
 class AdminEmployeeEndDutyAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffAdmin]
 
     def post(self, request, user_id):
         try:

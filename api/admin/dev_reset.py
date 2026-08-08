@@ -4,11 +4,11 @@ import os
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser
 from rest_framework.views import APIView
 
 from django.core.management import call_command
 
+from utils.permissions import IsSuperuserOnly
 from utils.response import error_response, success_response
 from utils.schema import error_schema
 
@@ -30,7 +30,7 @@ def _is_production_env() -> bool:
     responses={200: None, 403: error_schema("DevResetForbidden")},
 )
 class DevResetTestBusinessDataAPI(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperuserOnly]
 
     def post(self, request):
         if _is_production_env():
