@@ -1061,7 +1061,7 @@ class ChangePasswordAPI(DeviceSessionRequiredMixin, APIView):
     responses={200: SIMPLE_SUCCESS},
 )
 class AdminSecurityMonitoringAPI(APIView):
-    permission_classes = [IsStaffAdmin]
+    permission_classes = [IsSuperuserOnly]
 
     def get(self, request):
         from django.conf import settings

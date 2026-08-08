@@ -1,12 +1,12 @@
 import logging
 
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAdminUser
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
 from utils.pagination import StandardPagination
+from utils.permissions import IsSuperuserOnly
 from utils.response import success_response
 from utils.schema import PAGINATION_PARAMS, paginated_response_schema
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
     tags=["Audit Logs"],
     summary="List audit logs (admin)",
     description=(
-        "Full audit trail of system actions. Admin only.  \n\n"
+        "Full audit trail of system actions. Owner / superuser only.  \n\n"
         "**Filterable by:** `module`, `action`, `actor`, `entity_id`, `date_from`, `date_to`"
     ),
     parameters=[
@@ -71,7 +71,7 @@ class AuditLogListAPI(APIView):
       - page, page_size
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperuserOnly]
 
     def get(self, request):
         qs = AuditLog.objects.select_related("actor").order_by("-created_at")

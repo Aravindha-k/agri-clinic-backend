@@ -13,7 +13,7 @@ from .models import SystemSetting, SystemConfig
 @extend_schema(
     tags=["System"],
     summary="List or update system settings",
-    description="GET: returns all system settings (key/value pairs). PATCH: update a setting value by key.",
+    description="GET/PATCH system settings key/value pairs. Owner / superuser only.",
     request=inline_serializer(
         name="SystemSettingPatchRequest",
         fields={
@@ -24,10 +24,9 @@ from .models import SystemSetting, SystemConfig
     responses={200: SIMPLE_SUCCESS, 400: error_schema("SettingError")},
 )
 class SystemSettingsAPI(APIView):
-    def get_permissions(self):
-        if self.request.method in ("GET", "HEAD", "OPTIONS"):
-            return [IsStaffAdmin()]
-        return [IsSuperuserOnly()]
+    """Owner/superuser only — may contain sensitive configuration values."""
+
+    permission_classes = [IsSuperuserOnly]
 
     def get(self, request):
         settings = SystemSetting.objects.all()
