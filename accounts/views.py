@@ -359,6 +359,7 @@ class LoginAPI(APIView):
             {
                 "employee_id": drf_serializers.CharField(),
                 "username": drf_serializers.CharField(),
+                "temporary_password": drf_serializers.CharField(),
                 "can_login": drf_serializers.BooleanField(),
                 "mobile_login_enabled": drf_serializers.BooleanField(),
             },
@@ -380,9 +381,17 @@ class CreateEmployeeAPI(APIView):
             )
         from accounts.serializers import employee_create_success_payload
 
-        profile = serializer.save()
+        try:
+            profile = serializer.save()
+        except drf_serializers.ValidationError as exc:
+            return error_response(
+                errors=getattr(exc, "detail", exc.args),
+                message="Please correct the employee details.",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # ✅ AUDIT LOG (MUST BE BEFORE RETURN)
+        # ✅ AUDIT LOG (MUST BE BEFORE RETURN) — never include temporary_password
         create_audit_log(
             actor=request.user,
             module="ACCOUNTS",
@@ -859,8 +868,13 @@ class AdminEmployeeManagementAPI(APIView):
 
         try:
             profile = serializer.save()
-        except Exception as e:
-            return error_response(message=str(e))
+        except drf_serializers.ValidationError as exc:
+            return error_response(
+                errors=getattr(exc, "detail", exc.args),
+                message="Please correct the employee details.",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         from accounts.serializers import employee_create_success_payload
 

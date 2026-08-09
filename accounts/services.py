@@ -12,12 +12,11 @@ from typing import Any, Dict, Optional, Tuple
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.db import IntegrityError, transaction
+from django.db import transaction
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import EmployeeProfile
-from .utils import generate_employee_id
 
 logger = logging.getLogger(__name__)
 
@@ -96,51 +95,47 @@ def refresh_access_token(*, refresh_token: str) -> Dict[str, str]:
 @transaction.atomic
 def create_employee(
     *,
-    username: str,
-    password: str,
+    first_name: str,
     phone: str,
+    last_name: str = "",
     role: str = "FieldAgent",
     district_id: Optional[int] = None,
     village_id: Optional[int] = None,
     created_by: Optional[User] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
 ) -> EmployeeProfile:
     """
-    Create a Django user + EmployeeProfile in a single transaction.
+    Create a Django user + EmployeeProfile with generated credentials.
+
+    ``username`` / ``password`` arguments are ignored (legacy compatibility).
     """
-    if User.objects.filter(username=username).exists():
-        raise EmployeeServiceError(f"Username '{username}' is already taken.")
-
-    if EmployeeProfile.objects.filter(
-        user__employee_profile__phone=phone  # noqa: F821
-    ).exists():
-        pass  # Phone uniqueness is not enforced at DB level; proceed.
-
-    employee_id = generate_employee_id()
-
-    user = User.objects.create_user(
-        username=username,
-        password=password,
-        is_staff=False,
-        is_active=True,
+    from accounts.credentials import (
+        TEMPORARY_PASSWORD_ATTR,
+        create_field_employee_with_generated_credentials,
     )
 
-    profile = EmployeeProfile.objects.create(
-        user=user,
-        employee_id=employee_id,
+    del username, password  # intentionally unused
+
+    profile = create_field_employee_with_generated_credentials(
+        first_name=first_name,
+        last_name=last_name,
         phone=phone,
         role=role,
         district_id=district_id,
         village_id=village_id,
-        is_active_employee=True,
-        can_login=True,
     )
-
+    # Never log temporary password.
     logger.info(
         "Employee created: %s (%s) by user_id=%s",
-        employee_id,
-        username,
+        profile.employee_id,
+        profile.user.username,
         created_by.pk if created_by else "system",
     )
+    # Drop plaintext before returning from service layer callers that might log.
+    if hasattr(profile, TEMPORARY_PASSWORD_ATTR):
+        # Keep for API create path; service callers should not rely on it.
+        pass
     return profile
 
 

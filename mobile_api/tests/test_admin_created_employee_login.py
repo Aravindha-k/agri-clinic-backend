@@ -22,12 +22,11 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.admin)
 
-    def _create_legacy(self, username="new_field_agent", phone="9876543210"):
+    def _create_legacy(self, first_name="NewAgent", phone="9876543210"):
         return self.client.post(
             "/api/v1/employees/create/",
             {
-                "username": username,
-                "password": STRONG_PASSWORD,
+                "first_name": first_name,
                 "phone": phone,
             },
             format="json",
@@ -35,7 +34,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
 
     def _create_full(
         self,
-        username="full_field_agent",
+        first_name="FullAgent",
         employee_id="EMP-NEW99",
         phone="9876543211",
         role="FieldAgent",
@@ -43,24 +42,13 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         return self.client.post(
             "/api/v1/employees/admin/employees/",
             {
-                "username": username,
-                "password": STRONG_PASSWORD,
+                "first_name": first_name,
                 "phone": phone,
                 "employee_id": employee_id,
                 "role": role,
             },
             format="json",
         )
-
-    def _mobile_login(self, **payload):
-        body = {
-            "password": STRONG_PASSWORD,
-            "device_name": "Pixel Test",
-            "platform": "android",
-            "app_version": "1.0.0",
-        }
-        body.update(payload)
-        return self.client.post("/api/v1/mobile/auth/login/", body, format="json")
 
     def test_legacy_create_returns_string_employee_id_not_user_pk(self):
         r = self._create_legacy()
@@ -74,27 +62,30 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         self.assertTrue(data.get("mobile_login_enabled"))
         self.assertTrue(data.get("account_active"))
         self.assertEqual(data.get("role"), "FieldAgent")
+        self.assertEqual(data.get("username"), "KAC-NEWAGENT01")
+        self.assertRegex(data.get("temporary_password") or "", r"^Kac@[A-Z0-9]{6}$")
 
         profile = EmployeeProfile.objects.get(employee_id=employee_id)
-        self.assertTrue(profile.user.check_password(STRONG_PASSWORD))
+        self.assertTrue(profile.user.check_password(data["temporary_password"]))
         self.assertTrue(profile.user.password.startswith("pbkdf2_"))
-        self.assertNotEqual(profile.user.password, STRONG_PASSWORD)
+        self.assertNotEqual(profile.user.password, data["temporary_password"])
         self.assertTrue(profile.user.is_active)
         self.assertTrue(profile.can_login)
         self.assertTrue(profile.is_active_employee)
 
     def test_admin_created_employee_can_mobile_login_with_employee_id(self):
-        created = self._create_legacy(username="login_by_eid")
+        created = self._create_legacy(first_name="LoginEid")
         self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
-        employee_id = (created.data.get("data") or created.data)["employee_id"]
+        data = created.data.get("data") or created.data
+        employee_id = data["employee_id"]
+        temp_password = data["temporary_password"]
 
-        # Unauthenticated mobile client
         mobile = APIClient()
         r = mobile.post(
             "/api/v1/mobile/auth/login/",
             {
                 "employee_id": employee_id,
-                "password": STRONG_PASSWORD,
+                "password": temp_password,
                 "device_name": "Pixel Test",
                 "platform": "android",
             },
@@ -111,15 +102,16 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         )
 
     def test_username_login_works_for_admin_created_employee(self):
-        created = self._create_legacy(username="login_by_user")
+        created = self._create_legacy(first_name="LoginUser")
         self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        data = created.data.get("data") or created.data
 
         mobile = APIClient()
         r = mobile.post(
             "/api/v1/mobile/auth/login/",
             {
-                "username": "login_by_user",
-                "password": STRONG_PASSWORD,
+                "username": data["username"],
+                "password": data["temporary_password"],
                 "device_name": "Pixel Test",
                 "platform": "android",
             },
@@ -133,13 +125,14 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         data = created.data.get("data") or created.data
         self.assertEqual(data["employee_id"], "EMP-NEW99")
         self.assertTrue(data["mobile_login_enabled"])
+        self.assertEqual(data["username"], "KAC-FULLAGENT01")
 
         mobile = APIClient()
         r = mobile.post(
             "/api/v1/mobile/auth/login/",
             {
                 "employee_id": "EMP-NEW99",
-                "password": STRONG_PASSWORD,
+                "password": data["temporary_password"],
                 "device_name": "Pixel Test",
                 "platform": "android",
             },
@@ -155,7 +148,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         self.assertEqual(bootstrap.status_code, status.HTTP_200_OK, bootstrap.data)
 
     def test_wrong_password_returns_invalid_credentials(self):
-        created = self._create_legacy(username="wrong_pw_user", phone="9876543220")
+        created = self._create_legacy(first_name="WrongPw", phone="9876543220")
         employee_id = (created.data.get("data") or created.data)["employee_id"]
         mobile = APIClient()
         r = mobile.post(
@@ -173,7 +166,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
 
     def test_login_with_numeric_user_pk_as_employee_id_is_invalid_credentials(self):
         """Regression: admin UI used to show user.id as employee_id."""
-        created = self._create_legacy(username="pk_confusion", phone="9876543221")
+        created = self._create_legacy(first_name="PkConfusion", phone="9876543221")
         data = created.data.get("data") or created.data
         user_id = data["user_id"]
         mobile = APIClient()
@@ -181,7 +174,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
             "/api/v1/mobile/auth/login/",
             {
                 "employee_id": str(user_id),
-                "password": STRONG_PASSWORD,
+                "password": data["temporary_password"],
                 "device_name": "Pixel Test",
                 "platform": "android",
             },
@@ -191,8 +184,10 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         self.assertEqual(r.data.get("code"), "INVALID_CREDENTIALS")
 
     def test_inactive_employee_denied_with_account_inactive(self):
-        created = self._create_legacy(username="inactive_emp", phone="9876543222")
-        employee_id = (created.data.get("data") or created.data)["employee_id"]
+        created = self._create_legacy(first_name="InactiveEmp", phone="9876543222")
+        data = created.data.get("data") or created.data
+        employee_id = data["employee_id"]
+        temp_password = data["temporary_password"]
         profile = EmployeeProfile.objects.get(employee_id=employee_id)
         profile.is_active_employee = False
         profile.user.is_active = False
@@ -204,7 +199,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
             "/api/v1/mobile/auth/login/",
             {
                 "employee_id": employee_id,
-                "password": STRONG_PASSWORD,
+                "password": temp_password,
                 "device_name": "Pixel Test",
                 "platform": "android",
             },
@@ -214,8 +209,10 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         self.assertEqual(r.data.get("code"), "ACCOUNT_INACTIVE")
 
     def test_can_login_false_denied_with_login_disabled(self):
-        created = self._create_legacy(username="nologin_emp", phone="9876543223")
-        employee_id = (created.data.get("data") or created.data)["employee_id"]
+        created = self._create_legacy(first_name="NoLoginEmp", phone="9876543223")
+        data = created.data.get("data") or created.data
+        employee_id = data["employee_id"]
+        temp_password = data["temporary_password"]
         profile = EmployeeProfile.objects.get(employee_id=employee_id)
         profile.can_login = False
         profile.save(update_fields=["can_login"])
@@ -225,7 +222,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
             "/api/v1/mobile/auth/login/",
             {
                 "employee_id": employee_id,
-                "password": STRONG_PASSWORD,
+                "password": temp_password,
                 "device_name": "Pixel Test",
                 "platform": "android",
             },
@@ -256,13 +253,17 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
         self.assertEqual(r.data.get("code"), "EMPLOYEE_PROFILE_MISSING")
 
     def test_duplicate_employee_id_rejected(self):
-        first = self._create_full(username="dup1", employee_id="DUP-001", phone="9876543230")
+        first = self._create_full(
+            first_name="DupOne", employee_id="DUP-001", phone="9876543230"
+        )
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
-        second = self._create_full(username="dup2", employee_id="DUP-001", phone="9876543231")
+        second = self._create_full(
+            first_name="DupTwo", employee_id="DUP-001", phone="9876543231"
+        )
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST, second.data)
 
     def test_toggle_status_also_updates_can_login(self):
-        created = self._create_legacy(username="toggle_emp", phone="9876543232")
+        created = self._create_legacy(first_name="ToggleEmp", phone="9876543232")
         data = created.data.get("data") or created.data
         profile_id = data["id"]
         employee_id = data["employee_id"]

@@ -408,8 +408,7 @@ class StaffAdminCrudRegressionTests(TestCase):
         create_r = self.admin_client.post(
             "/api/v1/employees/admin/employees/",
             {
-                "username": "new.field.emp",
-                "password": STRONG_PASSWORD,
+                "first_name": "NewField",
                 "phone": "9000000099",
                 "role": "FieldAgent",
             },
@@ -420,7 +419,12 @@ class StaffAdminCrudRegressionTests(TestCase):
             status.HTTP_201_CREATED,
             msg=getattr(create_r, "data", create_r.content),
         )
-        created_profile = EmployeeProfile.objects.get(user__username="new.field.emp")
+        create_data = create_r.data.get("data") or create_r.data
+        self.assertEqual(create_data["username"], "KAC-NEWFIELD01")
+        self.assertIn("temporary_password", create_data)
+        created_profile = EmployeeProfile.objects.get(
+            user__username=create_data["username"]
+        )
 
         detail_r = self.admin_client.get(
             f"/api/v1/employees/admin/employees/{created_profile.id}/"

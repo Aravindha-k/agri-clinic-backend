@@ -17,13 +17,19 @@ def _validate_password_field(value):
     return value
 
 
-def employee_create_success_payload(profile: EmployeeProfile) -> dict:
-    """Canonical admin create/list success fields for mobile-capable accounts."""
-    return {
+def employee_create_success_payload(
+    profile: EmployeeProfile, *, temporary_password: str | None = None
+) -> dict:
+    """Canonical admin create success fields for mobile-capable accounts."""
+    from accounts.credentials import TEMPORARY_PASSWORD_ATTR
+
+    payload = {
         "id": profile.id,
         "user_id": profile.user_id,
         "username": profile.user.username,
         "employee_id": profile.employee_id,
+        "first_name": profile.user.first_name,
+        "last_name": profile.user.last_name,
         "role": profile.role,
         "is_active_employee": profile.is_active_employee,
         "can_login": profile.can_login,
@@ -35,26 +41,42 @@ def employee_create_success_payload(profile: EmployeeProfile) -> dict:
         ),
         "account_active": bool(profile.user.is_active and profile.is_active_employee),
     }
+    # Plaintext temp password only when explicitly provided or set for create.
+    temp = temporary_password
+    if temp is None:
+        temp = getattr(profile, TEMPORARY_PASSWORD_ATTR, None)
+    if temp:
+        payload["temporary_password"] = temp
+    return payload
 
 
 # =========================
 # EMPLOYEE CREATE (ADMIN)
 # =========================
 class EmployeeCreateSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    """
+    Field-employee create. Username + temporary password are generated server-side.
 
-    def validate_password(self, value):
-        return _validate_password_field(value)
+    Legacy clients may still send username/password; those fields are ignored.
+    """
 
+    first_name = serializers.CharField()
+    last_name = serializers.CharField(required=False, allow_blank=True, default="")
     phone = serializers.CharField()
+    # Ignored if present (legacy clients).
+    username = serializers.CharField(required=False, write_only=True)
+    password = serializers.CharField(required=False, write_only=True)
 
-    def validate_username(self, value):
+    def validate_first_name(self, value):
+        from accounts.credentials import normalize_first_name_for_username
+
         value = (value or "").strip()
         if not value:
-            raise serializers.ValidationError("Username is required")
-        if User.objects.filter(username__iexact=value).exists():
-            raise serializers.ValidationError("Username already exists")
+            raise serializers.ValidationError("First name is required")
+        if not normalize_first_name_for_username(value):
+            raise serializers.ValidationError(
+                "First name must contain at least one letter or digit."
+            )
         return value
 
     def validate_phone(self, value):
@@ -64,27 +86,17 @@ class EmployeeCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Phone must be exactly 10 digits")
         return value
 
-    @transaction.atomic
     def create(self, validated_data):
-        from .utils import generate_employee_id
+        from accounts.credentials import create_field_employee_with_generated_credentials
 
-        user = User.objects.create_user(
-            username=validated_data["username"],
-            password=validated_data["password"],
-            is_staff=False,
-            is_active=True,
-        )
-
-        profile = EmployeeProfile.objects.create(
-            user=user,
-            employee_id=generate_employee_id(),
+        validated_data.pop("username", None)
+        validated_data.pop("password", None)
+        return create_field_employee_with_generated_credentials(
+            first_name=validated_data["first_name"],
+            last_name=validated_data.get("last_name") or "",
             phone=validated_data["phone"],
-            is_active_employee=True,
-            can_login=True,
             role="FieldAgent",
         )
-        # Return profile so API can expose the real employee_id string.
-        return profile
 
 
 # =========================
@@ -296,8 +308,13 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
 # ADMIN EMPLOYEE CREATE (full)
 # =========================
 class AdminEmployeeFullCreateSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    """
+    Full field-employee create. Username + temporary password are generated
+    server-side from first_name. Legacy username/password input is ignored.
+    """
+
+    first_name = serializers.CharField()
+    last_name = serializers.CharField(required=False, allow_blank=True, default="")
     phone = serializers.CharField(required=False, allow_blank=True, default="")
     employee_id = serializers.CharField(required=False, allow_blank=True)
     role = serializers.ChoiceField(
@@ -305,16 +322,20 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
     )
     district = serializers.IntegerField(required=False, allow_null=True)
     village = serializers.IntegerField(required=False, allow_null=True)
+    # Ignored if present (legacy clients).
+    username = serializers.CharField(required=False, write_only=True)
+    password = serializers.CharField(required=False, write_only=True)
 
-    def validate_password(self, value):
-        return _validate_password_field(value)
+    def validate_first_name(self, value):
+        from accounts.credentials import normalize_first_name_for_username
 
-    def validate_username(self, value):
         value = (value or "").strip()
         if not value:
-            raise serializers.ValidationError("Username is required")
-        if User.objects.filter(username__iexact=value).exists():
-            raise serializers.ValidationError("Username already exists")
+            raise serializers.ValidationError("First name is required")
+        if not normalize_first_name_for_username(value):
+            raise serializers.ValidationError(
+                "First name must contain at least one letter or digit."
+            )
         return value
 
     def validate_phone(self, value):
@@ -335,33 +356,20 @@ class AdminEmployeeFullCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Employee ID already exists")
         return value
 
-    @transaction.atomic
     def create(self, validated_data):
-        from .utils import generate_employee_id
+        from accounts.credentials import create_field_employee_with_generated_credentials
 
-        emp_id = (validated_data.get("employee_id") or "").strip() or generate_employee_id()
-        if EmployeeProfile.objects.filter(employee_id__iexact=emp_id).exists():
-            raise serializers.ValidationError(
-                {"employee_id": "Employee ID already exists"}
-            )
-
-        user = User.objects.create_user(
-            username=validated_data["username"],
-            password=validated_data["password"],
-            is_staff=False,
-            is_active=True,
-        )
-        profile = EmployeeProfile.objects.create(
-            user=user,
-            employee_id=emp_id,
+        validated_data.pop("username", None)
+        validated_data.pop("password", None)
+        return create_field_employee_with_generated_credentials(
+            first_name=validated_data["first_name"],
+            last_name=validated_data.get("last_name") or "",
             phone=validated_data.get("phone") or "",
             role=validated_data.get("role", "FieldAgent"),
+            employee_id=validated_data.get("employee_id") or None,
             district_id=validated_data.get("district"),
             village_id=validated_data.get("village"),
-            is_active_employee=True,
-            can_login=True,
         )
-        return profile
 
 
 # =========================
