@@ -122,8 +122,8 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
             if not candidate.is_active:
                 logging.warning("LOGIN FAILED: Disabled user %s", candidate.username)
                 raise _auth_failed(
-                    "Your account is inactive. Please contact the administrator.",
-                    "ACCOUNT_INACTIVE",
+                    "Your account has been deactivated. Please contact your administrator.",
+                    "EMPLOYEE_INACTIVE",
                 )
             if not hasattr(candidate, "employee_profile"):
                 logging.warning(
@@ -134,23 +134,17 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
                     "EMPLOYEE_PROFILE_MISSING",
                 )
             profile = candidate.employee_profile
-            if not profile.is_active_employee:
+            if not profile.is_active_employee or not profile.can_login:
                 logging.warning(
-                    "LOGIN FAILED: Inactive employee %s",
+                    "LOGIN FAILED: Inactive employee %s "
+                    "(is_active_employee=%s can_login=%s)",
                     candidate.username,
+                    profile.is_active_employee,
+                    profile.can_login,
                 )
                 raise _auth_failed(
-                    "Your account is inactive. Please contact the administrator.",
-                    "ACCOUNT_INACTIVE",
-                )
-            if not profile.can_login:
-                logging.warning(
-                    "LOGIN FAILED: can_login=false for %s",
-                    candidate.username,
-                )
-                raise _auth_failed(
-                    "Mobile login is disabled for this account. Please contact the administrator.",
-                    "LOGIN_DISABLED",
+                    "Your account has been deactivated. Please contact your administrator.",
+                    "EMPLOYEE_INACTIVE",
                 )
             if candidate.is_staff:
                 logging.warning(
@@ -177,8 +171,8 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not user.is_active:
             logging.warning("LOGIN FAILED: Disabled user %s", user.username)
             raise _auth_failed(
-                "Your account is inactive. Please contact the administrator.",
-                "ACCOUNT_INACTIVE",
+                "Your account has been deactivated. Please contact your administrator.",
+                "EMPLOYEE_INACTIVE",
             )
         if not hasattr(user, "employee_profile"):
             logging.warning("LOGIN FAILED: No employee profile for %s", user.username)
@@ -187,23 +181,14 @@ class MobileTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "EMPLOYEE_PROFILE_MISSING",
             )
         profile = user.employee_profile
-        if not profile.is_active_employee:
+        if not profile.is_active_employee or not profile.can_login:
             logging.warning(
                 "LOGIN FAILED: Inactive employee %s",
                 user.username,
             )
             raise _auth_failed(
-                "Your account is inactive. Please contact the administrator.",
-                "ACCOUNT_INACTIVE",
-            )
-        if not profile.can_login:
-            logging.warning(
-                "LOGIN FAILED: can_login=false for %s",
-                user.username,
-            )
-            raise _auth_failed(
-                "Mobile login is disabled for this account. Please contact the administrator.",
-                "LOGIN_DISABLED",
+                "Your account has been deactivated. Please contact your administrator.",
+                "EMPLOYEE_INACTIVE",
             )
         if user.is_staff:
             logging.warning(
@@ -281,6 +266,7 @@ class MobileTokenObtainPairView(TokenObtainPairView):
                 if code
                 in {
                     "ACCOUNT_INACTIVE",
+                    "EMPLOYEE_INACTIVE",
                     "LOGIN_DISABLED",
                     "EMPLOYEE_PROFILE_MISSING",
                     "ACCOUNT_DISABLED",
@@ -325,10 +311,10 @@ class MobileTokenRefreshView(TokenRefreshView):
                 elif isinstance(detail, dict):
                     code = detail.get("code")
                 msg = str(detail) if detail is not None else "Authentication failed"
-                if code == "ACCOUNT_DISABLED":
+                if code in {"ACCOUNT_DISABLED", "EMPLOYEE_INACTIVE"}:
                     return error_response(
                         message=msg,
-                        code="ACCOUNT_DISABLED",
+                        code="EMPLOYEE_INACTIVE" if code == "EMPLOYEE_INACTIVE" else code,
                         status_code=403,
                     )
                 if code == "SESSION_REPLACED":

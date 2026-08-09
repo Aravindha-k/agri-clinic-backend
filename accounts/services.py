@@ -170,16 +170,10 @@ def update_employee(
 
 
 def toggle_employee_active(*, profile: EmployeeProfile) -> EmployeeProfile:
-    """Flip the is_active_employee flag."""
-    profile.is_active_employee = not profile.is_active_employee
-    profile.can_login = profile.is_active_employee
-    profile.save(update_fields=["is_active_employee", "can_login"])
-    logger.info(
-        "Employee %s toggled active=%s",
-        profile.employee_id,
-        profile.is_active_employee,
-    )
-    return profile
+    """Flip the is_active_employee flag via the canonical access helper."""
+    from accounts.employee_access import toggle_field_employee_active
+
+    return toggle_field_employee_active(profile, reason="service_toggle")
 
 
 @transaction.atomic

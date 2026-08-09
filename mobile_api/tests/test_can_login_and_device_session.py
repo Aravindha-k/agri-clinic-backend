@@ -37,7 +37,7 @@ class CanLoginEnforcementTests(TestCase):
         self.profile.save(update_fields=["can_login"])
         r = self._mobile_login()
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(r.data.get("code"), "LOGIN_DISABLED")
+        self.assertEqual(r.data.get("code"), "EMPLOYEE_INACTIVE")
 
     def test_web_login_blocked_when_can_login_false(self):
         self.profile.can_login = False
@@ -61,6 +61,7 @@ class CanLoginEnforcementTests(TestCase):
         )
         me = self.client.get("/api/v1/mobile/auth/me/")
         self.assertEqual(me.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(me.data.get("code"), "EMPLOYEE_INACTIVE")
 
     def test_mobile_refresh_blocked_when_can_login_false(self):
         r = self._mobile_login()
@@ -73,7 +74,7 @@ class CanLoginEnforcementTests(TestCase):
             format="json",
         )
         self.assertEqual(refresh.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(refresh.data.get("code"), "ACCOUNT_DISABLED")
+        self.assertEqual(refresh.data.get("code"), "EMPLOYEE_INACTIVE")
 
 
 class LegacyVisitDeviceSessionTests(TestCase):

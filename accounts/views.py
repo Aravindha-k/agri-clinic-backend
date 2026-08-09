@@ -560,17 +560,18 @@ class ToggleEmployeeStatusAPI(APIView):
     permission_classes = [IsStaffAdmin]
 
     def post(self, request, employee_id):
+        from accounts.employee_access import toggle_field_employee_active
+
         employee = get_object_or_404(
-            EmployeeProfile,
+            EmployeeProfile.objects.select_related("user"),
             employee_id=employee_id,
         )
-
-        employee.is_active_employee = not employee.is_active_employee
-        employee.can_login = employee.is_active_employee
-        employee.user.is_active = employee.is_active_employee
-
-        employee.user.save(update_fields=["is_active"])
-        employee.save(update_fields=["is_active_employee", "can_login"])
+        assert_can_mutate_employee_account(
+            actor=request.user, target_user=employee.user
+        )
+        employee = toggle_field_employee_active(
+            employee, reason="legacy_toggle"
+        )
 
         return success_response(
             data={
@@ -659,14 +660,15 @@ class AdminEmployeeUpdateDeleteAPI(APIView):
 
     # DELETE (SOFT)
     def delete(self, request, employee_id):
+        from accounts.employee_access import set_field_employee_active
+
         employee = self._get_employee(employee_id)
         assert_can_mutate_employee_account(
             actor=request.user, target_user=employee.user
         )
-        employee.is_active_employee = False
-        employee.user.is_active = False
-        employee.user.save(update_fields=["is_active"])
-        employee.save(update_fields=["is_active_employee"])
+        employee = set_field_employee_active(
+            employee, active=False, reason="legacy_soft_delete"
+        )
         return success_response(
             message="Employee deactivated successfully",
             data=AdminEmployeeListSerializer(employee).data,
@@ -959,13 +961,13 @@ class AdminEmployeeDetailAPI(APIView):
         )
 
     def delete(self, request, pk):
+        from accounts.employee_access import set_field_employee_active
+
         emp = self._get_employee(pk)
         assert_can_mutate_employee_account(actor=request.user, target_user=emp.user)
-        emp.is_active_employee = False
-        emp.can_login = False
-        emp.user.is_active = False
-        emp.user.save(update_fields=["is_active"])
-        emp.save(update_fields=["is_active_employee", "can_login"])
+        emp = set_field_employee_active(
+            emp, active=False, reason="admin_soft_delete"
+        )
         return success_response(
             data={"employee": AdminEmployeeListSerializer(emp).data},
             message="Employee deactivated",
@@ -990,16 +992,14 @@ class AdminEmployeeToggleStatusAPI(APIView):
     permission_classes = [IsStaffAdmin]
 
     def patch(self, request, pk):
+        from accounts.employee_access import toggle_field_employee_active
+
         emp = get_object_or_404(
             EmployeeProfile.objects.select_related("user", "district"),
             pk=pk,
         )
         assert_can_mutate_employee_account(actor=request.user, target_user=emp.user)
-        emp.is_active_employee = not emp.is_active_employee
-        emp.can_login = emp.is_active_employee
-        emp.user.is_active = emp.is_active_employee
-        emp.user.save(update_fields=["is_active"])
-        emp.save(update_fields=["is_active_employee", "can_login"])
+        emp = toggle_field_employee_active(emp, reason="admin_toggle_status")
 
         new_status = "activated" if emp.is_active_employee else "deactivated"
         logger.info(

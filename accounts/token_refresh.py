@@ -40,19 +40,48 @@ def _user_from_refresh(refresh: RefreshToken) -> User:
     return user
 
 
+def _user_from_refresh_allow_blacklist(raw_token: str) -> User | None:
+    """Resolve user from a refresh token even if it was blacklisted (deactivation)."""
+    try:
+
+        class _PeekRefresh(RefreshToken):
+            def check_blacklist(self):
+                return None
+
+        refresh = _PeekRefresh(raw_token)
+        return _user_from_refresh(refresh)
+    except Exception:
+        return None
+
+
 def _assert_account_may_refresh(user: User) -> None:
-    if not user.is_active:
+    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        if not user.is_active:
+            raise AuthenticationFailed(
+                "Your account is currently disabled. Please contact your administrator.",
+                code="ACCOUNT_DISABLED",
+            )
+        return
+
+    from accounts.employee_access import (
+        EMPLOYEE_INACTIVE_CODE,
+        EMPLOYEE_INACTIVE_MESSAGE,
+        field_employee_may_authenticate,
+    )
+
+    if not field_employee_may_authenticate(user):
+        try:
+            from accounts.device_sessions import revoke_user_device_sessions
+
+            revoke_user_device_sessions(user, reason="refresh_employee_inactive")
+        except Exception:
+            logger.exception(
+                "Failed to revoke sessions on inactive refresh user_id=%s",
+                getattr(user, "pk", None),
+            )
         raise AuthenticationFailed(
-            "Your account is currently disabled. Please contact your administrator.",
-            code="ACCOUNT_DISABLED",
-        )
-    profile = getattr(user, "employee_profile", None)
-    if profile is not None and (
-        not profile.is_active_employee or not profile.can_login
-    ):
-        raise AuthenticationFailed(
-            "Your account is currently disabled. Please contact your administrator.",
-            code="ACCOUNT_DISABLED",
+            EMPLOYEE_INACTIVE_MESSAGE,
+            code=EMPLOYEE_INACTIVE_CODE,
         )
 
 
@@ -101,14 +130,23 @@ class AgriTokenRefreshSerializer(TokenRefreshSerializer):
         try:
             refresh = RefreshToken(attrs["refresh"])
         except TokenError as exc:
+            # Deactivation blacklists outstanding refresh tokens. Prefer
+            # EMPLOYEE_INACTIVE over a generic token_not_valid for that case.
+            peeked = _user_from_refresh_allow_blacklist(attrs.get("refresh") or "")
+            if peeked is not None:
+                try:
+                    _assert_account_may_refresh(peeked)
+                except AuthenticationFailed:
+                    raise
             raise InvalidToken(exc.args[0]) from exc
 
         user = _user_from_refresh(refresh)
 
-        # 2) Device session validation — before account checks / new tokens.
-        # Mobile tokens embed device_session_id; enforce that claim on ANY refresh
-        # path (including /api/v1/auth/refresh/) so stolen mobile refresh tokens
-        # cannot strip device binding via the web endpoint.
+        # 2) Account validation BEFORE device check so deactivated employees
+        # get EMPLOYEE_INACTIVE even when their DeviceSession was already revoked.
+        _assert_account_may_refresh(user)
+
+        # 3) Device session validation
         device_session_id = _resolve_device_session_id(request, refresh, attrs)
         claim_device = refresh.get(DEVICE_SESSION_CLAIM)
         must_check_device = require_device or bool(claim_device)
@@ -124,9 +162,6 @@ class AgriTokenRefreshSerializer(TokenRefreshSerializer):
                     "You were logged out because this account was used on another device.",
                     code="SESSION_REPLACED",
                 )
-
-        # 3) Account validation
-        _assert_account_may_refresh(user)
 
         # 4) Rotate: blacklist current refresh, then issue new pair
         try:
@@ -193,6 +228,10 @@ class AgriWebTokenRefreshView(TokenRefreshView):
             if code == "ACCOUNT_DISABLED":
                 return error_response(
                     message=msg, code="ACCOUNT_DISABLED", status_code=403
+                )
+            if code == "EMPLOYEE_INACTIVE":
+                return error_response(
+                    message=msg, code="EMPLOYEE_INACTIVE", status_code=403
                 )
             if code == "SESSION_REPLACED":
                 return error_response(

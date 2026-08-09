@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 
 from rest_framework.exceptions import APIException
-
-logger = logging.getLogger(__name__)
 from rest_framework.views import APIView
 
 from accounts.device_sessions import (
@@ -14,7 +12,15 @@ from accounts.device_sessions import (
     SessionCheckResult,
     check_device_session,
 )
+from accounts.employee_access import (
+    EMPLOYEE_INACTIVE_CODE,
+    EMPLOYEE_INACTIVE_MESSAGE,
+    EmployeeInactive,
+    assert_field_employee_may_authenticate,
+)
 from utils.response import error_response
+
+logger = logging.getLogger(__name__)
 
 
 class SessionReplaced(APIException):
@@ -30,6 +36,14 @@ def session_replaced_response():
         message="You were logged out because this account was used on another device.",
         code="SESSION_REPLACED",
         status_code=409,
+    )
+
+
+def employee_inactive_response():
+    return error_response(
+        message=EMPLOYEE_INACTIVE_MESSAGE,
+        code=EMPLOYEE_INACTIVE_CODE,
+        status_code=403,
     )
 
 
@@ -57,6 +71,8 @@ class DeviceSessionRequiredMixin:
     def handle_exception(self, exc):
         if isinstance(exc, SessionReplaced):
             return session_replaced_response()
+        if isinstance(exc, EmployeeInactive):
+            return employee_inactive_response()
         return super().handle_exception(exc)
 
     @staticmethod
@@ -71,20 +87,10 @@ class DeviceSessionRequiredMixin:
     @staticmethod
     def _enforce_employee_account_active(request) -> None:
         """Block disabled field employees even if their JWT has not expired yet."""
-        from rest_framework.exceptions import PermissionDenied
-
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return
-        if user.is_staff or user.is_superuser:
-            return
-        profile = getattr(user, "employee_profile", None)
-        if profile is None:
-            return
-        if not profile.can_login or not profile.is_active_employee:
-            raise PermissionDenied(
-                detail="Your account is currently disabled. Please contact your administrator."
-            )
+        assert_field_employee_may_authenticate(user)
 
 
 class MobileEmployeeAPIView(DeviceSessionRequiredMixin, APIView):

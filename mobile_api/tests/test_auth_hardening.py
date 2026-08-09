@@ -137,7 +137,7 @@ class AuthHardeningTests(TestCase):
             format="json",
         )
         self.assertEqual(refresh.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(refresh.data.get("code"), "ACCOUNT_DISABLED")
+        self.assertEqual(refresh.data.get("code"), "EMPLOYEE_INACTIVE")
 
     def test_logout_does_not_end_duty_session(self):
         login = self._mobile_login()
@@ -190,7 +190,7 @@ class AuthHardeningTests(TestCase):
             format="json",
         )
         self.assertEqual(refresh.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(refresh.data.get("code"), "ACCOUNT_DISABLED")
+        self.assertEqual(refresh.data.get("code"), "EMPLOYEE_INACTIVE")
 
     def test_web_login_does_not_replace_mobile_device_session(self):
         mobile = self._mobile_login(device_id="phone-mobile")

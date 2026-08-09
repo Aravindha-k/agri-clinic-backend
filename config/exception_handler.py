@@ -1,6 +1,7 @@
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import APIException, AuthenticationFailed, PermissionDenied
 from django.db import IntegrityError, DatabaseError
 from django.db.utils import OperationalError
 from django.conf import settings
@@ -14,14 +15,17 @@ def custom_exception_handler(exc, context):
 
     # Handle known DRF errors (validation, auth, permission)
     if response is not None:
-        # DRF puts error detail directly in response.data; expose it as `errors`
+        code = _extract_exception_code(exc, response.status_code)
+        # Deactivated field employees: always 403 with EMPLOYEE_INACTIVE.
+        if code == "EMPLOYEE_INACTIVE":
+            response.status_code = status.HTTP_403_FORBIDDEN
         errors = response.data if settings.DEBUG else {}
         return Response(
             {
                 "success": False,
                 "message": _extract_message(response.data),
                 "errors": errors,
-                "code": _extract_code(response.status_code),
+                "code": code,
             },
             status=response.status_code,
         )
@@ -97,6 +101,26 @@ def _extract_message(data) -> str:
     if isinstance(data, list) and data:
         return str(data[0])
     return "Request failed"
+
+
+def _extract_exception_code(exc, http_status: int) -> str:
+    auth_code = getattr(exc, "auth_code", None)
+    if isinstance(auth_code, str) and auth_code:
+        return auth_code
+    code = getattr(exc, "default_code", None)
+    if isinstance(code, str) and code and code not in {"error", "authentication_failed"}:
+        return code
+    detail = getattr(exc, "detail", None)
+    if detail is not None and hasattr(detail, "code"):
+        detail_code = detail.code
+        if isinstance(detail_code, str) and detail_code not in {
+            None,
+            "authentication_failed",
+            "permission_denied",
+            "not_authenticated",
+        }:
+            return detail_code
+    return _extract_code(http_status)
 
 
 def _extract_code(http_status: int) -> str:

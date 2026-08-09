@@ -206,7 +206,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
-        self.assertEqual(r.data.get("code"), "ACCOUNT_INACTIVE")
+        self.assertEqual(r.data.get("code"), "EMPLOYEE_INACTIVE")
 
     def test_can_login_false_denied_with_login_disabled(self):
         created = self._create_legacy(first_name="NoLoginEmp", phone="9876543223")
@@ -229,7 +229,7 @@ class AdminCreatedEmployeeMobileLoginTests(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
-        self.assertEqual(r.data.get("code"), "LOGIN_DISABLED")
+        self.assertEqual(r.data.get("code"), "EMPLOYEE_INACTIVE")
 
     def test_missing_profile_denied_clearly(self):
         user = User.objects.create_user(

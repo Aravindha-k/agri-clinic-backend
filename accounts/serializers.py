@@ -392,6 +392,8 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        from accounts.employee_access import set_field_employee_active
+
         user = instance.user
         user_fields_to_save = []
 
@@ -411,16 +413,28 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
             user.last_name = validated_data["last_name"]
             user_fields_to_save.append("last_name")
 
+        # Canonical activate/deactivate path (revokes sessions on deactivate).
         if "is_active_employee" in validated_data:
-            instance.is_active_employee = validated_data["is_active_employee"]
-            user.is_active = validated_data["is_active_employee"]
-            user_fields_to_save.append("is_active")
-            # Keep mobile login flag aligned unless can_login is set explicitly.
-            if "can_login" not in validated_data:
-                instance.can_login = validated_data["is_active_employee"]
+            desired = bool(validated_data["is_active_employee"])
+            if desired != bool(instance.is_active_employee):
+                instance = set_field_employee_active(
+                    instance,
+                    active=desired,
+                    reason="admin_employee_update",
+                )
+                user = instance.user
+            # Explicit can_login after status change is ignored when status
+            # was just toggled (canonical path already aligned can_login).
+            validated_data.pop("can_login", None)
+        elif "can_login" in validated_data:
+            # Soft login disable without full deactivate — still revoke sessions.
+            instance.can_login = bool(validated_data["can_login"])
+            if not instance.can_login:
+                from accounts.device_sessions import revoke_user_device_sessions
+                from accounts.employee_access import blacklist_user_refresh_tokens
 
-        if "can_login" in validated_data:
-            instance.can_login = validated_data["can_login"]
+                revoke_user_device_sessions(user, reason="can_login_disabled")
+                blacklist_user_refresh_tokens(user)
 
         if user_fields_to_save:
             user.save(update_fields=list(dict.fromkeys(user_fields_to_save)))
