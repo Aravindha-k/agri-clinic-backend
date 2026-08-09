@@ -253,8 +253,10 @@ class FarmerStatsAPI(APIView):
 
 # ══════════════════════════════════════════════
 # FARMER DETAIL
-# GET  /api/v1/farmers/{id}/
-# PUT  /api/v1/farmers/{id}/
+# GET    /api/v1/farmers/{id}/
+# PUT    /api/v1/farmers/{id}/   (partial update)
+# PATCH  /api/v1/farmers/{id}/
+# DELETE /api/v1/farmers/{id}/   (staff/admin only)
 # ══════════════════════════════════════════════
 
 
@@ -267,11 +269,28 @@ class FarmerStatsAPI(APIView):
 )
 @extend_schema(
     tags=["Farmers"],
-    methods=["PUT"],
+    methods=["PUT", "PATCH"],
     summary="Update farmer",
-    description="Partial update (PATCH behaviour) of farmer profile. Employee access only.",
+    description=(
+        "Partial update of farmer profile. Staff/admin may update any farmer; "
+        "field employees only farmers they own/visited."
+    ),
     request=FarmerUpdateSerializer,
     responses={200: FarmerDetailSerializer, 403: error_schema("FarmerUpdateForbidden")},
+)
+@extend_schema(
+    tags=["Farmers"],
+    methods=["DELETE"],
+    summary="Delete farmer",
+    description=(
+        "Hard-delete a farmer. Staff/admin only. Visits keep historical name/phone "
+        "and farmer FK is SET_NULL; fields/activities CASCADE. Returns 409 if protected."
+    ),
+    responses={
+        200: SIMPLE_SUCCESS,
+        403: error_schema("FarmerDeleteForbidden"),
+        409: error_schema("FarmerDeleteProtected"),
+    },
 )
 class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
@@ -301,6 +320,12 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
         return success_response(data=data)
 
     def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
         self.request = request
         farmer = self._get_farmer(pk)
         from farmers.access import farmer_writable_by
@@ -327,6 +352,27 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
         farmer.refresh_from_db()
         return success_response(
             data=FarmerDetailSerializer(farmer, context={"request": request}).data
+        )
+
+    def delete(self, request, pk):
+        self.request = request
+        if not getattr(request.user, "is_staff", False):
+            return forbidden_response("Admin access required to delete farmers.")
+        farmer = self._get_farmer(pk)
+        farmer_id = farmer.pk
+        try:
+            from django.db.models.deletion import ProtectedError
+
+            farmer.delete()
+        except ProtectedError:
+            return error_response(
+                message="Cannot delete farmer while protected related records exist.",
+                code="DELETE_PROTECTED",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        return success_response(
+            message="Farmer deleted",
+            data={"id": farmer_id},
         )
 
 
