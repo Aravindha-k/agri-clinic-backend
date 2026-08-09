@@ -13,6 +13,8 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from rest_framework import serializers
+
 from accounts.models import EmployeeProfile
 from tracking.models import (
     DutySession,
@@ -83,6 +85,18 @@ def _ensure_field_employee(user: User) -> None:
     profile = EmployeeProfile.objects.filter(user=user).first()
     if profile and not profile.is_active_employee:
         raise DutyTrackingError("Inactive employee", "FORBIDDEN")
+
+
+def _coords_or_raise(latitude, longitude) -> tuple[float, float]:
+    """Validate coords; map DRF ValidationError → DutyTrackingError."""
+    try:
+        return validate_latitude_longitude(latitude, longitude)
+    except serializers.ValidationError as exc:
+        detail = exc.detail
+        if isinstance(detail, list) and detail:
+            detail = detail[0]
+        message = str(detail)
+        raise DutyTrackingError(message, "INVALID_COORDS") from exc
 
 
 def get_active_duty(user: User) -> DutySession | None:
@@ -162,7 +176,7 @@ def start_duty(
     now = timezone.now()
     lat_dec = lng_dec = None
     if latitude is not None and longitude is not None:
-        validate_latitude_longitude(latitude, longitude)
+        latitude, longitude = _coords_or_raise(latitude, longitude)
         lat_dec = Decimal(str(latitude)).quantize(Decimal("0.000001"))
         lng_dec = Decimal(str(longitude)).quantize(Decimal("0.000001"))
     else:

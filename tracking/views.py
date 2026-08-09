@@ -34,6 +34,7 @@ from .workday_utils import (
     expire_overlong_workdays_for_user,
 )
 from tracking.duty_timer import is_session_within_limit
+from tracking.live_tracking_service import online_seconds, stale_seconds
 from .serializers import (
     LocationLogCreateSerializer,
     LocationLogSerializer,
@@ -144,10 +145,18 @@ class BulkLocationUploadAPI(DeviceSessionRequiredMixin, APIView):
 # ──────────────────────────────────────────────
 # Constants
 # ──────────────────────────────────────────────
-HEARTBEAT_STALE_MINUTES = 5
-HEARTBEAT_STOPPED_MINUTES = 15
 GPS_JUMP_KM = 5
 MAX_BULK_POINTS = 500
+
+
+def _online_heartbeat_threshold(now):
+    """Shared online window with Admin Live (`LIVE_TRACKING_ONLINE_SECONDS`)."""
+    return now - timedelta(seconds=online_seconds())
+
+
+# Deprecated aliases — runtime online/stale windows use LIVE_TRACKING_* settings.
+HEARTBEAT_STALE_MINUTES = 7
+HEARTBEAT_STOPPED_MINUTES = 15
 
 
 def _employee_location_tuple(user_id, last_locations, active_workdays, now):
@@ -212,10 +221,10 @@ def _tracking_health(workday, now):
     hb = workday.last_heartbeat
     if not hb:
         return "STOPPED"
-    diff = (now - hb).total_seconds() / 60
-    if diff <= HEARTBEAT_STALE_MINUTES:
+    diff = (now - hb).total_seconds()
+    if diff <= online_seconds():
         return "OK"
-    if diff <= HEARTBEAT_STOPPED_MINUTES:
+    if diff <= stale_seconds():
         return "STALE"
     return "STOPPED"
 
@@ -478,7 +487,7 @@ class AdminTrackingDashboardStatsAPI(APIView):
     def get(self, request):
         expire_old_workdays()
         now = timezone.now()
-        heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+        heartbeat_threshold = _online_heartbeat_threshold(now)
 
         total_employees = EmployeeProfile.objects.filter(
             is_active_employee=True,
@@ -541,7 +550,7 @@ class AdminTrackingStatusAPI(APIView):
     def get(self, request):
         expire_old_workdays()
         now = timezone.now()
-        heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+        heartbeat_threshold = _online_heartbeat_threshold(now)
 
         # 1. All active employees with village->district chain
         employees = EmployeeProfile.objects.filter(
@@ -764,7 +773,7 @@ class AdminEmployeesGeoJSONAPI(APIView):
     def get(self, request):
         expire_old_workdays()
         now = timezone.now()
-        heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+        heartbeat_threshold = _online_heartbeat_threshold(now)
 
         employees = EmployeeProfile.objects.filter(
             is_active_employee=True
@@ -1618,7 +1627,7 @@ class EmployeeStatsAPIView(APIView):
             )
             if is_session_within_limit(wd.start_time, is_active=bool(wd.is_active), now=now)
             and wd.last_heartbeat
-            and wd.last_heartbeat >= now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+            and wd.last_heartbeat >= now - timedelta(seconds=online_seconds())
         )
         offline = total - online
 

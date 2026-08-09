@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -225,3 +226,66 @@ class WorkdayLiveTrackingSyncTests(APITestCase):
             r2.get("Cache-Control"),
             "no-store, no-cache, must-revalidate, max-age=0",
         )
+
+    def test_null_island_coords_rejected_on_start_and_gps_update(self):
+        start = self._start_work(0, 0)
+        self.assertEqual(start.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(start.data.get("code"), "INVALID_COORDS")
+        self.assertEqual(
+            DutySession.objects.filter(user=self.employee, is_active=True).count(),
+            0,
+        )
+
+        ok_start = self._start_work(12.9716, 77.5946)
+        self.assertEqual(ok_start.status_code, status.HTTP_200_OK)
+
+        gps = self.client.post(
+            "/api/tracking/location/update/",
+            {"latitude": 0, "longitude": 0},
+            format="json",
+        )
+        self.assertEqual(gps.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(gps.data.get("code"), "INVALID_COORDS")
+
+        near_zero = self.client.post(
+            "/api/tracking/location/update/",
+            {"latitude": 0.0, "longitude": 0.0001},
+            format="json",
+        )
+        self.assertEqual(near_zero.status_code, status.HTTP_200_OK)
+        live = EmployeeLiveLocation.objects.get(user=self.employee)
+        self.assertAlmostEqual(float(live.latitude), 0.0, places=5)
+        self.assertAlmostEqual(float(live.longitude), 0.0001, places=5)
+
+    @override_settings(
+        LIVE_TRACKING_ONLINE_SECONDS=7 * 60,
+        LIVE_TRACKING_STALE_SECONDS=15 * 60,
+    )
+    def test_live_and_status_online_agree_after_six_minutes(self):
+        """Former 5m Status vs 7m Live mismatch window must stay ONLINE on both."""
+        start = self._start_work(12.9716, 77.5946)
+        self.assertEqual(start.status_code, status.HTTP_200_OK)
+
+        aged = timezone.now() - timedelta(minutes=6)
+        WorkDay.objects.filter(user=self.employee, is_active=True).update(
+            last_heartbeat=aged
+        )
+        DutySession.objects.filter(user=self.employee, is_active=True).update(
+            last_heartbeat=aged
+        )
+        EmployeeLiveLocation.objects.filter(user=self.employee).update(
+            last_heartbeat_at=aged,
+            recorded_at=aged,
+        )
+
+        _, live_row = self._live_row()
+        self.assertEqual(live_row["connection"], "ONLINE")
+        self.assertEqual(live_row["tracking_status"], "ONLINE")
+
+        status_resp = self.admin_client.get("/api/v1/tracking/admin/status/")
+        self.assertEqual(status_resp.status_code, status.HTTP_200_OK)
+        status_row = next(
+            item for item in status_resp.data if item["user_id"] == self.employee.id
+        )
+        self.assertEqual(status_row["connection"], "ONLINE")
+        self.assertTrue(status_row["is_online"])

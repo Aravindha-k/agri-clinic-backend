@@ -17,10 +17,17 @@ from tracking.duty_timer import (
     format_elapsed_label,
     resolve_duty_for_workday,
 )
+from tracking.live_tracking_service import online_seconds, stale_seconds
 from tracking.models import LocationLog, WorkDay
 
-# Heartbeat thresholds (minutes) — keep in sync with tracking.views
-HEARTBEAT_STALE_MINUTES = 5
+
+def _online_heartbeat_threshold(now):
+    """Shared online window with Admin Live (`LIVE_TRACKING_ONLINE_SECONDS`)."""
+    return now - timedelta(seconds=online_seconds())
+
+
+# Deprecated alias (minutes). Prefer online_seconds() / _online_heartbeat_threshold.
+HEARTBEAT_STALE_MINUTES = 7  # documentation default; runtime uses online_seconds()
 
 MOVEMENT_WINDOW_MINUTES = 10
 MOVEMENT_MIN_DISTANCE_KM = 0.03  # ~30 m between last two points
@@ -279,7 +286,7 @@ def resolve_gps_data_status(
         return "never_sent"
     if not last_location_at:
         return "never_sent"
-    heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+    heartbeat_threshold = _online_heartbeat_threshold(now)
     if last_location_at >= heartbeat_threshold:
         return "online"
     return "offline"
@@ -337,7 +344,7 @@ def build_admin_tracking_row(
     from utils.photo_urls import build_profile_photo_url
 
     now = now or timezone.now()
-    heartbeat_threshold = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+    heartbeat_threshold = _online_heartbeat_threshold(now)
 
     district_name = None
     if emp.village and emp.village.district:
@@ -429,10 +436,10 @@ def build_admin_tracking_row(
 
     tracking_health = "STOPPED"
     if active and workday and workday.last_heartbeat:
-        diff = (now - workday.last_heartbeat).total_seconds() / 60
-        if diff <= HEARTBEAT_STALE_MINUTES:
+        diff = (now - workday.last_heartbeat).total_seconds()
+        if diff <= online_seconds():
             tracking_health = "OK"
-        elif diff <= 15:
+        elif diff <= stale_seconds():
             tracking_health = "STALE"
 
     if device_status is None:

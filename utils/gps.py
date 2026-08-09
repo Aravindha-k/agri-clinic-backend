@@ -28,7 +28,14 @@ def validate_longitude(value: Any) -> float:
 
 
 def validate_latitude_longitude(latitude: Any, longitude: Any) -> Tuple[float, float]:
-    return validate_latitude(latitude), validate_longitude(longitude)
+    lat = validate_latitude(latitude)
+    lng = validate_longitude(longitude)
+    # Reject null-island only — individual lat=0 or lng=0 remains valid.
+    if lat == 0.0 and lng == 0.0:
+        raise serializers.ValidationError(
+            "Invalid coordinates (0,0). Provide a real GPS fix."
+        )
+    return lat, lng
 
 
 def validate_gps_location_string(
