@@ -51,8 +51,17 @@ def field_employee_may_authenticate(user: User | None) -> bool:
 
 
 def assert_field_employee_may_authenticate(user: User) -> None:
-    """Raise EmployeeInactive when a field employee is not allowed to use mobile."""
+    """
+    Raise EmployeeInactive when a field employee profile exists but is inactive.
+
+    Staff/superuser and users without EmployeeProfile are left alone (other
+    auth layers handle those cases). This matches the historical
+    DeviceSessionRequiredMixin contract used by shared /api/v1/farmers APIs.
+    """
     if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        return
+    profile = getattr(user, "employee_profile", None)
+    if profile is None:
         return
     if field_employee_may_authenticate(user):
         return

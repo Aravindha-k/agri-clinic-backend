@@ -209,6 +209,13 @@ class DeactivatedEmployeeMobileAccessTests(TestCase):
         )
         self.assertEqual(other_login.status_code, status.HTTP_200_OK, other_login.data)
 
+    def test_assert_skips_users_without_employee_profile(self):
+        """Shared farmer APIs historically allowed authenticated users with no profile."""
+        from accounts.employee_access import assert_field_employee_may_authenticate
+
+        orphan = User.objects.create_user(username="orphan_no_profile", password=STRONG_PASSWORD)
+        assert_field_employee_may_authenticate(orphan)
+
     def test_set_field_employee_active_helper_revokes_without_ending_duty_contract(self):
         """Deactivation revokes device auth; duty lifecycle stays independent."""
         session = register_device_session(
