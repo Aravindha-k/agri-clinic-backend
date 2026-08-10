@@ -314,6 +314,7 @@ class AdminDrawerIsActiveAliasTests(TestCase):
         self.assertTrue(data.get("is_active_employee"))
         self.assertTrue(data.get("can_login"))
         self.assertTrue(data.get("mobile_login_enabled"))
+        self.assertEqual(data.get("is_active"), data.get("mobile_login_enabled"))
 
         self.profile.refresh_from_db()
         self.employee.refresh_from_db()
@@ -329,6 +330,49 @@ class AdminDrawerIsActiveAliasTests(TestCase):
                 user=self.employee, is_active=True
             ).exists()
         )
+
+    def test_desynced_flags_deactivate_heals_all_false(self):
+        """Production KAC-KAVYA01 pattern: can_login True but user/profile inactive."""
+        self.employee.is_active = False
+        self.employee.save(update_fields=["is_active"])
+        self.profile.is_active_employee = False
+        self.profile.can_login = True
+        self.profile.save(update_fields=["is_active_employee", "can_login"])
+
+        resp = self.admin_client.patch(self.url, {"is_active": False}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        data = resp.data.get("data") or resp.data
+        self.assertFalse(data.get("is_active"))
+        self.assertFalse(data.get("mobile_login_enabled"))
+        self.assertEqual(data.get("is_active"), data.get("mobile_login_enabled"))
+
+        self.profile.refresh_from_db()
+        self.employee.refresh_from_db()
+        self.assertFalse(self.profile.is_active_employee)
+        self.assertFalse(self.profile.can_login)
+        self.assertFalse(self.employee.is_active)
+
+    def test_put_with_unchanged_is_active_does_not_toggle_status(self):
+        """Drawer Save sends editForm including is_active when status unchanged."""
+        resp = self.admin_client.put(
+            self.url,
+            {
+                "first_name": "Drawer",
+                "last_name": "Emp",
+                "phone": "9111111199",
+                "role": self.profile.role,
+                "is_active": True,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.profile.refresh_from_db()
+        self.employee.refresh_from_db()
+        self.assertTrue(self.profile.is_active_employee)
+        self.assertTrue(self.profile.can_login)
+        self.assertTrue(self.employee.is_active)
+        login = self._login()
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
 
     def test_save_changes_without_status_does_not_alter_login_flags(self):
         before = (
