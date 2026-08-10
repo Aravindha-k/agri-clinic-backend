@@ -250,6 +250,9 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
     first_name = serializers.CharField(source="user.first_name", read_only=True)
     last_name = serializers.CharField(source="user.last_name", read_only=True)
     can_login = serializers.BooleanField(read_only=True)
+    # Admin UI maps `is_active` for "Active — employee can log in".
+    # Keep it aligned with the mobile-auth canonical rule, not a single flag.
+    is_active = serializers.SerializerMethodField()
     mobile_login_enabled = serializers.SerializerMethodField()
     device_status = serializers.SerializerMethodField()
     district_id = serializers.IntegerField(
@@ -272,6 +275,7 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             "role",
             "district_id",
             "district_name",
+            "is_active",
             "is_active_employee",
             "can_login",
             "mobile_login_enabled",
@@ -286,6 +290,7 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             "created_at",
             "profile_photo_url",
             "profile_photo_updated_at",
+            "is_active",
             "can_login",
             "mobile_login_enabled",
         )
@@ -297,6 +302,10 @@ class AdminEmployeeListSerializer(ProfilePhotoUrlMixin, serializers.ModelSeriali
             and obj.user.is_active
             and not obj.user.is_staff
         )
+
+    def get_is_active(self, obj):
+        """UI account-status flag — true only when mobile login is allowed."""
+        return self.get_mobile_login_enabled(obj)
 
     def get_device_status(self, obj):
         from accounts.device_sessions import device_status_payload
@@ -383,12 +392,21 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=EmployeeProfile.ROLE_CHOICES, required=False)
     district = serializers.IntegerField(required=False, allow_null=True)
     is_active_employee = serializers.BooleanField(required=False)
+    # Admin Employee drawer sends `is_active` (not is_active_employee).
+    is_active = serializers.BooleanField(required=False)
     can_login = serializers.BooleanField(required=False)
 
     def validate_phone(self, value):
         if value and (not value.isdigit() or len(value) != 10):
             raise serializers.ValidationError("Phone must be exactly 10 digits")
         return value
+
+    def validate(self, attrs):
+        # Normalize UI alias onto the canonical field.
+        if "is_active" in attrs and "is_active_employee" not in attrs:
+            attrs["is_active_employee"] = bool(attrs["is_active"])
+        attrs.pop("is_active", None)
+        return attrs
 
     @transaction.atomic
     def update(self, instance, validated_data):
@@ -414,9 +432,16 @@ class AdminEmployeeUpdateSerializer(serializers.Serializer):
             user_fields_to_save.append("last_name")
 
         # Canonical activate/deactivate path (revokes sessions on deactivate).
+        # Heal partial desyncs: Admin UI previously sent `is_active` which was
+        # ignored, leaving User.is_active / can_login out of sync.
         if "is_active_employee" in validated_data:
             desired = bool(validated_data["is_active_employee"])
-            if desired != bool(instance.is_active_employee):
+            flags_aligned = (
+                bool(instance.is_active_employee) is desired
+                and bool(instance.can_login) is desired
+                and bool(instance.user.is_active) is desired
+            )
+            if not flags_aligned:
                 instance = set_field_employee_active(
                     instance,
                     active=desired,

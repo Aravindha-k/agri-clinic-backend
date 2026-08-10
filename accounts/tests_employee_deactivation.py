@@ -231,3 +231,132 @@ class DeactivatedEmployeeMobileAccessTests(TestCase):
 
         set_field_employee_active(self.profile, active=False, reason="unit")
         self.assertIsNone(get_active_device_session(self.employee))
+
+
+class AdminDrawerIsActiveAliasTests(TestCase):
+    """
+    Admin Employee drawer uses PATCH/PUT /api/v1/employees/{profile_id}/
+    with body `{ is_active: bool }` (not is_active_employee).
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="kac.admin.drawer",
+            password=STRONG_PASSWORD,
+            is_staff=True,
+            is_active=True,
+        )
+        self.employee = User.objects.create_user(
+            username="KAC-DRAWER01",
+            password=STRONG_PASSWORD,
+            is_staff=False,
+            is_active=True,
+            first_name="Drawer",
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.employee,
+            employee_id="KAC-9901",
+            phone="9111111199",
+            is_active_employee=True,
+            can_login=True,
+        )
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(user=self.admin)
+        self.mobile = APIClient()
+        self.url = f"/api/v1/employees/{self.profile.id}/"
+
+    def _login(self):
+        return self.mobile.post(
+            "/api/v1/mobile/auth/login/",
+            {
+                "username": "KAC-DRAWER01",
+                "password": STRONG_PASSWORD,
+                "device_name": "Pixel",
+                "platform": "android",
+            },
+            format="json",
+        )
+
+    def test_drawer_is_active_false_blocks_mobile_and_syncs_flags(self):
+        ok = self._login()
+        self.assertEqual(ok.status_code, status.HTTP_200_OK, ok.data)
+
+        resp = self.admin_client.patch(self.url, {"is_active": False}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        data = resp.data.get("data") or resp.data
+        self.assertFalse(data.get("is_active"))
+        self.assertFalse(data.get("is_active_employee"))
+        self.assertFalse(data.get("can_login"))
+        self.assertFalse(data.get("mobile_login_enabled"))
+
+        self.profile.refresh_from_db()
+        self.employee.refresh_from_db()
+        self.assertFalse(self.profile.is_active_employee)
+        self.assertFalse(self.profile.can_login)
+        self.assertFalse(self.employee.is_active)
+
+        denied = self._login()
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+        self.assertEqual(denied.data.get("code"), "EMPLOYEE_INACTIVE")
+
+    def test_drawer_is_active_true_reactivates_and_mobile_login_works(self):
+        # Reproduce production-like desync: inactive user/profile, can_login True.
+        self.employee.is_active = False
+        self.employee.save(update_fields=["is_active"])
+        self.profile.is_active_employee = False
+        self.profile.can_login = True
+        self.profile.save(update_fields=["is_active_employee", "can_login"])
+
+        resp = self.admin_client.patch(self.url, {"is_active": True}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        data = resp.data.get("data") or resp.data
+        self.assertTrue(data.get("is_active"))
+        self.assertTrue(data.get("is_active_employee"))
+        self.assertTrue(data.get("can_login"))
+        self.assertTrue(data.get("mobile_login_enabled"))
+
+        self.profile.refresh_from_db()
+        self.employee.refresh_from_db()
+        self.assertTrue(self.profile.is_active_employee)
+        self.assertTrue(self.profile.can_login)
+        self.assertTrue(self.employee.is_active)
+
+        login = self._login()
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        self.assertIn("access", login.data)
+        self.assertTrue(
+            EmployeeDeviceSession.objects.filter(
+                user=self.employee, is_active=True
+            ).exists()
+        )
+
+    def test_save_changes_without_status_does_not_alter_login_flags(self):
+        before = (
+            self.profile.is_active_employee,
+            self.profile.can_login,
+            self.employee.is_active,
+        )
+        resp = self.admin_client.put(
+            self.url,
+            {
+                "first_name": "DrawerUpdated",
+                "last_name": "Emp",
+                "phone": "9111111199",
+                "role": self.profile.role,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.profile.refresh_from_db()
+        self.employee.refresh_from_db()
+        self.assertEqual(
+            (
+                self.profile.is_active_employee,
+                self.profile.can_login,
+                self.employee.is_active,
+            ),
+            before,
+        )
+        self.assertEqual(self.employee.first_name, "DrawerUpdated")
+        login = self._login()
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)

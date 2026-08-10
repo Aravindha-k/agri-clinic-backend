@@ -160,9 +160,23 @@ def update_employee(
     if village_id is not None:
         profile.village_id = village_id
     if is_active_employee is not None:
-        profile.is_active_employee = is_active_employee
+        from accounts.employee_access import set_field_employee_active
+
+        profile = set_field_employee_active(
+            profile,
+            active=bool(is_active_employee),
+            reason="service_update_employee",
+        )
+        # Canonical path already aligned can_login + User.is_active.
+        can_login = None
     if can_login is not None:
         profile.can_login = can_login
+        if not profile.can_login:
+            from accounts.device_sessions import revoke_user_device_sessions
+            from accounts.employee_access import blacklist_user_refresh_tokens
+
+            revoke_user_device_sessions(profile.user, reason="service_can_login_disabled")
+            blacklist_user_refresh_tokens(profile.user)
 
     profile.save()
     logger.info("Employee updated: %s", profile.employee_id)
