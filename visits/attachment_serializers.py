@@ -55,10 +55,9 @@ class VisitAttachmentSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_file_url(self, obj):
-        request = self.context.get("request")
-        if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
-        return None
+        from visits.media_response import build_absolute_media_url
+
+        return build_absolute_media_url(obj, self.context.get("request"))
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

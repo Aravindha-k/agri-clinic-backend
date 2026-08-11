@@ -15,6 +15,7 @@ from visits.attachment_serializers import (
     VisitAttachmentCreateSerializer,
     VisitAttachmentSerializer,
 )
+from visits.evidence import list_visit_evidence
 from visits.models import Visit, VisitAttachment
 
 logger = logging.getLogger(__name__)
@@ -119,4 +120,9 @@ class AdminVisitAttachmentListAPI(APIView):
 
     def get(self, request, visit_id):
         visit = get_object_or_404(Visit.objects.all(), pk=visit_id)
-        return _serialize_list(request, _attachments_for_visit(visit))
+        # READ-only union: VisitAttachment + VisitMedia. Writes/deletes stay
+        # on VisitAttachment (numeric id). VisitMedia is not deletable here.
+        return success_response(
+            data=list_visit_evidence(visit, request),
+            message="Attachments fetched",
+        )
