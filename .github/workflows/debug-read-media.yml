@@ -33,6 +33,9 @@ jobs:
           from accounts.models import EmployeeProfile
           print("USE_S3", getattr(settings, "USE_S3", None))
           print("DEBUG", settings.DEBUG)
+          print("SECURE_SSL_REDIRECT", settings.SECURE_SSL_REDIRECT)
+          print("SECURE_PROXY_SSL_HEADER", settings.SECURE_PROXY_SSL_HEADER)
+          print("USE_X_FORWARDED_HOST", settings.USE_X_FORWARDED_HOST)
           print("MEDIA_ROOT", settings.MEDIA_ROOT)
           print("MEDIA_URL", settings.MEDIA_URL)
           print("DEFAULT_FILE_STORAGE", getattr(settings, "DEFAULT_FILE_STORAGE", None))
@@ -68,4 +71,4 @@ jobs:
             /tmp/inspect_media.py "${EC2_USER}@${EC2_HOST}:/tmp/inspect_media.py"
           ssh -i ~/.ssh/deploy_key -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             "${EC2_USER}@${EC2_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; echo DEPLOYED_SHA=\$(git rev-parse HEAD); echo '--- nginx media ---'; (sudo -n grep -n -R --include='*.conf' -E 'location /media|alias |root ' /etc/nginx || grep -n -R --include='*.conf' -E 'location /media|alias |root ' /etc/nginx || true) 2>/dev/null | head -n 80; ls -la /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true; source .venv/bin/activate; PYTHONPATH='${DEPLOY_PATH}' python /tmp/inspect_media.py; rm -f /tmp/inspect_media.py"
+            "set -euo pipefail; cd '${DEPLOY_PATH}'; echo DEPLOYED_SHA=\$(git rev-parse HEAD); echo '--- nginx files ---'; ls -la /etc/nginx /etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d 2>/dev/null || true; echo '--- nginx grep ---'; (sudo -n grep -n -R -E 'location /media|X-Forwarded-Proto|proxy_set_header|alias ' /etc/nginx /etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d || true) 2>/dev/null | head -n 120; source .venv/bin/activate; PYTHONPATH='${DEPLOY_PATH}' python /tmp/inspect_media.py; rm -f /tmp/inspect_media.py"
