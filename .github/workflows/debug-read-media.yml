@@ -68,4 +68,4 @@ jobs:
             /tmp/inspect_media.py "${EC2_USER}@${EC2_HOST}:/tmp/inspect_media.py"
           ssh -i ~/.ssh/deploy_key -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             "${EC2_USER}@${EC2_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; echo DEPLOYED_SHA=\$(git rev-parse HEAD); echo '--- nginx media ---'; sudo grep -n -R --include='*.conf' -E 'location /media|alias |root ' /etc/nginx 2>/dev/null | head -n 80 || true; source .venv/bin/activate; python /tmp/inspect_media.py; rm -f /tmp/inspect_media.py"
+            "set -euo pipefail; cd '${DEPLOY_PATH}'; echo DEPLOYED_SHA=\$(git rev-parse HEAD); echo '--- nginx media ---'; (sudo -n grep -n -R --include='*.conf' -E 'location /media|alias |root ' /etc/nginx || grep -n -R --include='*.conf' -E 'location /media|alias |root ' /etc/nginx || true) 2>/dev/null | head -n 80; ls -la /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true; source .venv/bin/activate; PYTHONPATH='${DEPLOY_PATH}' python /tmp/inspect_media.py; rm -f /tmp/inspect_media.py"
