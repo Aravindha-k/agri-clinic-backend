@@ -610,6 +610,7 @@ class FarmerVisitListAPI(APIView):
             )
             .prefetch_related(
                 "media_files",
+                "attachments",
                 "issues__crop",
                 "issues__recommendations",
             )

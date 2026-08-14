@@ -355,6 +355,8 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
     field_info = serializers.SerializerMethodField()
     media_files = VisitMediaSerializer(many=True, read_only=True)
     issues = CropIssueSerializer(many=True, read_only=True)
+    evidence_count = serializers.SerializerMethodField()
+    evidence_preview = serializers.SerializerMethodField()
 
     class Meta:
         model = Visit
@@ -382,8 +384,30 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
             "visit_time",
             "media_files",
             "issues",
+            "evidence_count",
+            "evidence_preview",
         ]
         read_only_fields = ("id", "visit_time")
+
+    def _evidence_bundle(self, obj):
+        cached = getattr(obj, "_evidence_preview_bundle", None)
+        if cached is not None:
+            return cached
+        from visits.evidence import build_visit_evidence_preview
+
+        bundle = build_visit_evidence_preview(
+            obj, self.context.get("request"), limit=3, images_only=True
+        )
+        obj._evidence_preview_bundle = bundle
+        return bundle
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_evidence_count(self, obj):
+        return self._evidence_bundle(obj)["evidence_count"]
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_evidence_preview(self, obj):
+        return self._evidence_bundle(obj)["evidence_preview"]
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_crop_info(self, obj):

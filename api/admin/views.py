@@ -196,6 +196,21 @@ class VisitViewSet(
     filterset_fields = ["employee", "farmer", "field", "district", "village", "crop"]
     ordering_fields = ["created_at", "visit_date", "visit_time"]
 
+    def get_queryset(self):
+        """
+        Apply start_date/end_date at the queryset level BEFORE pagination/search.
+
+        Params: start_date, end_date as YYYY-MM-DD (inclusive, Asia/Kolkata local dates).
+        Canonical: Visit.visit_date; fallback: created_at local date when visit_date is null.
+        """
+        from visits.date_filters import apply_visit_date_range, parse_optional_iso_date
+
+        qs = super().get_queryset()
+        params = self.request.query_params
+        start = parse_optional_iso_date(params.get("start_date"), field_name="start_date")
+        end = parse_optional_iso_date(params.get("end_date"), field_name="end_date")
+        return apply_visit_date_range(qs, start, end)
+
     def get_serializer_class(self):
         if self.action == "create":
             return FieldVisitSubmitSerializer

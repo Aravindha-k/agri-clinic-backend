@@ -161,21 +161,29 @@ def list_visit_evidence(visit, request) -> list[dict[str, Any]]:
     """Normalized evidence for one visit: attachments + media, oldest first."""
     rows: list[dict[str, Any]] = []
 
-    attachments = (
-        VisitAttachment.objects.filter(visit=visit)
-        .select_related("employee", "uploaded_by", "visit")
-        .order_by("uploaded_at", "id")
-    )
+    # Prefer prefetched reverse relations to avoid N+1 on list endpoints.
+    pref = getattr(visit, "_prefetched_objects_cache", {}) or {}
+    if "attachments" in pref:
+        attachments = list(visit.attachments.all())
+    else:
+        attachments = list(
+            VisitAttachment.objects.filter(visit=visit)
+            .select_related("employee", "uploaded_by", "visit")
+            .order_by("uploaded_at", "id")
+        )
     for obj in attachments:
         row = serialize_attachment_evidence(obj, request)
         row["_storage_name"] = _storage_name(obj)
         rows.append(row)
 
-    media = (
-        VisitMedia.objects.filter(visit=visit)
-        .select_related("uploaded_by")
-        .order_by("uploaded_at", "id")
-    )
+    if "media_files" in pref:
+        media = list(visit.media_files.all())
+    else:
+        media = list(
+            VisitMedia.objects.filter(visit=visit)
+            .select_related("uploaded_by")
+            .order_by("uploaded_at", "id")
+        )
     for obj in media:
         row = serialize_media_evidence(obj, request)
         row["_storage_name"] = _storage_name(obj)
@@ -184,3 +192,40 @@ def list_visit_evidence(visit, request) -> list[dict[str, Any]]:
     rows = _dedupe_evidence(rows)
     rows.sort(key=_sort_key)
     return rows
+
+
+def build_visit_evidence_preview(
+    visit,
+    request,
+    *,
+    limit: int = 3,
+    images_only: bool = True,
+) -> dict[str, Any]:
+    """
+    Lightweight list-preview for farmer visit history cards.
+
+    Returns total evidence_count (all types) and a small image preview list.
+    """
+    rows = list_visit_evidence(visit, request)
+    preview_source = rows
+    if images_only:
+        preview_source = [
+            r
+            for r in rows
+            if (r.get("attachment_type") == "image")
+            or str(r.get("mime_type") or "").lower().startswith("image/")
+        ]
+    preview = []
+    for r in preview_source[: max(0, int(limit))]:
+        preview.append(
+            {
+                "evidence_key": r.get("evidence_key"),
+                "type": r.get("attachment_type") or "other",
+                "file_url": r.get("file_url"),
+                "mime_type": r.get("mime_type") or "",
+            }
+        )
+    return {
+        "evidence_count": len(rows),
+        "evidence_preview": preview,
+    }

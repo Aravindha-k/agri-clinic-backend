@@ -341,6 +341,75 @@ class AdminResetPasswordTests(TestCase):
         )
         self.assertNotIn(RESET_EMP_PASSWORD, str(resp.json()))
 
+    def test_unauthenticated_cannot_reset(self):
+        anon = APIClient()
+        resp = anon.post(
+            self.url,
+            {"employee_id": self.profile.employee_id, "new_password": RESET_EMP_PASSWORD},
+            format="json",
+        )
+        self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+    def test_staff_admin_cannot_reset_owner_superuser(self):
+        owner = User.objects.create_user(
+            username="owner_reset_target",
+            password="OwnerPass1!",
+            is_staff=True,
+            is_superuser=True,
+        )
+        owner_profile = EmployeeProfile.objects.create(
+            user=owner,
+            employee_id="OWNER-1",
+            phone="9000000991",
+            role="Owner",
+        )
+        staff = make_admin(username="staff_resetter")
+        staff_client = auth_client(staff)
+        resp = staff_client.post(
+            self.url,
+            {"employee_id": owner_profile.employee_id, "new_password": RESET_EMP_PASSWORD},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        owner.refresh_from_db()
+        self.assertTrue(owner.check_password("OwnerPass1!"))
+
+    def test_owner_can_reset_staff_target(self):
+        owner = User.objects.create_user(
+            username="owner_reset_actor",
+            password="OwnerPass1!",
+            is_staff=True,
+            is_superuser=True,
+        )
+        EmployeeProfile.objects.create(
+            user=owner, employee_id="OWNER-ACT", phone="9000000992", role="Owner"
+        )
+        owner_client = auth_client(owner)
+        resp = owner_client.post(
+            self.url,
+            {"employee_id": self.profile.employee_id, "new_password": RESET_EMP_PASSWORD},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.check_password(RESET_EMP_PASSWORD))
+
+    def test_inactive_target_can_still_be_reset_by_admin(self):
+        """Product rule: admin may reset inactive employees (reactivation path)."""
+        self.emp.is_active = False
+        self.emp.save(update_fields=["is_active"])
+        self.profile.is_active_employee = False
+        self.profile.can_login = False
+        self.profile.save(update_fields=["is_active_employee", "can_login"])
+        resp = self.client.post(
+            self.url,
+            {"employee_id": self.profile.employee_id, "new_password": RESET_EMP_PASSWORD},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.check_password(RESET_EMP_PASSWORD))
+
 
 class ProfilePhotoAPITest(APITestCase):
     def setUp(self):

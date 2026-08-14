@@ -3,10 +3,12 @@ from .views import (
     EmployeeVisitReportAPI,
     VillageVisitReportAPI,
     CropProblemReportAPI,
+    AdminReportSummaryAPI,
 )
 from .mobile_reports import DailyReportAPI, MonthlyReportAPI
 
 urlpatterns = [
+    path("summary/", AdminReportSummaryAPI.as_view(), name="admin-report-summary"),
     path("employee-visits/", EmployeeVisitReportAPI.as_view()),
     path("village-visits/", VillageVisitReportAPI.as_view()),
     path("crop-problems/", CropProblemReportAPI.as_view()),
