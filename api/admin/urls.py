@@ -20,6 +20,10 @@ from masters.problem_item_views import ProblemItemViewSet, ProblemItemImportAPI
 from .dev_reset import DevResetTestBusinessDataAPI
 from visits.attachment_views import AdminVisitAttachmentListAPI
 from accounts.profile_photos import AdminEmployeePhotoAPI
+from accounts.location_assignment_views import (
+    AdminEmployeeLocationAssignmentDetailAPI,
+    AdminEmployeeLocationAssignmentListAPI,
+)
 from farmers.photo_views import AdminFarmerPhotoAPI
 
 router = DefaultRouter()
@@ -65,6 +69,16 @@ urlpatterns = [
         "visits/<int:visit_id>/attachments/",
         AdminVisitAttachmentListAPI.as_view(),
         name="admin-visit-attachments",
+    ),
+    path(
+        "employees/<int:pk>/location-assignments/",
+        AdminEmployeeLocationAssignmentDetailAPI.as_view(),
+        name="admin-employee-location-assignments",
+    ),
+    path(
+        "employee-location-assignments/",
+        AdminEmployeeLocationAssignmentListAPI.as_view(),
+        name="admin-employee-location-assignment-list",
     ),
     path(
         "employees/<int:pk>/photo/",

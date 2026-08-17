@@ -157,3 +157,83 @@ class AdminSession(models.Model):
 
     def __str__(self):
         return f"AdminSession user_id={self.user_id} active={self.is_active}"
+
+
+class EmployeeLocationAssignment(models.Model):
+    """
+    Administrative reference metadata only. Must not be used for authorization
+    or operational scoping (farmer visibility, visits, tracking, auth, etc.).
+
+    Links a field employee to District / Taluk / Village master rows for
+    Admin-maintained territory reference. One row represents one assignment
+    granularity level:
+      - district-only: taluk=NULL, village=NULL
+      - taluk-level:   village=NULL
+      - village-level: all three set
+    """
+
+    employee = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name="location_assignments",
+    )
+    district = models.ForeignKey(
+        "masters.District",
+        on_delete=models.PROTECT,
+        related_name="employee_location_assignments",
+    )
+    taluk = models.ForeignKey(
+        "masters.Taluk",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="employee_location_assignments",
+    )
+    village = models.ForeignKey(
+        "masters.Village",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="employee_location_assignments",
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_employee_location_assignments",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_employee_location_assignments",
+    )
+
+    class Meta:
+        ordering = ["employee", "district", "taluk", "village"]
+        indexes = [
+            models.Index(fields=["employee", "is_active"]),
+            models.Index(fields=["district", "is_active"]),
+            models.Index(fields=["taluk", "is_active"]),
+            models.Index(fields=["village", "is_active"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "district", "taluk", "village"],
+                name="uniq_employee_location_assignment",
+                nulls_distinct=False,
+            ),
+        ]
+
+    def __str__(self):
+        parts = [self.district.name]
+        if self.taluk_id:
+            parts.append(self.taluk.name)
+        if self.village_id:
+            parts.append(self.village.name)
+        return f"{self.employee.employee_id}: {' / '.join(parts)}"
