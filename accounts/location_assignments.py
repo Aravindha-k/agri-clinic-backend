@@ -7,6 +7,7 @@ or operational scoping.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from django.contrib.auth.models import User
@@ -20,6 +21,12 @@ from masters.models import District, Taluk, Village
 
 class LocationAssignmentValidationError(serializers.ValidationError):
     """Raised when assignment payload fails hierarchy or master validation."""
+
+
+# Compact list preview caps — counts in location_assignment_summary remain authoritative.
+PREVIEW_DISTRICT_LIMIT = 2
+PREVIEW_TALUK_LIMIT = 3
+PREVIEW_VILLAGE_LIMIT = 3
 
 
 def field_employee_queryset() -> QuerySet[EmployeeProfile]:
@@ -93,6 +100,80 @@ def assignment_summary_from_rows(rows: list[EmployeeLocationAssignment]) -> dict
         "district_count": _distinct_district_count(rows),
         "taluk_count": _distinct_taluk_count(rows),
         "village_count": _distinct_village_count(rows),
+    }
+
+
+def _sorted_name_items(items: dict[int, str]) -> list[dict[str, Any]]:
+    return [
+        {"id": item_id, "name": name}
+        for item_id, name in sorted(items.items(), key=lambda pair: pair[1].lower())
+    ]
+
+
+def assignment_preview_from_rows(
+    rows: list[EmployeeLocationAssignment],
+    *,
+    district_limit: int = PREVIEW_DISTRICT_LIMIT,
+    taluk_limit: int = PREVIEW_TALUK_LIMIT,
+    village_limit: int = PREVIEW_VILLAGE_LIMIT,
+) -> dict[str, list[dict[str, Any]]]:
+    """Compact id/name preview for list rows — capped, counts remain authoritative."""
+    districts: dict[int, str] = {}
+    taluks: dict[int, str] = {}
+    villages: dict[int, str] = {}
+
+    for row in rows:
+        if row.district_id and row.district_id not in districts:
+            districts[row.district_id] = row.district.name
+        if row.taluk_id and row.taluk_id not in taluks:
+            taluks[row.taluk_id] = row.taluk.name
+        if row.village_id and row.village_id not in villages:
+            villages[row.village_id] = row.village.name
+
+    return {
+        "districts": _sorted_name_items(districts)[:district_limit],
+        "taluks": _sorted_name_items(taluks)[:taluk_limit],
+        "villages": _sorted_name_items(villages)[:village_limit],
+    }
+
+
+def assignment_previews_for_employees(
+    employee_ids: list[int],
+    *,
+    district_limit: int = PREVIEW_DISTRICT_LIMIT,
+    taluk_limit: int = PREVIEW_TALUK_LIMIT,
+    village_limit: int = PREVIEW_VILLAGE_LIMIT,
+) -> dict[int, dict[str, list[dict[str, Any]]]]:
+    """Batch preview lookup for one paginated list page — avoids N+1 detail requests."""
+    if not employee_ids:
+        return {}
+
+    rows = (
+        EmployeeLocationAssignment.objects.filter(
+            employee_id__in=employee_ids,
+            is_active=True,
+        )
+        .select_related("district", "taluk", "village")
+        .order_by(
+            "employee_id",
+            "district__name",
+            "taluk__name",
+            "village__name",
+        )
+    )
+
+    by_employee: dict[int, list[EmployeeLocationAssignment]] = defaultdict(list)
+    for row in rows:
+        by_employee[row.employee_id].append(row)
+
+    return {
+        employee_id: assignment_preview_from_rows(
+            by_employee.get(employee_id, []),
+            district_limit=district_limit,
+            taluk_limit=taluk_limit,
+            village_limit=village_limit,
+        )
+        for employee_id in employee_ids
     }
 
 

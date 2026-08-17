@@ -410,7 +410,54 @@ class EmployeeLocationAssignmentListTests(EmployeeLocationAssignmentFixtures):
         self.assertEqual(summary["district_count"], 1)
         self.assertEqual(summary["taluk_count"], 1)
         self.assertEqual(summary["village_count"], 2)
-        self.assertNotIn("villages", row)
+        preview = row["location_assignment_preview"]
+        self.assertEqual(preview["districts"], [{"id": self.d1.id, "name": "Villupuram"}])
+        self.assertEqual(preview["taluks"], [{"id": self.t_gingee.id, "name": "Gingee"}])
+        self.assertEqual(
+            {v["name"] for v in preview["villages"]},
+            {"Village A", "Village B"},
+        )
+        self.assertNotIn("assignments", row)
+
+    def test_list_preview_capped_and_empty_when_unassigned(self):
+        for index in range(4):
+            taluk = Taluk.objects.create(
+                name=f"Taluk {index}",
+                district=self.d1,
+            )
+            Village.objects.create(
+                name=f"Village {index}",
+                district=self.d1,
+                taluk=taluk,
+            )
+            EmployeeLocationAssignment.objects.create(
+                employee=self.field_profile,
+                district=self.d1,
+                taluk=taluk,
+                village=Village.objects.get(name=f"Village {index}"),
+            )
+
+        resp = self.admin_client.get(LIST_URL)
+        row = next(
+            r
+            for r in resp.json()["data"]["results"]
+            if r["employee"]["employee_id"] == self.field_profile.employee_id
+        )
+        self.assertEqual(row["location_assignment_summary"]["taluk_count"], 4)
+        self.assertEqual(len(row["location_assignment_preview"]["taluks"]), 3)
+        self.assertEqual(len(row["location_assignment_preview"]["villages"]), 3)
+
+        unassigned = make_field_employee(username="empty01", employee_id="KAC-EMPTY")
+        resp_empty = self.admin_client.get(LIST_URL)
+        empty_row = next(
+            r
+            for r in resp_empty.json()["data"]["results"]
+            if r["employee"]["employee_id"] == unassigned[1].employee_id
+        )
+        self.assertEqual(
+            empty_row["location_assignment_preview"],
+            {"districts": [], "taluks": [], "villages": []},
+        )
 
     def test_filter_by_district(self):
         EmployeeLocationAssignment.objects.create(

@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from accounts.location_assignments import (
     LocationAssignmentValidationError,
     annotate_assignment_counts,
+    assignment_previews_for_employees,
     assignment_rows_for_employee,
     assignment_summary_from_rows,
     employee_summary_payload,
@@ -80,8 +81,11 @@ class AdminEmployeeLocationAssignmentListAPI(APIView):
         paginator.page_size = min(int(request.query_params.get("page_size", 20)), 100)
         page = paginator.paginate_queryset(qs, request)
 
+        page_profiles = list(page)
+        previews = assignment_previews_for_employees([p.id for p in page_profiles])
+
         results = []
-        for profile in page:
+        for profile in page_profiles:
             results.append(
                 {
                     "employee": employee_summary_payload(profile),
@@ -90,6 +94,10 @@ class AdminEmployeeLocationAssignmentListAPI(APIView):
                         "taluk_count": profile.location_taluk_count,
                         "village_count": profile.location_village_count,
                     },
+                    "location_assignment_preview": previews.get(
+                        profile.id,
+                        {"districts": [], "taluks": [], "villages": []},
+                    ),
                 }
             )
 
