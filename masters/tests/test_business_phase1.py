@@ -228,10 +228,25 @@ class CropPestImportAndVisitMultiProblemTests(TestCase):
         self.village = Village.objects.create(
             name="Pattanur", district=self.district, taluk=self.taluk
         )
-        self.paddy = Crop.objects.create(name_en="Paddy", name_ta="நெல்")
-        self.tomato = Crop.objects.create(name_en="Tomato", name_ta="தக்காளி")
+        # 0009_preload_crops seeds Paddy/Tomato on a migrate-from-zero DB.
+        # Reuse those rows so import CropProblem mappings attach to the same
+        # crop the visit payload uses (do not create duplicate name_en rows).
+        self.paddy = self._ensure_crop("Paddy", "நெல்")
+        self.tomato = self._ensure_crop("Tomato", "தக்காளி")
         call_command("import_crop_pests")
         self.client = login_mobile_client(employee_id="V-MP-1", password=STRONG)
+
+    @staticmethod
+    def _ensure_crop(name_en: str, name_ta: str) -> Crop:
+        crop = Crop.objects.filter(name_en__iexact=name_en).order_by("id").first()
+        if crop is None:
+            return Crop.objects.create(
+                name_en=name_en, name_ta=name_ta, is_active=True
+            )
+        if not crop.is_active:
+            crop.is_active = True
+            crop.save(update_fields=["is_active", "updated_at"])
+        return crop
 
     def _base_payload(self, **extra):
         pest_cat = ProblemCategory.objects.get(code=ProblemCategory.CODE_PEST)
