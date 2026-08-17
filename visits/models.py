@@ -83,6 +83,12 @@ class Visit(models.Model):
         blank=True,
         related_name="visits",
     )
+    problem_items = models.ManyToManyField(
+        ProblemMaster,
+        related_name="visit_selections",
+        blank=True,
+        help_text="Canonical multi-select problems for this visit.",
+    )
     problem_description = models.TextField(
         blank=True,
         null=True,

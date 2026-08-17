@@ -5,6 +5,7 @@ from .models import (
     FarmerField,
     FieldCrop,
     District,
+    Taluk,
     Village,
     Crop,
     Farmer,
@@ -14,7 +15,9 @@ from .serializers import (
     FarmerFieldSerializer,
     FieldCropSerializer,
     DistrictSerializer,
+    TalukSerializer,
     VillageSerializer,
+    VillageLightweightSerializer,
     CropSerializer,
     ProblemCategorySerializer,
     FarmerSerializer,
@@ -114,9 +117,9 @@ class DistrictViewSet(BaseMasterViewSet):
     ordering = ["name"]
 
 
-class VillageViewSet(BaseMasterViewSet):
-    queryset = Village.objects.all()
-    serializer_class = VillageSerializer
+class TalukViewSet(BaseMasterViewSet):
+    queryset = Taluk.objects.select_related("district").all()
+    serializer_class = TalukSerializer
     filterset_fields = ["district", "is_active"] if HAS_DJANGO_FILTER else []
     search_fields = ["name"]
     ordering_fields = ["name"]
@@ -124,10 +127,44 @@ class VillageViewSet(BaseMasterViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        district_id = self.request.query_params.get("district_id")
-        if district_id:
+        district = self.request.query_params.get("district") or self.request.query_params.get(
+            "district_id"
+        )
+        if district:
+            queryset = queryset.filter(district_id=district)
+        return queryset.order_by("name")
+
+
+class VillageViewSet(BaseMasterViewSet):
+    queryset = Village.objects.select_related("district", "taluk").all()
+    serializer_class = VillageSerializer
+    filterset_fields = ["district", "taluk", "is_active"] if HAS_DJANGO_FILTER else []
+    search_fields = ["name", "official_code"]
+    ordering_fields = ["name"]
+    ordering = ["name"]
+
+    def get_serializer_class(self):
+        # Lightweight list when filtering by taluk (mobile cascading dropdown).
+        if self.action == "list" and (
+            self.request.query_params.get("taluk")
+            or self.request.query_params.get("taluk_id")
+        ):
+            return VillageLightweightSerializer
+        return VillageSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        district_id = self.request.query_params.get(
+            "district_id"
+        ) or self.request.query_params.get("district")
+        taluk_id = self.request.query_params.get("taluk_id") or self.request.query_params.get(
+            "taluk"
+        )
+        if taluk_id:
+            queryset = queryset.filter(taluk_id=taluk_id)
+        elif district_id:
             queryset = queryset.filter(district_id=district_id)
-        return queryset
+        return queryset.order_by("name")
 
 
 class CropViewSet(BaseMasterViewSet):
@@ -141,7 +178,7 @@ class CropViewSet(BaseMasterViewSet):
 
 class FarmerViewSet(BaseMasterViewSet):
     queryset = Farmer.objects.select_related(
-        "village", "district", "assigned_employee", "created_by_employee"
+        "village", "district", "taluk", "assigned_employee", "created_by_employee"
     ).all()
     serializer_class = FarmerSerializer
     search_fields = ["name", "phone", "farmer_code", "village__name"]

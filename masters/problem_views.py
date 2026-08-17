@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from masters.location_utils import models_Q_crop_filter  # noqa: F401
 from masters.models import Crop, ProblemCategory, ProblemMaster, Village
 from masters.problem_item_utils import problem_categories_with_active_items
 from masters.problem_serializers import (
@@ -22,12 +23,6 @@ def _problem_master_dropdown_qs(category_id=None, crop_id=None):
     if crop_id:
         qs = qs.filter(models_Q_crop_filter(crop_id))
     return qs.order_by("category__name", "name")
-
-
-def models_Q_crop_filter(crop_id):
-    from django.db.models import Q
-
-    return Q(crop_id__isnull=True) | Q(crop_id=crop_id)
 
 
 @extend_schema(tags=["Masters", "Field Visit"], summary="Problem categories dropdown")

@@ -13,6 +13,10 @@ from masters.models import Crop, Farmer, ProblemCategory, ProblemMaster, Village
 from visits.field_notes import apply_observation_write
 from visits.field_visit import merge_field_visit_request_aliases, validate_visit_submit_data
 from visits.models import Visit
+from visits.problem_selection import (
+    apply_problem_items_to_visit,
+    resolve_problem_items_for_visit,
+)
 from visits.services.farmer_resolution import resolve_farmer_for_visit
 from visits.services.field_visit_service import (
     ensure_visit_route_point,
@@ -45,6 +49,12 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
         source="problem_master",
         required=False,
         allow_null=True,
+        write_only=True,
+    )
+    problem_item_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
         write_only=True,
     )
     village_id = serializers.PrimaryKeyRelatedField(
@@ -87,6 +97,7 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
             "problem_category",
             "problem_master_id",
             "problem_master",
+            "problem_item_ids",
             "problem_description",
             "problem_seen",
             "recommendation",
@@ -146,11 +157,34 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
         if lat is not None and lng is not None:
             validate_latitude_longitude(lat, lng)
 
+        # Multi-problem resolution before required-field validation so
+        # problem_item_ids can satisfy problem_master / category requirements.
+        raw_ids = None
+        has_new_ids = False
+        if hasattr(raw, "get") and "problem_item_ids" in raw:
+            has_new_ids = True
+            raw_ids = raw.get("problem_item_ids")
+        if "problem_item_ids" in data:
+            has_new_ids = True
+            raw_ids = data.pop("problem_item_ids")
+        crop = data.get("crop")
+        crop_id = getattr(crop, "pk", data.get("crop_id") or crop)
+        problems = resolve_problem_items_for_visit(
+            problem_item_ids=raw_ids if has_new_ids else None,
+            legacy_master=data.get("problem_master"),
+            crop_id=crop_id,
+        )
+        if problems:
+            data["problem_master"] = problems[0]
+            data["problem_category"] = problems[0].category
+        data["_resolved_problem_items"] = problems
+
         if self.instance is None:
             validate_visit_submit_data(data, raw)
         return data
 
     def create(self, validated_data):
+        problems = validated_data.pop("_resolved_problem_items", None)
         request = self.context.get("request")
         user = getattr(request, "user", None)
         employee = user
@@ -174,11 +208,14 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
             request=request,
         )
         visit = result.visit
+        if problems is not None:
+            apply_problem_items_to_visit(visit, problems)
         # Stash for transport adapters that need duplicate flag without re-query.
         visit._field_visit_submit_result = result  # type: ignore[attr-defined]
         return visit
 
     def update(self, instance, validated_data):
+        problems = validated_data.pop("_resolved_problem_items", None)
         for key in (
             "age",
             "phone",
@@ -217,5 +254,7 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
             }
         )
         instance.save()
+        if problems is not None:
+            apply_problem_items_to_visit(instance, problems)
         ensure_visit_route_point(instance)
         return instance

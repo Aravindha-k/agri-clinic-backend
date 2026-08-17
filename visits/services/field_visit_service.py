@@ -38,6 +38,8 @@ _WRITE_POP_KEYS = (
     "problem_subcategory",
     "status",
     "employee",
+    "_resolved_problem_items",
+    "problem_item_ids",
 )
 
 

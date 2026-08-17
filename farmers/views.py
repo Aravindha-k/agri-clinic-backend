@@ -112,7 +112,7 @@ def _farmers_queryset_with_visit_counts(user):
                 output_field=CharField(),
             ),
         )
-        .select_related("district", "village", "assigned_employee")
+        .select_related("district", "village", "taluk", "assigned_employee")
     )
 
 
@@ -298,7 +298,7 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
     def _get_farmer(self, pk):
         return get_object_or_404(
             _farmers_queryset_for_user(self.request.user).select_related(
-                "village", "district", "assigned_employee"
+                "village", "district", "taluk", "assigned_employee"
             ).prefetch_related(
                 "fields__crops__crop",
             ),

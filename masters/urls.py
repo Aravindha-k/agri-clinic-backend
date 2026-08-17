@@ -2,6 +2,7 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path
 from .views import (
     DistrictViewSet,
+    TalukViewSet,
     VillageViewSet,
     CropViewSet,
     FarmerViewSet,
@@ -23,6 +24,7 @@ from .problem_item_views import ProblemItemListAPI, ProblemMasterImportAPI
 
 router = DefaultRouter()
 router.register(r"districts", DistrictViewSet)
+router.register(r"taluks", TalukViewSet)
 router.register(r"villages", VillageViewSet)
 router.register(r"crops", CropViewSet, basename="crop")
 router.register(r"farmers", FarmerViewSet)

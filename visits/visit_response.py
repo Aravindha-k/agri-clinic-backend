@@ -18,6 +18,7 @@ VISIT_LIST_SELECT_RELATED = (
     "farmer",
     "farmer__village",
     "farmer__district",
+    "farmer__taluk",
     "field",
     "problem_category",
     "problem_master",
@@ -84,13 +85,22 @@ def build_visit_farmer_block(
 
 
 def build_field_visit_problem_block(visit: Visit) -> dict | None:
-    if not visit.problem_category_id and not (visit.problem_description or visit.problem_seen):
+    from visits.problem_selection import serialize_visit_problems
+
+    problems = serialize_visit_problems(visit)
+    if (
+        not visit.problem_category_id
+        and not (visit.problem_description or visit.problem_seen)
+        and not problems
+    ):
         return None
     block = {
         "problem_category_id": visit.problem_category_id,
         "problem_master_id": visit.problem_master_id,
         "problem_subcategory_id": visit.problem_master_id,
         "problem_description": visit.problem_description or visit.problem_seen or "",
+        "problems": problems,
+        "problem_item_ids": [p["id"] for p in problems],
     }
     if visit.problem_category_id:
         cat = visit.problem_category

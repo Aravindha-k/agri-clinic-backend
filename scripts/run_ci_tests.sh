@@ -21,6 +21,8 @@ python manage.py test \
   masters.tests.test_problem_master_list \
   masters.tests.test_problem_item_import \
   masters.tests.test_problem_category_cleanup \
+  masters.tests.test_business_phase1 \
+  masters.tests.test_resolve_backfill_review \
   system_settings.tests.test_clean_test_data \
   system_settings.tests.test_terminate_test_db_connections \
   "$@"

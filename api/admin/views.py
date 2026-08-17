@@ -178,6 +178,8 @@ class VisitViewSet(
             "attachments",
             "attachments__uploaded_by",
             "attachments__employee",
+            "problem_items",
+            "problem_items__category",
         )
         .order_by("-created_at", "-id")
     )

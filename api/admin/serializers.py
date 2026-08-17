@@ -384,6 +384,17 @@ class AdminVisitSerializer(serializers.ModelSerializer):
         if problem:
             data["field_visit"] = problem
             data.update(problem)
+            data["problems"] = problem.get("problems") or []
+        # Farmer location context for admin detail (no Visit.taluk duplication).
+        if instance.farmer_id:
+            farmer = instance.farmer
+            data["farmer_district"] = (
+                farmer.district.name if farmer.district_id else ""
+            )
+            data["farmer_taluk"] = farmer.taluk.name if farmer.taluk_id else ""
+            data["farmer_village"] = (
+                farmer.village.name if farmer.village_id else ""
+            )
         # Grouped media for admin UIs (images / audio / videos / documents).
         from visits.media_response import group_visit_media
 
@@ -475,6 +486,9 @@ class AdminFarmerSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
+    taluk_name = serializers.CharField(
+        source="taluk.name", read_only=True, default="", allow_null=True
+    )
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
@@ -492,6 +506,7 @@ class AdminFarmerSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "phone",
             "district",
             "district_name",
+            "taluk_name",
             "village",
             "village_name",
             "address",

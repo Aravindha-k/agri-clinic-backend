@@ -29,11 +29,13 @@ def get_or_create_farmer_for_field_visit(
         return existing, False
 
     district = village.district if village.district_id else None
+    taluk = village.taluk if village.taluk_id else None
     farmer = Farmer(
         name=(name or "").strip() or "Farmer",
         phone=phone_digits,
         village=village,
         district=district,
+        taluk=taluk,
         is_active=True,
         created_by_employee=created_by if created_by and not created_by.is_staff else None,
     )

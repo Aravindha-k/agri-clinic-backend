@@ -454,6 +454,9 @@ class FarmerListSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
+    taluk_name = serializers.CharField(
+        source="taluk.name", read_only=True, default="", allow_null=True
+    )
     crop_name = serializers.SerializerMethodField()
     latitude = serializers.SerializerMethodField()
     longitude = serializers.SerializerMethodField()
@@ -496,6 +499,7 @@ class FarmerListSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "village",
             "village_name",
             "district_name",
+            "taluk_name",
             "crop_name",
             "latitude",
             "longitude",
@@ -522,6 +526,9 @@ class FarmerDetailSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
+    taluk_name = serializers.CharField(
+        source="taluk.name", read_only=True, default="", allow_null=True
+    )
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
@@ -542,6 +549,8 @@ class FarmerDetailSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "phone",
             "district",
             "district_name",
+            "taluk",
+            "taluk_name",
             "village",
             "village_name",
             "address",
@@ -617,6 +626,7 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
             "name",
             "phone",
             "district",
+            "taluk",
             "village",
             "address",
             "gps_location",
@@ -624,6 +634,11 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
             "irrigation_type",
             "soil_type",
         ]
+        extra_kwargs = {
+            "district": {"required": True, "allow_null": False},
+            "taluk": {"required": True, "allow_null": False},
+            "village": {"required": True, "allow_null": False},
+        }
 
     def validate_gps_location(self, value):
         from utils.gps import validate_gps_location_string
@@ -642,6 +657,13 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
                 "A farmer with this mobile number already exists."
             )
         return phone
+
+    def validate(self, attrs):
+        from masters.serializers import validate_farmer_location_hierarchy
+
+        return validate_farmer_location_hierarchy(
+            attrs, instance=self.instance, require_complete=True
+        )
 
 
 class FarmerUpdateSerializer(serializers.ModelSerializer):
@@ -651,6 +673,7 @@ class FarmerUpdateSerializer(serializers.ModelSerializer):
             "name",
             "phone",
             "district",
+            "taluk",
             "village",
             "address",
             "gps_location",
@@ -676,6 +699,17 @@ class FarmerUpdateSerializer(serializers.ModelSerializer):
                 "A farmer with this mobile number already exists."
             )
         return phone
+
+    def validate(self, attrs):
+        from masters.serializers import (
+            location_fields_changed,
+            validate_farmer_location_hierarchy,
+        )
+
+        require_complete = location_fields_changed(attrs, self.instance)
+        return validate_farmer_location_hierarchy(
+            attrs, instance=self.instance, require_complete=require_complete
+        )
 
 
 # ══════════════════════════════════════════════

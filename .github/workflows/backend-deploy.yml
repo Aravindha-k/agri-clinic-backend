@@ -65,6 +65,9 @@ jobs:
              source .venv/bin/activate
              pip install -r requirements.txt
              python manage.py migrate --noinput
+             python manage.py import_business_locations
+             python manage.py import_crop_pests
+             python manage.py resolve_backfill_review
              python manage.py collectstatic --noinput
              sudo systemctl restart '${SERVICE_NAME}'
              sleep 3

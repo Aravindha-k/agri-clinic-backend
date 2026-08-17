@@ -251,6 +251,11 @@ log "Migration plan"
 log "Applying migrations"
 "$PYTHON" manage.py migrate --noinput
 
+log "Importing idempotent Phase 1 master data"
+"$PYTHON" manage.py import_business_locations
+"$PYTHON" manage.py import_crop_pests
+"$PYTHON" manage.py resolve_backfill_review
+
 log "Verifying visits.0029_visitmedia_canonical_metadata is applied"
 "$PYTHON" <<'PY'
 import os

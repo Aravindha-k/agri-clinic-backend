@@ -1,0 +1,141 @@
+Crop,English Pest Name,Tamil Pest Name
+Paddy,Yellow Stem Borer,குருத்துப்பூச்சி
+Paddy,Leaf Folder,இலை சுருட்டுப்புழு
+Paddy,Gall Midge,ஆனைக்கொம்பன்
+Paddy,Brown Plant Hopper,தாள் புகையான்
+Paddy,Green Leaf Hopper,பச்சை தத்துப்பூச்சி
+Paddy,Thrips,இலைப்பேன்
+Paddy,Rice Earhead Bug,கதிர் நாவாய்ப்பூச்சி
+Paddy,Whorl Maggot,குருத்து ஈ
+Paddy,Case Worm,கூண்டுப்புழு
+Paddy,Green Horned Caterpillar,கொம்புப்புழு
+Maize,Fall Armyworm,படைப்புழு
+Maize,Stem Borer,தண்டுத்துளைப்பான்
+Maize,Pink Stem Borer,இளஞ்சிவப்பு தண்டுத்துளைப்பான்
+Maize,Shoot Fly,குருத்து ஈ
+Bajra,Stem Borer,தண்டுத்துளைப்பான்
+Bajra,Shoot Fly,குருத்து ஈ
+Bajra,Earhead Worm,கதிர்ப்புழு
+Groundnut,Leaf Miner,இலைத் துளைப்பான்
+Groundnut,Red Hairy Caterpillar,சிவப்பு கம்பளிப்பூச்சி
+Groundnut,Tobacco Caterpillar,புகையிலை கம்பளிப்புழு
+Groundnut,Thrips,திரிப்ஸ்
+Groundnut,Aphid,அசுவினி
+Groundnut,White Grub,வெள்ளை வண்டு புழு
+Ragi,Earhead Bug,கதிர் நாவாய்ப்பூச்சி
+Ragi,Aphid,அசுவினி
+Blackgram,Aphid,அசுவினி
+Blackgram,Whitefly,வெள்ளை ஈ
+Blackgram,Blue Butterfly,நீல பட்டாம்பூச்சி
+Blackgram,Spotted Pod Borer,புள்ளிக்காய்ப்புழு
+Blackgram,Gram Pod Borer,பச்சைக்காய்ப்புழு
+Greengram,Aphid,அசுவினி
+Greengram,Whitefly,வெள்ளை ஈ
+Greengram,Blue Butterfly,நீல பட்டாம்பூச்சி
+Greengram,Spotted Pod Borer,புள்ளிக்காய்ப்புழு
+Greengram,Gram Pod Borer,பச்சைக்காய்ப்புழு
+Cluster Bean,Aphid,அசுவினி
+Cluster Bean,Whitefly,வெள்ளை ஈ
+Cluster Bean,Pod Borer,காய்த்துளைப்பான்
+Cluster Bean,Leaf Hopper,தத்துப்பூச்சி
+Brinjal,Shoot and Fruit Borer,குருத்து மற்றும் காய்த் துளைப்பான்
+Brinjal,Epilachna Beetle,எப்பிலக்னா வண்டு
+Brinjal,Whitefly,வெள்ளை ஈ
+Brinjal,Jassid,தத்துப்பூச்சி
+Bhendi,Fruit Borer,காய்ப்புழு
+Bhendi,Jassid,தத்துப்பூச்சி
+Bhendi,Whitefly,வெள்ளை ஈ
+Bhendi,Red Spider Mite,சிவப்பு சிலந்திப்பூச்சி
+Cucumber,Fruit Fly,பழ ஈ
+Cucumber,Red Pumpkin Beetle,சிவப்பு பூசணி வண்டு
+Cucumber,Aphid,அசுவினி
+Cucumber,Whitefly,வெள்ளை ஈ
+Bottle Gourd,Fruit Fly,பழ ஈ
+Bottle Gourd,Red Pumpkin Beetle,சிவப்பு பூசணி வண்டு
+Bottle Gourd,Aphid,அசுவினி
+Ridge Gourd,Fruit Fly,பழ ஈ
+Ridge Gourd,Red Pumpkin Beetle,சிவப்பு பூசணி வண்டு
+Ridge Gourd,Aphid,அசுவினி
+Bitter Gourd,Fruit Fly,பழ ஈ
+Bitter Gourd,Epilachna Beetle,எப்பிலக்னா வண்டு
+Bitter Gourd,Aphid,அசுவினி
+Pumpkin,Fruit Fly,பழ ஈ
+Pumpkin,Red Pumpkin Beetle,சிவப்பு பூசணி வண்டு
+Pumpkin,Aphid,அசுவினி
+Ash Gourd,Fruit Fly,பழ ஈ
+Ash Gourd,Red Pumpkin Beetle,சிவப்பு பூசணி வண்டு
+Ash Gourd,Aphid,அசுவினி
+Snake Gourd,Fruit Fly,பழ ஈ
+Snake Gourd,Red Pumpkin Beetle,சிவப்பு பூசணி வண்டு
+Snake Gourd,Aphid,அசுவினி
+Watermelon,Fruit Fly,பழ ஈ
+Watermelon,Aphid,அசுவினி
+Watermelon,Thrips,திரிப்ஸ்
+Watermelon,Red Spider Mite,சிவப்பு சிலந்திப்பூச்சி
+Tomato,Fruit Borer,காய்ப்புழு
+Tomato,Tobacco Caterpillar,புகையிலை கம்பளிப்புழு
+Tomato,Whitefly,வெள்ளை ஈ
+Tomato,Thrips,திரிப்ஸ்
+Tomato,Serpentine Leaf Miner,சுருள் இலைத் துளைப்பான்
+Chilli,Thrips,திரிப்ஸ்
+Chilli,Yellow Mite,மஞ்சள் சிலந்திப்பூச்சி
+Chilli,Fruit Borer,காய்ப்புழு
+Chilli,Aphid,அசுவினி
+Chilli,Whitefly,வெள்ளை ஈ
+Greens (Amaranthus),Leaf Webber,இலை பின்னும் புழு
+Greens (Amaranthus),Aphid,அசுவினி
+Greens (Amaranthus),Leaf Eating Caterpillar,இலை தின்னும் புழு
+Guava,Fruit Fly,பழ ஈ
+Guava,Bark Eating Caterpillar,பட்டை தின்னும் புழு
+Guava,Mealy Bug,மாவுப்பூச்சி
+Guava,Scale Insect,செதில் பூச்சி
+Coconut,Rhinoceros Beetle,காண்டாமிருக வண்டு
+Coconut,Red Palm Weevil,சிவப்பு கூன்வண்டு
+Coconut,Black Headed Caterpillar,கருந்தலைப்புழு
+Coconut,Eriophyid Mite,தேங்காய் நுண்ணுயிரி சிலந்தி
+Coconut,Rugose Spiralling Whitefly,சுருள் வெள்ளை ஈ
+Sugarcane,Early Shoot Borer,குருத்துத் துளைப்பான்
+Sugarcane,Internode Borer,இடைக்கணுத் துளைப்பான்
+Sugarcane,Top Borer,நுனிக்குருத்துப் புழு
+Sugarcane,Root Borer,வேர்த் துளைப்பான்
+Sugarcane,Pyrilla,பைரில்லா
+Sugarcane,Whitefly,வெள்ளை ஈ
+Sugarcane,Scale Insect,செதில் பூச்சி
+Sugarcane,Woolly Aphid,கம்பளி அசுவினி
+Sugarcane,Termite,கரையான்
+Sugarcane,White Grub,வெள்ளை வண்டு புழு
+Jasmine (Jasminum spp.),Bud Worm,மொட்டுப்புழு
+Jasmine (Jasminum spp.),Blossom Midge,பூ மொட்டு ஈ
+Jasmine (Jasminum spp.),Gall Mite,மொட்டு சிலந்தி
+Jasmine (Jasminum spp.),Thrips,திரிப்ஸ்
+Jasmine (Jasminum spp.),Red Spider Mite,சிவப்பு சிலந்திப்பூச்சி
+Jasmine (Jasminum spp.),Whitefly,வெள்ளை ஈ
+Jasmine (Jasminum spp.),Mealy Bug,மாவுப்பூச்சி
+Jasminum sambac (குண்டுமல்லி),Bud Worm,மொட்டுப்புழு
+Jasminum sambac (குண்டுமல்லி),Blossom Midge,பூ மொட்டு ஈ
+Jasminum sambac (குண்டுமல்லி),Gall Mite,மொட்டு சிலந்தி
+Jasminum auriculatum (முல்லை),Bud Worm,மொட்டுப்புழு
+Jasminum auriculatum (முல்லை),Blossom Midge,பூ மொட்டு ஈ
+Jasminum auriculatum (முல்லை),Gall Mite,மொட்டு சிலந்தி
+Marigold,Bud Borer,மொட்டுத் துளைப்பான்
+Marigold,Tobacco Caterpillar,புகையிலை கம்பளிப்புழு
+Marigold,Aphid,அசுவினி
+Marigold,Thrips,திரிப்ஸ்
+Marigold,Leaf Hopper,தத்துப்பூச்சி
+Marigold,Red Spider Mite,சிவப்பு சிலந்திப்பூச்சி
+Chrysanthemum,Aphid,அசுவினி
+Chrysanthemum,Thrips,திரிப்ஸ்
+Chrysanthemum,Leaf Miner,இலைத் துளைப்பான்
+Chrysanthemum,Mealy Bug,மாவுப்பூச்சி
+Chrysanthemum,Red Spider Mite,சிவப்பு சிலந்திப்பூச்சி
+Chrysanthemum,Caterpillar,இலைத் தின்னும் புழு
+Tuberose,Thrips,திரிப்ஸ்
+Tuberose,Bud Borer,மொட்டுத் துளைப்பான்
+Tuberose,Aphid,அசுவினி
+Tuberose,Mealy Bug,மாவுப்பூச்சி
+Tuberose,Grasshopper,வெட்டுக்கிளி
+Cockscomb (Celosia),Aphid,அசுவினி
+Cockscomb (Celosia),Thrips,திரிப்ஸ்
+Cockscomb (Celosia),Mealy Bug,மாவுப்பூச்சி
+Cockscomb (Celosia),Leaf Eating Caterpillar,இலை தின்னும் புழு
+Cockscomb (Celosia),Red Spider Mite,சிவப்பு சிலந்திப்பூச்சி

@@ -332,10 +332,13 @@ def validate_field_visit_submit_data(data: dict) -> None:
             errors["problem_master"] = msg
         else:
             crop_id = getattr(data.get("crop"), "pk", data.get("crop_id") or data.get("crop"))
-            if master.crop_id and crop_id and master.crop_id != int(crop_id):
-                msg = "Problem subcategory is not available for the selected crop."
-                errors["problem_subcategory"] = msg
-                errors["problem_master"] = msg
+            if crop_id:
+                from masters.location_utils import problem_allowed_for_crop
+
+                if not problem_allowed_for_crop(master, int(crop_id)):
+                    msg = "Problem subcategory is not available for the selected crop."
+                    errors["problem_subcategory"] = msg
+                    errors["problem_master"] = msg
             data["problem_master"] = master
             data["problem_subcategory"] = master
     elif master:

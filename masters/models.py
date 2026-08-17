@@ -31,6 +31,30 @@ class District(BaseMaster):
         return self.name
 
 
+class Taluk(BaseMaster):
+    name = models.CharField(max_length=255)
+    district = models.ForeignKey(
+        District,
+        on_delete=models.PROTECT,
+        related_name="taluks",
+    )
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["district", "name"],
+                name="uniq_taluk_district_name",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["district", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.district.name})"
+
+
 class Village(BaseMaster):
 
     name = models.CharField(max_length=255)
@@ -41,13 +65,59 @@ class Village(BaseMaster):
         null=True,
         blank=True,
     )
+    taluk = models.ForeignKey(
+        Taluk,
+        on_delete=models.PROTECT,
+        related_name="villages",
+        null=True,
+        blank=True,
+    )
+    official_code = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Official revenue village code when supplied by source PDF.",
+    )
+    official_source = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Official PDF/page URL for this village row.",
+    )
+    firka_name = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         ordering = ["name"]
-        indexes = []
+        indexes = [
+            models.Index(fields=["taluk", "is_active"]),
+            models.Index(fields=["district", "is_active"]),
+            models.Index(fields=["taluk", "official_code"]),
+        ]
+        constraints = [
+            # Official codes can repeat within a taluk for E/W variants; include name.
+            models.UniqueConstraint(
+                fields=["taluk", "official_code", "name"],
+                condition=~models.Q(official_code="") & models.Q(taluk__isnull=False),
+                name="uniq_village_taluk_code_name",
+            ),
+        ]
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        # Keep Village.district consistent with Taluk.district when taluk is set.
+        if self.taluk_id:
+            taluk_district_id = getattr(self.taluk, "district_id", None)
+            if taluk_district_id is None:
+                taluk_district_id = (
+                    Taluk.objects.filter(pk=self.taluk_id)
+                    .values_list("district_id", flat=True)
+                    .first()
+                )
+            if taluk_district_id and self.district_id != taluk_district_id:
+                self.district_id = taluk_district_id
+        super().save(*args, **kwargs)
 
 
 # ==========================================================
@@ -159,7 +229,14 @@ class ProblemMaster(BaseMaster):
         null=True,
         blank=True,
         related_name="problem_masters",
-        help_text="Optional: limit this problem to a crop.",
+        help_text="Legacy single-crop limit. Prefer crops/CropProblem for new data.",
+    )
+    crops = models.ManyToManyField(
+        Crop,
+        through="CropProblem",
+        related_name="problem_items",
+        blank=True,
+        help_text="Canonical multi-crop mappings for this problem.",
     )
 
     class Meta:
@@ -171,6 +248,36 @@ class ProblemMaster(BaseMaster):
 
     def __str__(self):
         return f"{self.category.name} | {self.name}"
+
+
+class CropProblem(models.Model):
+    """Through table: one ProblemMaster may map to many Crops."""
+
+    problem_master = models.ForeignKey(
+        ProblemMaster,
+        on_delete=models.CASCADE,
+        related_name="crop_problems",
+    )
+    crop = models.ForeignKey(
+        Crop,
+        on_delete=models.CASCADE,
+        related_name="crop_problems",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["problem_master", "crop"],
+                name="uniq_crop_problem_master_crop",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["crop", "problem_master"]),
+        ]
+
+    def __str__(self):
+        return f"{self.crop_id} -> {self.problem_master_id}"
 
 
 # ==========================================================
@@ -221,7 +328,13 @@ class Farmer(BaseMaster):
         blank=True,
         related_name="farmers",
     )
-
+    taluk = models.ForeignKey(
+        Taluk,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="farmers",
+    )
     village = models.ForeignKey(
         Village,
         on_delete=models.SET_NULL,
