@@ -29,8 +29,10 @@ from rest_framework.permissions import IsAuthenticated, SAFE_METHODS, BasePermis
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 
+from masters.location_audit import location_master_counts, village_count_annotation
 from utils.response import success_response, error_response
 
 try:
@@ -116,6 +118,18 @@ class DistrictViewSet(BaseMasterViewSet):
     ordering_fields = ["name"]
     ordering = ["name"]
 
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .annotate(
+                taluk_count=Count("taluks", filter=Q(taluks__is_active=True), distinct=True),
+                village_count=Count(
+                    "villages", filter=Q(villages__is_active=True), distinct=True
+                ),
+            )
+        )
+
 
 class TalukViewSet(BaseMasterViewSet):
     queryset = Taluk.objects.select_related("district").all()
@@ -132,7 +146,7 @@ class TalukViewSet(BaseMasterViewSet):
         )
         if district:
             queryset = queryset.filter(district_id=district)
-        return queryset.order_by("name")
+        return queryset.annotate(village_count=village_count_annotation()).order_by("name")
 
 
 class VillageViewSet(BaseMasterViewSet):
@@ -218,6 +232,17 @@ class FieldCropViewSet(BaseMasterViewSet):
     ordering_fields = ["crop_name", "sowing_date", "created_at", "is_active"]
     ordering = ["-sowing_date"]
     filterset_fields = ["land", "crop", "is_active"] if HAS_DJANGO_FILTER else []
+
+
+@extend_schema(
+    tags=["Masters"],
+    summary="Active location master counts for Admin badges",
+)
+class LocationSummaryAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return success_response(data=location_master_counts())
 
 
 @extend_schema(

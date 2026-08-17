@@ -12,10 +12,13 @@ from .models import (
 
 
 class DistrictSerializer(serializers.ModelSerializer):
+    taluk_count = serializers.IntegerField(read_only=True, required=False, default=0)
+    village_count = serializers.IntegerField(read_only=True, required=False, default=0)
+
     class Meta:
         model = District
-        fields = ["id", "name", "is_active"]
-        read_only_fields = ("created_at", "updated_at")
+        fields = ["id", "name", "is_active", "taluk_count", "village_count"]
+        read_only_fields = ("created_at", "updated_at", "taluk_count", "village_count")
 
     def validate_name(self, value):
         qs = District.objects.filter(name__iexact=value)
@@ -28,11 +31,19 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 class TalukSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source="district.name", read_only=True)
+    village_count = serializers.IntegerField(read_only=True, required=False, default=0)
 
     class Meta:
         model = Taluk
-        fields = ["id", "name", "district", "district_name", "is_active"]
-        read_only_fields = ("created_at", "updated_at")
+        fields = [
+            "id",
+            "name",
+            "district",
+            "district_name",
+            "is_active",
+            "village_count",
+        ]
+        read_only_fields = ("created_at", "updated_at", "district_name", "village_count")
 
 
 class VillageSerializer(serializers.ModelSerializer):

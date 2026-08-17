@@ -8,6 +8,7 @@ from .views import (
     FarmerViewSet,
     FarmerFieldViewSet,
     FieldCropViewSet,
+    LocationSummaryAPI,
 )
 from .problem_views import (
     ProblemCategoryListCreateAPIView,
@@ -33,6 +34,7 @@ router.register(r"field-crops", FieldCropViewSet)
 
 urlpatterns = [
     # Before router.urls so "villages/dropdown" is not captured as villages/<pk>.
+    path("location-summary/", LocationSummaryAPI.as_view(), name="location-summary"),
     path("villages/dropdown/", VillageDropdownAPI.as_view(), name="villages-dropdown"),
     path("crops/dropdown/", CropDropdownAPI.as_view(), name="crops-dropdown"),
     *router.urls,
