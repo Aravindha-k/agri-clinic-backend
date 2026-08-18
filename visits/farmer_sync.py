@@ -95,6 +95,11 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
     elif farmer.village_id and not visit.village_id:
         visit_updates["village_id"] = farmer.village_id
 
+    if visit.village_id:
+        village_taluk_id = getattr(visit.village, "taluk_id", None)
+        if village_taluk_id and farmer.taluk_id != village_taluk_id:
+            master_updates["taluk_id"] = village_taluk_id
+
     if master_updates:
         Farmer.objects.filter(pk=farmer.pk).update(**master_updates)
 

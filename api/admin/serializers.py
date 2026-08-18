@@ -25,6 +25,7 @@ from visits.visit_response import (
     build_field_visit_snapshot,
     build_visit_employee_block,
     build_visit_farmer_block,
+    build_visit_location_block,
     crop_display_name,
 )
 from utils.serializer_mixins import ProfilePhotoUrlMixin
@@ -357,6 +358,9 @@ class AdminVisitSerializer(serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
+    district_name = serializers.CharField(
+        source="district.name", read_only=True, default=""
+    )
     crop_name = serializers.SerializerMethodField()
     crop_info = serializers.SerializerMethodField()
     issues = AdminCropIssueSerializer(many=True, read_only=True)
@@ -386,15 +390,25 @@ class AdminVisitSerializer(serializers.ModelSerializer):
             data.update(problem)
             data["problems"] = problem.get("problems") or []
         # Farmer location context for admin detail (no Visit.taluk duplication).
+        location = build_visit_location_block(instance)
+        data.update(location)
         if instance.farmer_id:
             farmer = instance.farmer
-            data["farmer_district"] = (
+            data["farmer_district"] = location["district_name"] or (
                 farmer.district.name if farmer.district_id else ""
             )
-            data["farmer_taluk"] = farmer.taluk.name if farmer.taluk_id else ""
-            data["farmer_village"] = (
+            data["farmer_taluk"] = location["taluk_name"] or (
+                farmer.taluk.name if farmer.taluk_id else ""
+            )
+            data["farmer_village"] = location["village_name"] or (
                 farmer.village.name if farmer.village_id else ""
             )
+        # Unified evidence for admin detail (same contract as /attachments/).
+        from visits.evidence import list_visit_evidence
+
+        evidence_rows = list_visit_evidence(instance, request)
+        data["evidence_count"] = len(evidence_rows)
+        data["evidence"] = evidence_rows
         # Grouped media for admin UIs (images / audio / videos / documents).
         from visits.media_response import group_visit_media
 

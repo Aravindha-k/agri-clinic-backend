@@ -19,6 +19,8 @@ VISIT_LIST_SELECT_RELATED = (
     "farmer__village",
     "farmer__district",
     "farmer__taluk",
+    "village__district",
+    "village__taluk",
     "field",
     "problem_category",
     "problem_master",
@@ -130,6 +132,46 @@ def build_field_visit_snapshot(visit: Visit) -> dict:
         "crop_name": crop_display_name(visit),
         "acreage": visit.land_area,
         **(build_field_visit_problem_block(visit) or {}),
+    }
+
+
+def build_visit_location_block(visit: Visit) -> Dict[str, Any]:
+    """
+    Canonical visit location names for admin/mobile detail.
+
+    Visit stores district + village FKs only. Taluk is derived from the village
+    master row when present, then farmer.taluk as fallback.
+    """
+    district_id = visit.district_id
+    district_name = ""
+    if visit.district_id:
+        district_name = visit.district.name
+    elif visit.farmer_id and visit.farmer.district_id:
+        district_id = visit.farmer.district_id
+        district_name = visit.farmer.district.name
+
+    village_id = visit.village_id
+    village_name = visit.village.name if visit.village_id else ""
+    if not village_name and visit.farmer_id and visit.farmer.village_id:
+        village_id = visit.farmer.village_id
+        village_name = visit.farmer.village.name
+
+    taluk_id = None
+    taluk_name = ""
+    if visit.village_id and visit.village.taluk_id:
+        taluk_id = visit.village.taluk_id
+        taluk_name = visit.village.taluk.name
+    elif visit.farmer_id and visit.farmer.taluk_id:
+        taluk_id = visit.farmer.taluk_id
+        taluk_name = visit.farmer.taluk.name
+
+    return {
+        "district_id": district_id,
+        "district_name": district_name,
+        "taluk_id": taluk_id,
+        "taluk_name": taluk_name,
+        "village_id": village_id,
+        "village_name": village_name,
     }
 
 
