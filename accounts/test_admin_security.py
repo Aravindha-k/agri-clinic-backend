@@ -19,8 +19,15 @@ class StrongPasswordPolicyTest(TestCase):
         with self.assertRaises(Exception):
             validate_strong_password("short")
 
+    def test_seven_char_rejected(self):
+        with self.assertRaises(Exception):
+            validate_strong_password("Ka@0003")
+
     def test_strong_password_accepted(self):
         validate_strong_password(STRONG_PASSWORD)
+
+    def test_eight_char_strong_password_accepted(self):
+        validate_strong_password("Kavi@000")
 
 
 @override_settings(

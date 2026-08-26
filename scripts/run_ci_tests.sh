@@ -17,6 +17,7 @@ python manage.py test \
   tracking.tests \
   mobile_api.tests \
   accounts.test_admin_security \
+  accounts.tests_password_policy \
   accounts.tests_location_assignments \
   farmers.tests \
   masters.tests.test_problem_master_list \

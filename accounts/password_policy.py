@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 
-MIN_PASSWORD_LENGTH = 10
+MIN_PASSWORD_LENGTH = 8
 
 _REQUIREMENTS = (
     (r"[a-z]", "at least one lowercase letter"),
@@ -52,6 +52,6 @@ class StrongPasswordValidator:
 
     def get_help_text(self):
         return _(
-            "Password must be at least 10 characters and include uppercase, "
+            "Password must be at least 8 characters and include uppercase, "
             "lowercase, a number, and a special character."
         )
