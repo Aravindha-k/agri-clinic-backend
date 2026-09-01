@@ -77,7 +77,11 @@ class MobileVisitDateFilterTest(APITestCase):
         ids = self._result_ids(
             self.client.get("/api/v1/mobile/visits/", {"date_filter": "month"})
         )
-        self.assertEqual(ids, {self.today_visit.id, self.week_visit.id})
+        month_start = timezone.localdate().replace(day=1)
+        expected = {self.today_visit.id}
+        if self.week_visit.visit_date >= month_start:
+            expected.add(self.week_visit.id)
+        self.assertEqual(ids, expected)
 
     def test_no_date_filter_returns_all(self):
         ids = self._result_ids(self.client.get("/api/v1/mobile/visits/"))
