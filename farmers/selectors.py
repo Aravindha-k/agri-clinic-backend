@@ -13,6 +13,10 @@ from django.contrib.auth.models import User
 from django.db.models import Count, QuerySet
 
 from masters.models import Farmer, FarmerField, FieldCrop
+from utils.prefix_search import (
+    FARMER_DIRECTORY_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +61,7 @@ def get_farmers(
         qs = qs.filter(created_by_employee_id=created_by_id)
 
     if search:
-        from django.db.models import Q
-
-        qs = qs.filter(
-            Q(name__icontains=search)
-            | Q(phone__icontains=search)
-            | Q(farmer_code__icontains=search)
-            | Q(village__name__icontains=search)
-        )
+        qs = filter_queryset_by_prefix_search(qs, search, FARMER_DIRECTORY_SEARCH_FIELDS)
 
     if include_visit_count:
         qs = qs.annotate(visit_count=Count("visits"))

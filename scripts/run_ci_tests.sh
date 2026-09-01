@@ -18,6 +18,8 @@ python manage.py test \
   mobile_api.tests \
   accounts.test_admin_security \
   accounts.tests_password_policy \
+  farmers.tests.test_prefix_search \
+  utils.tests.test_prefix_search \
   accounts.tests_location_assignments \
   farmers.tests \
   masters.tests.test_problem_master_list \

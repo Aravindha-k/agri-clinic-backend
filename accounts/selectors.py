@@ -14,6 +14,10 @@ from django.contrib.auth.models import User
 from django.db.models import QuerySet, Prefetch
 
 from .models import EmployeeProfile
+from utils.prefix_search import (
+    EMPLOYEE_PROFILE_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +81,7 @@ def get_all_employees(
         qs = qs.filter(district_id=district_id)
 
     if search:
-        qs = (
-            qs.filter(user__username__icontains=search)
-            | qs.filter(employee_id__icontains=search)
-            | qs.filter(phone__icontains=search)
-        )
+        qs = filter_queryset_by_prefix_search(qs, search, EMPLOYEE_PROFILE_SEARCH_FIELDS)
 
     return qs
 

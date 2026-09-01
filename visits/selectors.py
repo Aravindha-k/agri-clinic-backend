@@ -11,7 +11,10 @@ from datetime import date
 from typing import Optional
 
 from django.contrib.auth.models import User
-from django.db.models import Count, F, Q, QuerySet
+from utils.prefix_search import (
+    VISIT_SELECTOR_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+)
 
 from .models import Visit
 
@@ -61,12 +64,7 @@ def get_visits(
     if status:
         qs = qs.filter(status=status)
     if search:
-        qs = qs.filter(
-            Q(farmer_name__icontains=search)
-            | Q(farmer_phone__icontains=search)
-            | Q(notes__icontains=search)
-            | Q(village__name__icontains=search)
-        )
+        qs = filter_queryset_by_prefix_search(qs, search, VISIT_SELECTOR_SEARCH_FIELDS)
 
     return qs
 

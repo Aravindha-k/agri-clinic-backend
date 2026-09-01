@@ -125,7 +125,7 @@ class ReadOnlyViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
 
 class FarmerViewSet(AdminModelViewSet):
     serializer_class = AdminFarmerSerializer
-    search_fields = ["farmer_code", "name", "phone", "village__name", "district__name"]
+    search_fields = ["farmer_code", "name", "phone", "village__name", "district__name", "taluk__name"]
     filterset_fields = ["district", "village", "assigned_employee"]
     ordering_fields = ["created_at", "updated_at", "name", "farmer_code"]
     queryset = (
@@ -191,6 +191,7 @@ class VisitViewSet(
         "employee__username",
         "employee__first_name",
         "employee__last_name",
+        "employee__employee_profile__employee_id",
         "village__name",
         "crop__name_en",
         "crop__name_ta",
@@ -255,6 +256,7 @@ class CropIssueViewSet(AdminModelViewSet):
         "visit__farmer_name",
         "visit__farmer_phone",
         "visit__employee__username",
+        "visit__employee__employee_profile__employee_id",
         "crop__name_en",
         "crop__name_ta",
     ]

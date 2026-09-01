@@ -2,7 +2,11 @@ import logging
 
 from datetime import timedelta
 
-from django.db.models import Q
+from utils.prefix_search import (
+    VISIT_LIST_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+    normalize_search_term,
+)
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -82,19 +86,9 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
         if not is_privileged_user(request.user):
             qs = qs.filter(employee=request.user)
 
-        search = (request.query_params.get("search") or "").strip()
+        search = normalize_search_term(request.query_params.get("search"))
         if search:
-            qs = qs.filter(
-                Q(farmer_name__icontains=search)
-                | Q(farmer_phone__icontains=search)
-                | Q(farmer__name__icontains=search)
-                | Q(farmer__phone__icontains=search)
-                | Q(employee__username__icontains=search)
-                | Q(employee__first_name__icontains=search)
-                | Q(employee__last_name__icontains=search)
-                | Q(village__name__icontains=search)
-                | Q(crop__name_en__icontains=search)
-            )
+            qs = filter_queryset_by_prefix_search(qs, search, VISIT_LIST_SEARCH_FIELDS)
 
         paginator = VisitListPagination()
         page = paginator.paginate_queryset(qs, request)

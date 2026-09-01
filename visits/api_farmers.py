@@ -3,8 +3,9 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max
 from visits.models import Visit
+from utils.prefix_search import filter_queryset_by_prefix_search, normalize_search_term
 from utils.schema import PAGINATION_PARAMS, SEARCH_PARAM, SIMPLE_SUCCESS
 
 
@@ -24,7 +25,6 @@ class FarmerSummaryPagination(PageNumberPagination):
 class FarmerSummaryAPI(APIView):
     @extend_schema(operation_id="v1_visits_farmer_list")
     def get(self, request):
-        search = request.GET.get("search")
         qs = (
             Visit.objects.values(
                 "farmer_phone",
@@ -34,9 +34,12 @@ class FarmerSummaryAPI(APIView):
             .annotate(total_visits=Count("id"), last_visit_date=Max("visit_date"))
             .order_by("-last_visit_date")
         )
+        search = normalize_search_term(request.GET.get("search"))
         if search:
-            qs = qs.filter(
-                Q(farmer_name__icontains=search) | Q(farmer_phone__icontains=search)
+            qs = filter_queryset_by_prefix_search(
+                qs,
+                search,
+                ("farmer_name", "farmer_phone"),
             )
         paginator = FarmerSummaryPagination()
         page = paginator.paginate_queryset(qs, request)

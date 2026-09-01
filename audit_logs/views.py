@@ -7,6 +7,7 @@ from drf_spectacular.types import OpenApiTypes
 
 from utils.pagination import StandardPagination
 from utils.permissions import IsSuperuserOnly
+from utils.prefix_search import normalize_search_term
 from utils.response import success_response
 from utils.schema import PAGINATION_PARAMS, paginated_response_schema
 
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
         OpenApiParameter(
             "actor",
             OpenApiTypes.STR,
-            description="Filter by actor username (substring match).",
+            description="Filter by actor username (prefix match).",
         ),
         OpenApiParameter(
             "entity_id",
@@ -84,9 +85,9 @@ class AuditLogListAPI(APIView):
         if action:
             qs = qs.filter(action=action)
 
-        actor = request.query_params.get("actor", "").strip()
+        actor = normalize_search_term(request.query_params.get("actor"))
         if actor:
-            qs = qs.filter(actor__username__icontains=actor)
+            qs = qs.filter(actor__username__istartswith=actor)
 
         entity_id = request.query_params.get("entity_id", "").strip()
         if entity_id:

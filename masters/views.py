@@ -22,6 +22,7 @@ from .serializers import (
     ProblemCategorySerializer,
     FarmerSerializer,
 )
+from utils.filters import PrefixSearchFilter
 from rest_framework import viewsets, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -73,7 +74,7 @@ class MasterPagination(PageNumberPagination):
 class BaseMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminWriteEmployeeReadOnly]
     pagination_class = MasterPagination
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter] + (
+    filter_backends = [PrefixSearchFilter, filters.OrderingFilter] + (
         [DjangoFilterBackend] if HAS_DJANGO_FILTER else []
     )
     search_fields = ["name_en", "name_ta"]

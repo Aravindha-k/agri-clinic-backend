@@ -14,7 +14,13 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from mobile_api.device_session import DeviceSessionRequiredMixin
+from utils.prefix_search import (
+    CROP_SEARCH_FIELDS,
+    FARMER_DIRECTORY_SEARCH_FIELDS,
+    FARMER_VISIT_LIST_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+    normalize_search_term,
+)
 from utils.response import (
     success_response,
     error_response,
@@ -45,6 +51,7 @@ from visits.farmer_visit_summary import (
 )
 from visits.submitted import submitted_visits_qs
 from visits.access import get_visit_for_user, is_privileged_user
+from mobile_api.device_session import DeviceSessionRequiredMixin
 from visits.serializers import (
     VisitMediaSerializer,
     VisitSerializer as BaseVisitSerializer,
@@ -170,16 +177,13 @@ class FarmerListCreateAPI(DeviceSessionRequiredMixin, APIView):
 
     def get(self, request):
         farmers = _farmers_queryset_with_visit_counts(request.user).order_by("name")
-        search = (request.query_params.get("search") or "").strip()
-        village = (request.query_params.get("village") or "").strip()
+        search = normalize_search_term(request.query_params.get("search"))
+        village = normalize_search_term(request.query_params.get("village"))
         if village:
-            farmers = farmers.filter(village__name__icontains=village)
+            farmers = farmers.filter(village__name__istartswith=village)
         if search:
-            farmers = farmers.filter(
-                Q(name__icontains=search)
-                | Q(phone__icontains=search)
-                | Q(farmer_code__icontains=search)
-                | Q(village__name__icontains=search)
+            farmers = filter_queryset_by_prefix_search(
+                farmers, search, FARMER_DIRECTORY_SEARCH_FIELDS
             )
         paginator = StandardPagination()
         page = paginator.paginate_queryset(farmers, request)
@@ -521,15 +525,10 @@ class VisitListCreateAPI(DeviceSessionRequiredMixin, APIView):
         params = request.query_params
 
         # Text search across farmer, village, field, employee, crop
-        search = params.get("search", "").strip()
+        search = normalize_search_term(params.get("search"))
         if search:
-            qs = qs.filter(
-                Q(farmer__name__icontains=search)
-                | Q(farmer_name__icontains=search)
-                | Q(farmer__village__name__icontains=search)
-                | Q(field__land_name__icontains=search)
-                | Q(employee__username__icontains=search)
-                | Q(crop__name_en__icontains=search)
+            qs = filter_queryset_by_prefix_search(
+                qs, search, FARMER_VISIT_LIST_SEARCH_FIELDS
             )
 
         # Date range
@@ -876,13 +875,9 @@ class CropMasterListCreateAPI(APIView):
     def get(self, request):
         qs = Crop.objects.filter(is_active=True).order_by("name_en")
 
-        search = request.query_params.get("search", "").strip()
+        search = normalize_search_term(request.query_params.get("search"))
         if search:
-            qs = qs.filter(
-                Q(name_en__icontains=search)
-                | Q(name_ta__icontains=search)
-                | Q(scientific_name__icontains=search)
-            )
+            qs = filter_queryset_by_prefix_search(qs, search, CROP_SEARCH_FIELDS)
 
         category = request.query_params.get("crop_category")
         if category:

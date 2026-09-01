@@ -1,6 +1,10 @@
 import logging
 
-from django.db.models import Q
+from utils.prefix_search import (
+    FARMER_DIRECTORY_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+    normalize_search_term,
+)
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
@@ -34,13 +38,10 @@ class MobileFarmerListAPI(MobileEmployeeAPIView):
 
     def get(self, request):
         farmers = _farmers_queryset_with_visit_counts(request.user).order_by("name")
-        search = (request.query_params.get("search") or "").strip()
+        search = normalize_search_term(request.query_params.get("search"))
         if search:
-            farmers = farmers.filter(
-                Q(name__icontains=search)
-                | Q(phone__icontains=search)
-                | Q(farmer_code__icontains=search)
-                | Q(village__name__icontains=search)
+            farmers = filter_queryset_by_prefix_search(
+                farmers, search, FARMER_DIRECTORY_SEARCH_FIELDS
             )
         paginator = StandardPagination()
         page = paginator.paginate_queryset(farmers, request)

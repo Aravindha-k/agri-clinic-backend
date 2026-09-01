@@ -7,6 +7,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
+from utils.prefix_search import (
+    PROBLEM_ITEM_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+    normalize_search_term,
+)
 from masters.models import Crop, ProblemMaster
 from masters.problem_item_import import import_problem_items_from_excel
 from masters.problem_item_serializers import ProblemItemSerializer
@@ -56,9 +61,9 @@ def _problem_item_queryset(request):
         else:
             qs = crop_filtered
 
-    search = (request.query_params.get("search") or "").strip()
+    search = normalize_search_term(request.query_params.get("search"))
     if search:
-        qs = qs.filter(name__icontains=search) | qs.filter(tamil_name__icontains=search)
+        qs = filter_queryset_by_prefix_search(qs, search, PROBLEM_ITEM_SEARCH_FIELDS)
 
     is_active = request.query_params.get("is_active")
     if is_active is not None and is_active != "":
@@ -145,9 +150,9 @@ class ProblemItemViewSet(ModelViewSet):
         crop_id = self.request.query_params.get("crop_id")
         if crop_id:
             qs = qs.filter(models_Q_crop_filter(crop_id))
-        search = (self.request.query_params.get("search") or "").strip()
+        search = normalize_search_term(self.request.query_params.get("search"))
         if search:
-            qs = qs.filter(name__icontains=search) | qs.filter(tamil_name__icontains=search)
+            qs = filter_queryset_by_prefix_search(qs, search, PROBLEM_ITEM_SEARCH_FIELDS)
         is_active = self.request.query_params.get("is_active")
         if is_active is not None and is_active != "":
             qs = qs.filter(is_active=is_active.lower() in {"true", "1", "yes"})

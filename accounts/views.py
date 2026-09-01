@@ -8,6 +8,11 @@ from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, FormParser
 from utils.response import success_response, error_response
 from utils.permissions import IsStaffAdmin, IsSuperuserOnly
+from utils.prefix_search import (
+    EMPLOYEE_PROFILE_SEARCH_FIELDS,
+    filter_queryset_by_prefix_search,
+    normalize_search_term,
+)
 from rest_framework import status
 
 from .admin_guards import assert_can_mutate_employee_account
@@ -510,22 +515,16 @@ class EmployeeListAPI(APIView):
     permission_classes = [IsStaffAdmin]
 
     def get(self, request):
-        from django.db.models import Q
         from utils.pagination import StandardPagination
 
         qs = EmployeeProfile.objects.select_related(
             "user", "district", "village"
         ).order_by("employee_id")
 
-        # Search: name (first/last/username), phone
-        search = request.query_params.get("search", "").strip()
+        search = normalize_search_term(request.query_params.get("search"))
         if search:
-            qs = qs.filter(
-                Q(user__first_name__icontains=search)
-                | Q(user__last_name__icontains=search)
-                | Q(user__username__icontains=search)
-                | Q(phone__icontains=search)
-                | Q(employee_id__icontains=search)
+            qs = filter_queryset_by_prefix_search(
+                qs, search, EMPLOYEE_PROFILE_SEARCH_FIELDS
             )
 
         # Filter: is_active
@@ -810,14 +809,10 @@ class AdminEmployeeManagementAPI(APIView):
         ).order_by("employee_id")
 
         # Search
-        search = request.query_params.get("search", "").strip()
+        search = normalize_search_term(request.query_params.get("search"))
         if search:
-            from django.db.models import Q
-
-            qs = qs.filter(
-                Q(employee_id__icontains=search)
-                | Q(user__username__icontains=search)
-                | Q(phone__icontains=search)
+            qs = filter_queryset_by_prefix_search(
+                qs, search, EMPLOYEE_PROFILE_SEARCH_FIELDS
             )
 
         # Filters

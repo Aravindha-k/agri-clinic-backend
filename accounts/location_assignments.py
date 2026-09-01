@@ -17,6 +17,11 @@ from rest_framework import serializers
 
 from accounts.models import EmployeeLocationAssignment, EmployeeProfile
 from masters.models import District, Taluk, Village
+from utils.prefix_search import (
+    EMPLOYEE_PROFILE_SEARCH_FIELDS,
+    prefix_search_q,
+    normalize_search_term,
+)
 
 
 class LocationAssignmentValidationError(serializers.ValidationError):
@@ -422,10 +427,9 @@ def filter_employees_for_assignment_list(
             location_assignments__is_active=True,
         )
     if search:
-        qs = qs.filter(
-            Q(employee_id__icontains=search)
-            | Q(user__username__icontains=search)
-            | Q(user__first_name__icontains=search)
-            | Q(user__last_name__icontains=search)
-        )
+        normalized = normalize_search_term(search)
+        if normalized:
+            qs = qs.filter(
+                prefix_search_q(EMPLOYEE_PROFILE_SEARCH_FIELDS, normalized)
+            )
     return qs.distinct()
