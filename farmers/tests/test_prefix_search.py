@@ -191,7 +191,10 @@ class ProblemItemPrefixSearchTests(TestCase):
             password="x",
             is_staff=True,
         )
-        self.category = ProblemCategory.objects.create(name="Pest", code="pest")
+        self.category, _ = ProblemCategory.objects.get_or_create(
+            code="pest",
+            defaults={"name": "Pest"},
+        )
         self.crop = Crop.objects.create(name_en="Tomato", name_ta="தக்காளி")
         self.item = ProblemMaster.objects.create(
             category=self.category,
