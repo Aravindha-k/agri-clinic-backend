@@ -5,7 +5,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
 from masters.models import Crop, District, Farmer, Village
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.field_notes import NOT_ADDED_BY_EMPLOYEE
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
@@ -28,6 +28,8 @@ class VisitFieldNotesFlowTest(APITestCase):
         )
         district = District.objects.create(name="Notes District")
         village = Village.objects.create(name="Notes Village", district=district)
+        assign_operational_territory(self.employee, village)
+        self.village = village
         self.farmer = Farmer.objects.create(
             name="Notes Farmer",
             phone="9888777001",
@@ -45,6 +47,7 @@ class VisitFieldNotesFlowTest(APITestCase):
         payload = {
             "farmer": self.farmer.id,
             "crop": self.crop.id,
+            "village": self.village.id,
             "latitude": 12.9716,
             "longitude": 77.5946,
             "field_notes": "Leaf curl on lower branches.",

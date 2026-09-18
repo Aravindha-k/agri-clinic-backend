@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase, APIClient
 
 from accounts.models import EmployeeProfile
 from masters.models import Crop, District, Farmer, ProblemCategory, ProblemMaster, Village
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
 
@@ -29,6 +29,7 @@ class VisitReleaseBlockerTest(APITestCase):
         )
         district = District.objects.create(name="Blocker District")
         self.village = Village.objects.create(name="Blocker Village", district=district)
+        assign_operational_territory(self.employee, self.village)
         self.farmer = Farmer.objects.create(
             name="Blocker Farmer",
             phone="9888777666",

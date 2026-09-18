@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile
 from masters.models import Crop, District, Farmer, ProblemCategory, ProblemMaster, Village
-from mobile_api.tests.helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.models import Visit
 from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE
 
@@ -25,6 +25,7 @@ class MobileAPIAuditTest(TestCase):
 
         district = District.objects.create(name="Audit D")
         village = Village.objects.create(name="Audit V", district=district)
+        assign_operational_territory(self.employee, village)
         self.farmer = Farmer.objects.create(
             name="Audit Farmer",
             phone="9777666555",

@@ -41,6 +41,10 @@ class EmployeeProfile(models.Model):
         null=True,
         blank=True,
         related_name="employees",
+        help_text=(
+            "DEPRECATED. Not used for operational territory. "
+            "Use EmployeeLocationAssignment village rows."
+        ),
     )
 
     village = models.ForeignKey(
@@ -49,6 +53,10 @@ class EmployeeProfile(models.Model):
         null=True,
         blank=True,
         related_name="employees",
+        help_text=(
+            "DEPRECATED. Not used for operational territory. "
+            "Use EmployeeLocationAssignment village rows."
+        ),
     )
 
     is_active_employee = models.BooleanField(default=True)
@@ -161,15 +169,13 @@ class AdminSession(models.Model):
 
 class EmployeeLocationAssignment(models.Model):
     """
-    Administrative reference metadata only. Must not be used for authorization
-    or operational scoping (farmer visibility, visits, tracking, auth, etc.).
+    Operational employee territory. Source of truth is village-level rows.
 
-    Links a field employee to District / Taluk / Village master rows for
-    Admin-maintained territory reference. One row represents one assignment
-    granularity level:
-      - district-only: taluk=NULL, village=NULL
-      - taluk-level:   village=NULL
-      - village-level: all three set
+    New writes persist one row per assigned village. District and taluk on
+    the row are denormalized copies of Village → Taluk → District.
+
+    Incomplete rows (no village, or village without a live Taluk/District)
+    may remain with is_operational=False and must not grant territory.
     """
 
     employee = models.ForeignKey(
@@ -197,6 +203,14 @@ class EmployeeLocationAssignment(models.Model):
         related_name="employee_location_assignments",
     )
     is_active = models.BooleanField(default=True, db_index=True)
+    is_operational = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text=(
+            "True only for village-level rows with a valid District→Taluk→Village "
+            "hierarchy. Legacy district-only/taluk-only rows are False."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
@@ -218,6 +232,10 @@ class EmployeeLocationAssignment(models.Model):
         ordering = ["employee", "district", "taluk", "village"]
         indexes = [
             models.Index(fields=["employee", "is_active"]),
+            models.Index(
+                fields=["employee", "is_operational", "is_active"],
+                name="accounts_em_employe_op_idx",
+            ),
             models.Index(fields=["district", "is_active"]),
             models.Index(fields=["taluk", "is_active"]),
             models.Index(fields=["village", "is_active"]),
@@ -227,6 +245,11 @@ class EmployeeLocationAssignment(models.Model):
                 fields=["employee", "district", "taluk", "village"],
                 name="uniq_employee_location_assignment",
                 nulls_distinct=False,
+            ),
+            models.UniqueConstraint(
+                fields=["employee", "village"],
+                condition=models.Q(is_operational=True, village__isnull=False),
+                name="uniq_employee_operational_village",
             ),
         ]
 

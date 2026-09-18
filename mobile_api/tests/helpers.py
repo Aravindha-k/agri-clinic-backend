@@ -1,5 +1,6 @@
 """Helpers for mobile API tests that call employee endpoints."""
 
+from mobile_api.test_helpers import assign_operational_territory  # noqa: F401
 from rest_framework.test import APIClient
 
 

@@ -55,6 +55,11 @@ urlpatterns = [
         name="mobile-farmer-detail",
     ),
     path(
+        "territory/",
+        views.MobileTerritoryAPI.as_view(),
+        name="mobile-territory",
+    ),
+    path(
         "farmers/<int:pk>/photo/",
         views.MobileFarmerPhotoAPI.as_view(),
         name="mobile-farmer-photo",

@@ -40,6 +40,7 @@ _WRITE_POP_KEYS = (
     "employee",
     "_resolved_problem_items",
     "problem_item_ids",
+    "taluk",
 )
 
 

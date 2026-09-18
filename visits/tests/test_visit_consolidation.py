@@ -20,7 +20,7 @@ from masters.models import (
     ProblemMaster,
     Village,
 )
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from utils.concurrency_test_helpers import run_concurrent_workers
 from tracking.models import DutySession, EmployeeRoutePoint
 from visits.models import Visit, VisitMedia
@@ -61,6 +61,8 @@ class VisitConsolidationBase(TestCase):
         )
         self.district = District.objects.create(name="P5 District")
         self.village = Village.objects.create(name="P5 Village", district=self.district)
+        assign_operational_territory(self.employee, self.village)
+        assign_operational_territory(self.other, self.village)
         self.farmer = Farmer.objects.create(
             name="P5 Farmer",
             phone="9888000111",
@@ -384,6 +386,7 @@ class ConcurrentVisitReplayTests(TransactionTestCase):
         )
         district = District.objects.create(name="P5 Race D")
         self.village = Village.objects.create(name="P5 Race V", district=district)
+        assign_operational_territory(self.employee, self.village)
         self.farmer = Farmer.objects.create(
             name="Race Farmer",
             phone="9777000111",

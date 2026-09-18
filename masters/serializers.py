@@ -63,6 +63,27 @@ class VillageSerializer(serializers.ModelSerializer):
             "is_active",
         ]
         read_only_fields = ("created_at", "updated_at")
+        extra_kwargs = {
+            "district": {"required": False},
+            "taluk": {"required": False},
+        }
+
+    def validate(self, attrs):
+        taluk = attrs.get("taluk")
+        if taluk is None and self.instance is not None:
+            taluk = self.instance.taluk
+        if self.instance is None and taluk is None:
+            raise serializers.ValidationError(
+                {"taluk": "Taluk is required for a new village."}
+            )
+        if taluk is not None:
+            if not taluk.district_id:
+                raise serializers.ValidationError(
+                    {"taluk": "Taluk must belong to a district."}
+                )
+            attrs["taluk"] = taluk
+            attrs["district"] = taluk.district
+        return attrs
 
 
 class VillageLightweightSerializer(serializers.ModelSerializer):
@@ -99,6 +120,81 @@ def location_fields_changed(attrs, instance) -> bool:
         if _location_pk(attrs[key]) != _location_pk(getattr(instance, key, None)):
             return True
     return False
+
+
+def bind_farmer_location_from_village(
+    attrs, instance=None, *, require_village=False
+):
+    """
+    Derive Farmer.district / Farmer.taluk from Village.
+
+    Client-supplied district/taluk are ignored when a village is present.
+    Villages without an active Taluk/District cannot be newly assigned.
+    """
+    village = attrs.get("village", getattr(instance, "village", None) if instance else None)
+    if village is not None and not isinstance(village, Village):
+        village = (
+            Village.objects.filter(pk=getattr(village, "pk", village))
+            .select_related("taluk", "taluk__district")
+            .first()
+        )
+        attrs["village"] = village
+    elif isinstance(village, Village) and village.taluk_id and getattr(village, "taluk", None) is None:
+        village = (
+            Village.objects.filter(pk=village.pk)
+            .select_related("taluk", "taluk__district")
+            .first()
+        )
+        attrs["village"] = village
+
+    if require_village and not village:
+        raise serializers.ValidationError({"village": "Village is required."})
+    if village is None:
+        return attrs
+
+    assigning_village = "village" in attrs and attrs["village"] is not None
+    if assigning_village and not village.is_active:
+        raise serializers.ValidationError(
+            {"village": "Inactive village cannot be newly assigned."}
+        )
+    if not village.taluk_id:
+        raise serializers.ValidationError(
+            {"village": "Village does not belong to a taluk."}
+        )
+    taluk = village.taluk
+    if taluk is None:
+        taluk = (
+            Taluk.objects.select_related("district").filter(pk=village.taluk_id).first()
+        )
+    if not taluk or not taluk.is_active:
+        raise serializers.ValidationError(
+            {"village": "Village does not belong to an active taluk."}
+        )
+    district = taluk.district
+    if not district or not district.is_active:
+        raise serializers.ValidationError(
+            {"village": "Village does not belong to an active district."}
+        )
+    attrs["village"] = village
+    attrs["taluk"] = taluk
+    attrs["district"] = district
+    return attrs
+
+
+def _enforce_employee_farmer_village(attrs, request, instance=None):
+    from accounts.territory import (
+        assert_village_in_employee_territory,
+        user_requires_territory_scope,
+    )
+
+    user = getattr(request, "user", None) if request is not None else None
+    if not user_requires_territory_scope(user):
+        return attrs
+    village = attrs.get("village")
+    if village is None and instance is not None:
+        village = instance.village
+    assert_village_in_employee_territory(user, village)
+    return attrs
 
 
 def validate_farmer_location_hierarchy(attrs, instance=None, *, require_complete=False):
@@ -187,9 +283,19 @@ class FarmerSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        require_complete = location_fields_changed(attrs, self.instance)
-        return validate_farmer_location_hierarchy(
-            attrs, instance=self.instance, require_complete=require_complete
+        request = self.context.get("request")
+        from accounts.territory import user_requires_territory_scope
+
+        user = getattr(request, "user", None) if request else None
+        employee_scoped = user_requires_territory_scope(user)
+        if location_fields_changed(attrs, self.instance) or attrs.get("village") is not None:
+            attrs = bind_farmer_location_from_village(
+                attrs,
+                instance=self.instance,
+                require_village=employee_scoped,
+            )
+        return _enforce_employee_farmer_village(
+            attrs, request, instance=self.instance
         )
 
 

@@ -635,9 +635,9 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
             "soil_type",
         ]
         extra_kwargs = {
-            "district": {"required": True, "allow_null": False},
-            "taluk": {"required": True, "allow_null": False},
-            "village": {"required": True, "allow_null": False},
+            "district": {"required": False, "allow_null": True},
+            "taluk": {"required": False, "allow_null": True},
+            "village": {"required": False, "allow_null": True},
         }
 
     def validate_gps_location(self, value):
@@ -659,11 +659,19 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
         return phone
 
     def validate(self, attrs):
-        from masters.serializers import validate_farmer_location_hierarchy
-
-        return validate_farmer_location_hierarchy(
-            attrs, instance=self.instance, require_complete=True
+        from accounts.territory import user_requires_territory_scope
+        from masters.serializers import (
+            _enforce_employee_farmer_village,
+            bind_farmer_location_from_village,
         )
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        require_village = user_requires_territory_scope(user)
+        attrs = bind_farmer_location_from_village(
+            attrs, require_village=require_village
+        )
+        return _enforce_employee_farmer_village(attrs, request)
 
 
 class FarmerUpdateSerializer(serializers.ModelSerializer):
@@ -702,13 +710,17 @@ class FarmerUpdateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         from masters.serializers import (
+            _enforce_employee_farmer_village,
+            bind_farmer_location_from_village,
             location_fields_changed,
-            validate_farmer_location_hierarchy,
         )
 
-        require_complete = location_fields_changed(attrs, self.instance)
-        return validate_farmer_location_hierarchy(
-            attrs, instance=self.instance, require_complete=require_complete
+        if location_fields_changed(attrs, self.instance) or "village" in attrs:
+            attrs = bind_farmer_location_from_village(
+                attrs, instance=self.instance, require_village=True
+            )
+        return _enforce_employee_farmer_village(
+            attrs, self.context.get("request"), instance=self.instance
         )
 
 

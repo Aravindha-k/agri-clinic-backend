@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
@@ -30,6 +30,9 @@ class AdminVisitScopeTest(APITestCase):
 
         district = District.objects.create(name="Scope District")
         village = Village.objects.create(name="Scope Village", district=district)
+        assign_operational_territory(self.emp_a, village)
+        assign_operational_territory(self.emp_b, village)
+        self.village = village
         self.farmer = Farmer.objects.create(
             name="Scope Farmer",
             phone="9111222333",
@@ -42,6 +45,7 @@ class AdminVisitScopeTest(APITestCase):
         return {
             "farmer": self.farmer.id,
             "crop": self.crop.id,
+            "village": self.village.id,
             "latitude": 12.97,
             "longitude": 77.59,
         }

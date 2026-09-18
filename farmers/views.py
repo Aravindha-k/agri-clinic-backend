@@ -57,7 +57,7 @@ from visits.serializers import (
     VisitSerializer as BaseVisitSerializer,
 )
 
-from .helpers import farmers_directory_queryset
+from .helpers import farmers_queryset_for_user
 from .permissions import IsAdminOnly
 from .services import invalidate_farmers_list_cache
 from .serializers import (
@@ -134,8 +134,8 @@ def _scoped_visits_for_user(user):
 
 
 def _farmers_queryset_for_user(user):
-    """All farmer master records — independent of visits."""
-    return farmers_directory_queryset()
+    """Operational farmer directory for this user (territory-scoped for employees)."""
+    return farmers_queryset_for_user(user)
 
 
 def _get_scoped_farmer_or_404(user, **kwargs):
@@ -210,7 +210,9 @@ class FarmerListCreateAPI(DeviceSessionRequiredMixin, APIView):
         return paginator.get_paginated_response(data)
 
     def post(self, request):
-        serializer = FarmerCreateSerializer(data=request.data)
+        serializer = FarmerCreateSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         if request.user.is_staff:
             assigned = request.data.get("assigned_employee")
@@ -339,7 +341,9 @@ class FarmerDetailAPI(DeviceSessionRequiredMixin, APIView):
                 "You can only update farmers assigned to you, created by you, "
                 "or that you have visited."
             )
-        serializer = FarmerUpdateSerializer(farmer, data=request.data, partial=True)
+        serializer = FarmerUpdateSerializer(
+            farmer, data=request.data, partial=True, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         # Staff may reassign ownership; field employees may not.
         if request.user.is_staff and "assigned_employee" in request.data:

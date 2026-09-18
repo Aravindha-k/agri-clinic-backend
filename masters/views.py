@@ -120,15 +120,14 @@ class DistrictViewSet(BaseMasterViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .annotate(
-                taluk_count=Count("taluks", filter=Q(taluks__is_active=True), distinct=True),
-                village_count=Count(
-                    "villages", filter=Q(villages__is_active=True), distinct=True
-                ),
-            )
+        from accounts.territory import filter_districts_for_user
+
+        queryset = filter_districts_for_user(super().get_queryset(), self.request.user)
+        return queryset.annotate(
+            taluk_count=Count("taluks", filter=Q(taluks__is_active=True), distinct=True),
+            village_count=Count(
+                "villages", filter=Q(villages__is_active=True), distinct=True
+            ),
         )
 
 
@@ -141,7 +140,9 @@ class TalukViewSet(BaseMasterViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        from accounts.territory import filter_taluks_for_user
+
+        queryset = filter_taluks_for_user(super().get_queryset(), self.request.user)
         district = self.request.query_params.get("district") or self.request.query_params.get(
             "district_id"
         )
@@ -168,7 +169,9 @@ class VillageViewSet(BaseMasterViewSet):
         return VillageSerializer
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        from accounts.territory import filter_villages_for_user
+
+        queryset = filter_villages_for_user(super().get_queryset(), self.request.user)
         district_id = self.request.query_params.get(
             "district_id"
         ) or self.request.query_params.get("district")
@@ -206,7 +209,9 @@ class FarmerViewSet(BaseMasterViewSet):
     )
 
     def get_queryset(self):
-        return self.queryset.order_by("name")
+        from accounts.territory import filter_farmers_for_user
+
+        return filter_farmers_for_user(self.queryset, self.request.user).order_by("name")
 
     def perform_create(self, serializer):
         serializer.save(created_by_employee=self.request.user)

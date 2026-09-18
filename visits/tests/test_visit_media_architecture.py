@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile
 from masters.models import Crop, District, Farmer, ProblemCategory, ProblemMaster, Village
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.media_response import build_absolute_media_url, serialize_visit_media
 from visits.media_validation import (
     CODE_UNSUPPORTED_MEDIA_TYPE,
@@ -83,6 +83,8 @@ class VisitMediaArchitectureTests(TestCase):
         self.village = Village.objects.create(
             name="Media Village", district=self.district
         )
+        assign_operational_territory(self.employee, self.village)
+        assign_operational_territory(self.other, self.village)
         self.farmer = Farmer.objects.create(
             name="Media Farmer",
             phone="9888111222",
@@ -107,6 +109,7 @@ class VisitMediaArchitectureTests(TestCase):
         data = {
             "farmer_id": self.farmer.id,
             "crop_id": self.crop.id,
+            "village_id": self.village.id,
             "problem_category_id": self.category.id,
             "problem_master_id": self.problem.id,
             "problem_description": "Leaf damage",

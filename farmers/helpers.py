@@ -45,10 +45,23 @@ def e2e_test_farmer_filter():
 
 
 def farmers_directory_queryset():
-    """All farmer master records (not filtered by visits or is_active)."""
+    """Unscoped farmer master records (audit / admin-wide). Not territory-filtered."""
     from masters.models import Farmer
 
     return Farmer.objects.all()
+
+
+def farmers_queryset_for_user(user):
+    """
+    Operational farmer directory for the requesting user.
+
+    Field employees: active farmers in assigned villages (fail-closed).
+    Staff/admin: all farmer rows including inactive.
+    """
+    from masters.models import Farmer
+    from accounts.territory import filter_farmers_for_user
+
+    return filter_farmers_for_user(Farmer.objects.all(), user)
 
 
 def active_farmers_queryset():

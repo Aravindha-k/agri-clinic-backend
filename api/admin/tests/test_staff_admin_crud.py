@@ -17,6 +17,7 @@ from masters.models import (
     FarmerField,
     ProblemCategory,
     Recommendation,
+    Taluk,
     Village,
 )
 from visits.models import Visit
@@ -96,8 +97,9 @@ class StaffAdminCrudRegressionTests(TestCase):
         self.anon = APIClient()
 
         self.district = District.objects.create(name="Admin CRUD District")
+        self.taluk = Taluk.objects.create(name="Admin CRUD Taluk", district=self.district)
         self.village = Village.objects.create(
-            name="Admin CRUD Village", district=self.district
+            name="Admin CRUD Village", district=self.district, taluk=self.taluk
         )
         self.crop = Crop.objects.create(
             name_en="Paddy", name_ta="Paddy", is_active=True
@@ -380,9 +382,21 @@ class StaffAdminCrudRegressionTests(TestCase):
             # Some masters endpoints wrap payloads.
             dist_id = District.objects.get(name="Staff District").id
 
+        taluk_create = self.admin_client.post(
+            "/api/v1/masters/taluks/",
+            {"name": "Staff Taluk", "district": dist_id},
+            format="json",
+        )
+        self.assertEqual(taluk_create.status_code, status.HTTP_201_CREATED)
+        taluk_id = taluk_create.data.get("id") or taluk_create.data.get("data", {}).get("id")
+        if taluk_id is None:
+            from masters.models import Taluk
+
+            taluk_id = Taluk.objects.get(name="Staff Taluk").id
+
         village_create = self.admin_client.post(
             "/api/v1/masters/villages/",
-            {"name": "Staff Village", "district": dist_id},
+            {"name": "Staff Village", "taluk": taluk_id},
             format="json",
         )
         self.assertEqual(village_create.status_code, status.HTTP_201_CREATED)

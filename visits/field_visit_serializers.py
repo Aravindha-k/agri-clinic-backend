@@ -147,6 +147,14 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
         if isinstance(create_flag, str):
             create_flag = create_flag.strip().lower() not in {"false", "0", "no"}
         employee = getattr(request, "user", None) if request else None
+        from accounts.territory import user_requires_territory_scope
+
+        if user_requires_territory_scope(employee):
+            village = data.get("village")
+            if village is None:
+                raise serializers.ValidationError(
+                    {"village": "Village is required."}
+                )
         resolve_farmer_for_visit(
             data, employee=employee, create_if_missing=bool(create_flag)
         )

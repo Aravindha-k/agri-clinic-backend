@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import EmployeeProfile
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.models import Visit
 from visits.submitted import SUBMIT_VISIT_REQUIRED_MESSAGE, visit_has_submitted_details
@@ -28,6 +28,8 @@ class VisitSubmitOnlyCreationTest(TestCase):
         )
         district = District.objects.create(name="Submit District")
         village = Village.objects.create(name="Submit Village", district=district)
+        self.village = village
+        assign_operational_territory(self.employee, village)
         self.farmer = Farmer.objects.create(
             name="Submit Farmer",
             phone="9888777666",
@@ -38,6 +40,7 @@ class VisitSubmitOnlyCreationTest(TestCase):
         self.complete_payload = {
             "farmer": self.farmer.id,
             "crop": self.crop.id,
+            "village": self.village.id,
             "latitude": 12.9716,
             "longitude": 77.5946,
         }

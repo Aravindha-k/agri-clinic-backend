@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
-
 from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework import status
@@ -12,7 +9,6 @@ from rest_framework.test import APIClient
 
 from accounts.employee_access import set_field_employee_active
 from accounts.models import EmployeeLocationAssignment, EmployeeProfile
-from farmers.helpers import farmers_directory_queryset
 from masters.models import District, Taluk, Village
 
 STRONG = "SecurePass1!"
@@ -179,16 +175,15 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
             4,
         )
 
-    def test_district_only_assignment(self):
+    def test_district_only_assignment_rejected(self):
         payload = {"assignments": [{"district_id": self.d1.id, "village_ids": []}]}
         resp = self.admin_client.put(self.detail_url(), payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        row = EmployeeLocationAssignment.objects.get(employee=self.field_profile)
-        self.assertEqual(row.district_id, self.d1.id)
-        self.assertIsNone(row.taluk_id)
-        self.assertIsNone(row.village_id)
+        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(
+            EmployeeLocationAssignment.objects.filter(employee=self.field_profile).exists()
+        )
 
-    def test_taluk_level_assignment(self):
+    def test_taluk_level_assignment_rejected(self):
         payload = {
             "assignments": [
                 {
@@ -199,11 +194,10 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
             ]
         }
         resp = self.admin_client.put(self.detail_url(), payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        row = EmployeeLocationAssignment.objects.get(employee=self.field_profile)
-        self.assertEqual(row.district_id, self.d1.id)
-        self.assertEqual(row.taluk_id, self.t_gingee.id)
-        self.assertIsNone(row.village_id)
+        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(
+            EmployeeLocationAssignment.objects.filter(employee=self.field_profile).exists()
+        )
 
     def test_removing_district_drops_child_taluk_and_village(self):
         first = {
@@ -511,72 +505,35 @@ class EmployeeLocationAssignmentEmployeeLifecycleTests(
         )
 
 
-class EmployeeLocationAssignmentReferenceOnlyTests(EmployeeLocationAssignmentFixtures):
-    OPERATIONAL_MODULES = (
-        "farmers.helpers",
-        "farmers.access",
-        "visits.access",
-        "tracking.services",
-        "tracking.duty_service",
-        "tracking.gps_service",
-        "mobile_api.auth",
-        "accounts.employee_access",
-        "reports.summary",
-    )
+class EmployeeLocationAssignmentOperationalTests(EmployeeLocationAssignmentFixtures):
+    def test_new_write_persists_village_level_operational_rows(self):
+        payload = {
+            "assignments": [
+                {
+                    "district_id": self.d1.id,
+                    "taluk_id": self.t_gingee.id,
+                    "village_ids": [self.v_a.id],
+                }
+            ]
+        }
+        resp = self.admin_client.put(self.detail_url(), payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        row = EmployeeLocationAssignment.objects.get(employee=self.field_profile)
+        self.assertTrue(row.is_operational)
+        self.assertEqual(row.village_id, self.v_a.id)
+        self.assertEqual(row.taluk_id, self.t_gingee.id)
+        self.assertEqual(row.district_id, self.d1.id)
 
-    def test_operational_modules_do_not_import_assignment_model(self):
-        for module_name in self.OPERATIONAL_MODULES:
-            module = importlib.import_module(module_name)
-            source_path = getattr(module, "__file__", "")
-            self.assertTrue(source_path)
-            with open(source_path, encoding="utf-8") as handle:
-                source = handle.read()
-            self.assertNotIn(
-                "EmployeeLocationAssignment",
-                source,
-                msg=f"{module_name} must not reference EmployeeLocationAssignment",
-            )
+    def test_farmer_directory_unscoped_audit_queryset_unchanged(self):
+        from farmers.helpers import farmers_directory_queryset
 
-    def test_farmer_directory_unaffected_after_assignment(self):
+        before = farmers_directory_queryset().count()
         EmployeeLocationAssignment.objects.create(
             employee=self.field_profile,
             district=self.d1,
             taluk=self.t_gingee,
             village=self.v_a,
+            is_operational=True,
         )
-        before = farmers_directory_queryset().count()
         after = farmers_directory_queryset().count()
         self.assertEqual(before, after)
-
-    def test_assignment_package_not_imported_by_operational_apps(self):
-        forbidden = (
-            "accounts.location_assignments",
-            "accounts.location_assignment_views",
-        )
-        import farmers
-        import mobile_api
-        import tracking
-        import visits
-
-        packages = (farmers, visits, tracking, mobile_api)
-        for pkg in packages:
-            for module_info in pkgutil.walk_packages(
-                pkg.__path__, prefix=pkg.__name__ + "."
-            ):
-                if module_info.name.endswith("tests") or ".tests" in module_info.name:
-                    continue
-                try:
-                    module = importlib.import_module(module_info.name)
-                except Exception:
-                    continue
-                source_path = getattr(module, "__file__", "") or ""
-                if not source_path.endswith(".py"):
-                    continue
-                with open(source_path, encoding="utf-8") as handle:
-                    source = handle.read()
-                for forbidden_module in forbidden:
-                    self.assertNotIn(
-                        forbidden_module,
-                        source,
-                        msg=f"{module_info.name} imports assignment reference module",
-                    )

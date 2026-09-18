@@ -537,3 +537,12 @@ class AdminFarmerSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("id", "farmer_code", "created_at", "updated_at", "profile_photo_url")
+
+    def validate(self, attrs):
+        from masters.serializers import bind_farmer_location_from_village
+
+        if attrs.get("village") is not None:
+            attrs = bind_farmer_location_from_village(
+                attrs, instance=self.instance, require_village=False
+            )
+        return attrs

@@ -9,8 +9,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import EmployeeProfile
-from masters.models import Farmer, FarmerField
-from mobile_api.test_helpers import login_mobile_client
+from masters.models import District, Farmer, FarmerField, Taluk, Village
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.models import Visit
 
 
@@ -88,9 +88,18 @@ class FarmerDetailMutationTests(TestCase):
         )
         self.anon = APIClient()
 
+        self.district = District.objects.create(name="Mutation District")
+        self.taluk = Taluk.objects.create(name="Mutation Taluk", district=self.district)
+        self.village = Village.objects.create(
+            name="Mutation Village", district=self.district, taluk=self.taluk
+        )
+        assign_operational_territory(self.employee, self.village)
         self.farmer = Farmer.objects.create(
             name="Mutation Farmer",
             phone="9222000001",
+            district=self.district,
+            taluk=self.taluk,
+            village=self.village,
             assigned_employee=self.employee,
             created_by_employee=self.employee,
         )

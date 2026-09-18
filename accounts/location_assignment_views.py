@@ -1,4 +1,4 @@
-"""Admin-only employee location assignment reference APIs."""
+"""Admin employee location assignment APIs (village-based operational territory)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from accounts.location_assignments import (
     field_employee_queryset,
     filter_employees_for_assignment_list,
     group_assignments_for_response,
+    legacy_incomplete_assignment_count,
     replace_employee_location_assignments,
 )
 from accounts.models import EmployeeProfile
@@ -59,8 +60,7 @@ class AdminEmployeeLocationAssignmentListAPI(APIView):
     """
     GET /api/v1/admin/employee-location-assignments/
 
-    Administrative reference metadata only. Must not be used for authorization
-    or operational scoping.
+    Operational village-level territory summaries for Admin.
     """
 
     permission_classes = [IsStaffAdmin]
@@ -134,6 +134,9 @@ class AdminEmployeeLocationAssignmentDetailAPI(APIView, AssignmentGroupSerialize
             data={
                 "employee": employee_summary_payload(employee),
                 "location_assignment_summary": assignment_summary_from_rows(rows),
+                "legacy_incomplete_count": legacy_incomplete_assignment_count(
+                    employee.id
+                ),
                 "assignments": group_assignments_for_response(rows),
             }
         )
@@ -170,6 +173,9 @@ class AdminEmployeeLocationAssignmentDetailAPI(APIView, AssignmentGroupSerialize
             data={
                 "employee": employee_summary_payload(employee),
                 "location_assignment_summary": assignment_summary_from_rows(rows),
+                "legacy_incomplete_count": legacy_incomplete_assignment_count(
+                    employee.id
+                ),
                 "assignments": group_assignments_for_response(rows),
             },
             message="Location assignments updated.",

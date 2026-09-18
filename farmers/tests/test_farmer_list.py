@@ -2,7 +2,9 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from masters.models import District, Farmer, Village
+from accounts.models import EmployeeProfile
+from masters.models import District, Farmer, Taluk, Village
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.models import Visit
 
 
@@ -15,27 +17,41 @@ class FarmerListAPITest(TestCase):
             is_superuser=True,
         )
         self.employee = User.objects.create_user(username="emp_farmer_list", password="x")
+        EmployeeProfile.objects.create(
+            user=self.employee,
+            employee_id="EMP-FLIST",
+            phone="9000000111",
+            is_active_employee=True,
+            can_login=True,
+        )
         self.client = APIClient()
 
         district = District.objects.create(name="Audit District")
-        village = Village.objects.create(name="Audit Village", district=district)
+        taluk = Taluk.objects.create(name="Audit Taluk", district=district)
+        village = Village.objects.create(
+            name="Audit Village", district=district, taluk=taluk
+        )
+        assign_operational_territory(self.employee, village)
 
         self.zero_visits = Farmer.objects.create(
             name="Zero Visits Farmer",
             phone="9111111111",
             district=district,
+            taluk=taluk,
             village=village,
         )
         self.with_visit = Farmer.objects.create(
             name="With Visit Farmer",
             phone="9222222222",
             district=district,
+            taluk=taluk,
             village=village,
         )
         self.admin_created = Farmer.objects.create(
             name="Admin Created Farmer",
             phone="9333333333",
             district=district,
+            taluk=taluk,
             village=village,
             is_active=False,
         )
@@ -58,11 +74,13 @@ class FarmerListAPITest(TestCase):
         self.assertIn(self.admin_created.id, ids)
         self.assertIn(self.zero_visits.id, ids)
 
-    def test_employee_sees_admin_created_farmer(self):
-        self.client.force_authenticate(user=self.employee)
-        response = self.client.get("/api/v1/farmers/", {"page_size": 100})
+    def test_employee_does_not_see_archived_farmer(self):
+        client = login_mobile_client(employee_id="EMP-FLIST")
+        response = client.get("/api/v1/farmers/", {"page_size": 100})
         ids = {row["id"] for row in response.data["results"]}
-        self.assertIn(self.admin_created.id, ids)
+        self.assertNotIn(self.admin_created.id, ids)
+        self.assertIn(self.zero_visits.id, ids)
+        self.assertIn(self.with_visit.id, ids)
 
     def test_list_fields_no_status_flags(self):
         self.client.force_authenticate(user=self.admin)
@@ -83,8 +101,8 @@ class FarmerListAPITest(TestCase):
     def test_update_rejects_duplicate_phone(self):
         self.zero_visits.assigned_employee = self.employee
         self.zero_visits.save(update_fields=["assigned_employee"])
-        self.client.force_authenticate(user=self.employee)
-        response = self.client.put(
+        client = login_mobile_client(employee_id="EMP-FLIST")
+        response = client.put(
             f"/api/v1/farmers/{self.zero_visits.id}/",
             {"phone": self.with_visit.phone},
             format="json",

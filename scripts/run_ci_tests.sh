@@ -21,6 +21,8 @@ python manage.py test \
   farmers.tests.test_prefix_search \
   utils.tests.test_prefix_search \
   accounts.tests_location_assignments \
+  accounts.tests_territory \
+  api.admin.tests.test_staff_admin_crud \
   farmers.tests \
   masters.tests.test_problem_master_list \
   masters.tests.test_problem_item_import \

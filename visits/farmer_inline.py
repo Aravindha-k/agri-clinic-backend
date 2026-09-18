@@ -24,12 +24,17 @@ def get_or_create_farmer_for_field_visit(
     if not phone_digits:
         raise ValueError("phone required")
 
-    existing = Farmer.objects.filter(phone=phone_digits).order_by("id").first()
+    existing = Farmer.objects.filter(phone=phone_digits, is_active=True).order_by("id").first()
     if existing:
         return existing, False
+    archived = Farmer.objects.filter(phone=phone_digits, is_active=False).exists()
+    if archived:
+        raise ValueError("archived farmer cannot be used for a new visit")
 
-    district = village.district if village.district_id else None
     taluk = village.taluk if village.taluk_id else None
+    district = taluk.district if taluk is not None else (
+        village.district if village.district_id else None
+    )
     farmer = Farmer(
         name=(name or "").strip() or "Farmer",
         phone=phone_digits,
@@ -46,6 +51,8 @@ def get_or_create_farmer_for_field_visit(
     except IntegrityError:
         existing = Farmer.objects.filter(phone=phone_digits).order_by("id").first()
         if existing:
+            if not existing.is_active:
+                raise ValueError("archived farmer cannot be used for a new visit")
             return existing, False
         raise
     return farmer, True

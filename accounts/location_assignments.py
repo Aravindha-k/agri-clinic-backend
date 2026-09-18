@@ -1,8 +1,9 @@
 """
 Employee location assignment service.
 
-Administrative reference metadata only. Must not be used for authorization
-or operational scoping.
+Operational territory is village-based. District/taluk on stored rows are
+copied from Village → Taluk → District. District-only and taluk-only
+payloads are rejected for new writes.
 """
 
 from __future__ import annotations
@@ -45,29 +46,46 @@ def field_employee_queryset() -> QuerySet[EmployeeProfile]:
 
 def assignment_rows_for_employee(employee_id: int) -> QuerySet[EmployeeLocationAssignment]:
     return (
-        EmployeeLocationAssignment.objects.filter(employee_id=employee_id, is_active=True)
+        EmployeeLocationAssignment.objects.filter(
+            employee_id=employee_id,
+            is_active=True,
+            is_operational=True,
+            village_id__isnull=False,
+        )
         .select_related("district", "taluk", "village", "employee__user")
         .order_by("district__name", "taluk__name", "village__name")
     )
 
 
+def legacy_incomplete_assignment_count(employee_id: int) -> int:
+    return EmployeeLocationAssignment.objects.filter(
+        employee_id=employee_id,
+        is_active=True,
+        is_operational=False,
+    ).count()
+
+
 def annotate_assignment_counts(qs: QuerySet[EmployeeProfile]) -> QuerySet[EmployeeProfile]:
-    """Attach district/taluk/village counts without loading all village rows."""
-    active = Q(location_assignments__is_active=True)
+    """Attach district/taluk/village counts from operational village-level rows."""
+    operational = Q(
+        location_assignments__is_active=True,
+        location_assignments__is_operational=True,
+        location_assignments__village__isnull=False,
+    )
     return qs.annotate(
         location_district_count=Count(
             "location_assignments__district",
-            filter=active,
+            filter=operational,
             distinct=True,
         ),
         location_taluk_count=Count(
             "location_assignments__taluk",
-            filter=active & Q(location_assignments__taluk__isnull=False),
+            filter=operational & Q(location_assignments__taluk__isnull=False),
             distinct=True,
         ),
         location_village_count=Count(
             "location_assignments__village",
-            filter=active & Q(location_assignments__village__isnull=False),
+            filter=operational,
             distinct=True,
         ),
     )
@@ -157,6 +175,8 @@ def assignment_previews_for_employees(
         EmployeeLocationAssignment.objects.filter(
             employee_id__in=employee_ids,
             is_active=True,
+            is_operational=True,
+            village_id__isnull=False,
         )
         .select_related("district", "taluk", "village")
         .order_by(
@@ -350,20 +370,24 @@ def expand_assignment_groups(
                         )
                     village_cache[village_id] = village
                 _validate_village(village, district, taluk)
-                key = (district.id, taluk.id, village.id)
+                # Persist village as source of truth; copy district/taluk from master.
+                key = (
+                    village.taluk.district_id,
+                    village.taluk_id,
+                    village.id,
+                )
                 if key not in seen:
                     seen.add(key)
                     rows.append(key)
-        elif taluk_id:
-            key = (district.id, taluk.id, None)
-            if key not in seen:
-                seen.add(key)
-                rows.append(key)
         else:
-            key = (district.id, None, None)
-            if key not in seen:
-                seen.add(key)
-                rows.append(key)
+            raise LocationAssignmentValidationError(
+                {
+                    f"{prefix}.village_ids": (
+                        "village_ids are required. District-only and taluk-only "
+                        "assignments are not operational."
+                    )
+                }
+            )
 
     return rows
 
@@ -382,7 +406,10 @@ def replace_employee_location_assignments(
     """
     expanded = expand_assignment_groups(assignment_groups)
 
-    EmployeeLocationAssignment.objects.filter(employee=employee).delete()
+    # Replace operational village rows only. Leave incomplete historical rows.
+    EmployeeLocationAssignment.objects.filter(
+        employee=employee, is_operational=True
+    ).delete()
 
     created: list[EmployeeLocationAssignment] = []
     for district_id, taluk_id, village_id in expanded:
@@ -393,6 +420,7 @@ def replace_employee_location_assignments(
                 taluk_id=taluk_id,
                 village_id=village_id,
                 is_active=True,
+                is_operational=True,
                 created_by=actor,
                 updated_by=actor,
             )
@@ -415,16 +443,21 @@ def filter_employees_for_assignment_list(
         qs = qs.filter(
             location_assignments__district_id=district_id,
             location_assignments__is_active=True,
+            location_assignments__is_operational=True,
+            location_assignments__village__isnull=False,
         )
     if taluk_id:
         qs = qs.filter(
             location_assignments__taluk_id=taluk_id,
             location_assignments__is_active=True,
+            location_assignments__is_operational=True,
+            location_assignments__village__isnull=False,
         )
     if village_id:
         qs = qs.filter(
             location_assignments__village_id=village_id,
             location_assignments__is_active=True,
+            location_assignments__is_operational=True,
         )
     if search:
         normalized = normalize_search_term(search)

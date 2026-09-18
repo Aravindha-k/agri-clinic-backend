@@ -16,3 +16,4 @@ from mobile_api.profile import MobileProfilePhotoAPI
 from farmers.photo_views import MobileFarmerPhotoAPI
 from .farmers import MobileFarmerListAPI, MobileFarmerDetailAPI
 from .map import MobileVisitMapAPI
+from .territory import MobileTerritoryAPI

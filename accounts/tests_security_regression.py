@@ -69,16 +69,31 @@ class SecurityAuthzRegressionTests(TestCase):
             {"name": "Hijacked"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn(
+            resp.status_code,
+            {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND},
+        )
         self.farmer_b.refresh_from_db()
         self.assertEqual(self.farmer_b.name, "Farmer B")
 
     def test_employee_cannot_reassign_farmer_via_mass_assignment(self):
+        from masters.models import District, Taluk, Village
+        from mobile_api.test_helpers import assign_operational_territory
+
+        district = District.objects.create(name="Sec District")
+        taluk = Taluk.objects.create(name="Sec Taluk", district=district)
+        village = Village.objects.create(
+            name="Sec Village", district=district, taluk=taluk
+        )
+        assign_operational_territory(self.emp_a, village)
         own = Farmer.objects.create(
             name="Farmer A",
             phone="9777777777",
             assigned_employee=self.emp_a,
             created_by_employee=self.emp_a,
+            district=district,
+            taluk=taluk,
+            village=village,
         )
         resp = self.client_a.put(
             f"/api/v1/farmers/{own.id}/",

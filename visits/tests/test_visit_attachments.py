@@ -3,7 +3,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from masters.models import Crop, District, Farmer, Village
 from visits.attachments import MAX_ATTACHMENT_BYTES
 from visits.models import Visit, VisitAttachment
@@ -31,6 +31,9 @@ class VisitAttachmentAPITest(APITestCase):
 
         district = District.objects.create(name="Att District")
         village = Village.objects.create(name="Att Village", district=district)
+        assign_operational_territory(self.employee_a, village)
+        assign_operational_territory(self.employee_b, village)
+        self.village = village
         self.farmer = Farmer.objects.create(
             name="Attachment Farmer",
             phone="9888777666",
@@ -47,6 +50,7 @@ class VisitAttachmentAPITest(APITestCase):
         payload = {
             "farmer": self.farmer.id,
             "crop": self.crop.id,
+            "village": self.village.id,
             "latitude": 12.97,
             "longitude": 77.59,
         }

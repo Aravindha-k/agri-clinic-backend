@@ -24,6 +24,7 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
 
     # Match order: existing FK → normalized phone → controlled create.
     # Never link by farmer name alone.
+    archived_phone = False
     if not farmer and phone:
         digits = "".join(ch for ch in phone if ch.isdigit())
         farmer = (
@@ -32,9 +33,13 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
             else None
         )
         if farmer is None and digits:
-            farmer = Farmer.objects.filter(phone=phone).order_by("id").first()
+            archived_phone = Farmer.objects.filter(
+                phone__in=[digits, phone], is_active=False
+            ).exists()
+            if not archived_phone:
+                farmer = Farmer.objects.filter(phone=phone, is_active=True).order_by("id").first()
 
-    if not farmer and phone:
+    if not farmer and phone and not archived_phone:
         digits = "".join(ch for ch in phone if ch.isdigit()) or phone
         farmer = Farmer.objects.create(
             name=name or "Unknown",

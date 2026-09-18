@@ -2,8 +2,8 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
-from mobile_api.test_helpers import login_mobile_client
-from masters.models import Crop, District, Farmer, Village
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
+from masters.models import Crop, District, Farmer, Taluk, Village
 from visits.models import Visit
 from visits.submitted import visit_has_submitted_details
 
@@ -25,13 +25,19 @@ class VisitFarmerAPIFlowTest(APITestCase):
         self.admin_client.force_authenticate(user=self.admin)
 
         district = District.objects.create(name="Flow District")
-        village = Village.objects.create(name="Flow Village", district=district)
+        taluk = Taluk.objects.create(name="Flow Taluk", district=district)
+        village = Village.objects.create(
+            name="Flow Village", district=district, taluk=taluk
+        )
+        self.village = village
+        assign_operational_territory(self.employee, village)
         self.admin_farmer = Farmer.objects.create(
             name="Admin Created Farmer",
             phone="9111000001",
             district=district,
+            taluk=taluk,
             village=village,
-            is_active=False,
+            is_active=True,
         )
         self.crop = Crop.objects.create(name_en="Rice", name_ta="Rice", is_active=True)
 
@@ -39,11 +45,12 @@ class VisitFarmerAPIFlowTest(APITestCase):
         return {
             "farmer": farmer_id,
             "crop": self.crop.id,
+            "village": self.village.id,
             "latitude": 12.97,
             "longitude": 77.59,
         }
 
-    def test_farmers_list_shows_all_including_admin_created(self):
+    def test_farmers_list_shows_active_territory_farmers(self):
         r = self.emp_client.get("/api/v1/farmers/", {"page_size": 100})
         self.assertEqual(r.status_code, 200)
         ids = {row["id"] for row in r.data["results"]}

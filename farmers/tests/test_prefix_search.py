@@ -16,6 +16,7 @@ from masters.models import (
     Taluk,
     Village,
 )
+from mobile_api.test_helpers import assign_operational_territory
 
 
 class PrefixSearchTestMixin:
@@ -87,6 +88,7 @@ class FarmerDirectoryPrefixSearchTests(PrefixSearchTestMixin, TestCase):
             district=self.district,
             taluk=self.taluk,
         )
+        assign_operational_territory(self.employee_user, self.village)
         self.target = Farmer.objects.create(
             name="Aravindh",
             phone="9626262922",
@@ -227,7 +229,9 @@ class ProblemItemPrefixSearchTests(TestCase):
 
 class LocationMasterPrefixSearchTests(PrefixSearchTestMixin, TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="loc_prefix", password="x")
+        self.user = User.objects.create_user(
+            username="loc_prefix", password="x", is_staff=True
+        )
         self.district = District.objects.create(name="Villupuram")
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)

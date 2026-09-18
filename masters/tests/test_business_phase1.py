@@ -21,7 +21,7 @@ from masters.models import (
     Taluk,
     Village,
 )
-from mobile_api.test_helpers import login_mobile_client
+from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.models import Visit
 
 
@@ -100,16 +100,18 @@ class FarmerLocationValidationTests(TestCase):
         self.v1 = Village.objects.create(
             name="TestVillage", district=self.d1, taluk=self.t1, official_code="001"
         )
+        self.emp = User.objects.create_user(username="farm_emp", password=STRONG)
         EmployeeProfile.objects.create(
-            user=User.objects.create_user(username="farm_emp", password=STRONG),
+            user=self.emp,
             employee_id="F-LOC-1",
             phone="9000000002",
             is_active_employee=True,
             can_login=True,
         )
+        assign_operational_territory(self.emp, self.v1)
         self.client = login_mobile_client(employee_id="F-LOC-1", password=STRONG)
 
-    def test_rejects_cross_district_taluk(self):
+    def test_ignores_client_district_taluk_and_derives_from_village(self):
         resp = self.client.post(
             "/api/v1/farmers/",
             {
@@ -121,7 +123,11 @@ class FarmerLocationValidationTests(TestCase):
             },
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED), resp.data)
+        farmer = Farmer.objects.get(phone="9888888801")
+        self.assertEqual(farmer.village_id, self.v1.id)
+        self.assertEqual(farmer.taluk_id, self.t1.id)
+        self.assertEqual(farmer.district_id, self.d1.id)
 
     def test_accepts_valid_hierarchy(self):
         resp = self.client.post(
@@ -137,14 +143,15 @@ class FarmerLocationValidationTests(TestCase):
         )
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
 
-    def test_new_farmer_requires_taluk(self):
+    def test_village_without_taluk_rejected(self):
+        no_taluk = Village.objects.create(name="NoTalukVillage", district=self.d1, taluk=None)
         resp = self.client.post(
             "/api/v1/farmers/",
             {
                 "name": "Missing Taluk",
                 "phone": "9888888803",
                 "district": self.d1.id,
-                "village": self.v1.id,
+                "village": no_taluk.id,
             },
             format="json",
         )
@@ -152,6 +159,14 @@ class FarmerLocationValidationTests(TestCase):
 
     def test_legacy_null_taluk_list_detail_and_unrelated_patch(self):
         emp = User.objects.get(username="farm_emp")
+        admin = User.objects.create_user(
+            username="farm_loc_admin",
+            password=STRONG,
+            is_staff=True,
+            is_superuser=True,
+        )
+        admin_client = APIClient()
+        admin_client.force_authenticate(user=admin)
         legacy_village = Village.objects.create(
             name="KolathurLegacy", district=self.d1, taluk=None
         )
@@ -168,17 +183,18 @@ class FarmerLocationValidationTests(TestCase):
         body = list_resp.json()
         data = body.get("data", body)
         results = data.get("results", data) if isinstance(data, dict) else data
-        row = next(r for r in results if r["id"] == farmer.id)
-        self.assertIn("taluk_name", row)
-        self.assertIn(row["taluk_name"], ("", None))
+        self.assertFalse(any(r["id"] == farmer.id for r in results))
 
         detail = self.client.get(f"/api/v1/farmers/{farmer.id}/")
-        self.assertEqual(detail.status_code, 200)
-        detail_body = detail.json()
+        self.assertEqual(detail.status_code, 404)
+
+        admin_detail = admin_client.get(f"/api/v1/farmers/{farmer.id}/")
+        self.assertEqual(admin_detail.status_code, 200)
+        detail_body = admin_detail.json()
         detail_data = detail_body.get("data", detail_body)
         self.assertIn(detail_data.get("taluk_name"), ("", None))
 
-        patch = self.client.patch(
+        patch = admin_client.patch(
             f"/api/v1/farmers/{farmer.id}/",
             {"address": "Keep taluk null"},
             format="json",
@@ -189,17 +205,7 @@ class FarmerLocationValidationTests(TestCase):
         self.assertEqual(farmer.village_id, legacy_village.id)
         self.assertEqual(farmer.address, "Keep taluk null")
 
-        incomplete = self.client.patch(
-            f"/api/v1/farmers/{farmer.id}/",
-            {"village": self.v1.id},
-            format="json",
-        )
-        self.assertEqual(incomplete.status_code, status.HTTP_400_BAD_REQUEST)
-        farmer.refresh_from_db()
-        self.assertEqual(farmer.village_id, legacy_village.id)
-        self.assertIsNone(farmer.taluk_id)
-
-        complete = self.client.patch(
+        complete = admin_client.patch(
             f"/api/v1/farmers/{farmer.id}/",
             {
                 "district": self.d1.id,
@@ -216,8 +222,9 @@ class FarmerLocationValidationTests(TestCase):
 
 class CropPestImportAndVisitMultiProblemTests(TestCase):
     def setUp(self):
+        self.visit_emp = User.objects.create_user(username="visit_emp", password=STRONG)
         EmployeeProfile.objects.create(
-            user=User.objects.create_user(username="visit_emp", password=STRONG),
+            user=self.visit_emp,
             employee_id="V-MP-1",
             phone="9000000003",
             is_active_employee=True,
@@ -228,6 +235,7 @@ class CropPestImportAndVisitMultiProblemTests(TestCase):
         self.village = Village.objects.create(
             name="Pattanur", district=self.district, taluk=self.taluk
         )
+        assign_operational_territory(self.visit_emp, self.village)
         # 0009_preload_crops seeds Paddy/Tomato on a migrate-from-zero DB.
         # Reuse those rows so import CropProblem mappings attach to the same
         # crop the visit payload uses (do not create duplicate name_en rows).
