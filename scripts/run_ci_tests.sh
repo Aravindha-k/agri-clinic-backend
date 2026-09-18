@@ -32,6 +32,7 @@ python manage.py test \
   masters.tests.test_operational_villages \
   masters.tests.test_resolve_backfill_review \
   reports.tests.test_admin_report_summary \
+  system_settings.tests.test_reset_operational_data \
   system_settings.tests.test_clean_test_data \
   system_settings.tests.test_terminate_test_db_connections \
   "$@"

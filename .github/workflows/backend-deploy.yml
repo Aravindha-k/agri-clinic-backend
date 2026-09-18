@@ -1,6 +1,9 @@
 name: Backend Deploy
 
 # Automatic AWS EC2 deploy on push to main (plus manual dispatch).
+# Do not auto-run import_business_locations or resolve_backfill_review:
+# those recreate/mutate District/Taluk/Village and would undo a fresh
+# village-only operational reset. import_crop_pests is reusable master seed.
 on:
   push:
     branches: [main]
@@ -65,14 +68,15 @@ jobs:
              source .venv/bin/activate
              pip install -r requirements.txt
              python manage.py migrate --noinput
-             python manage.py import_business_locations
              python manage.py import_crop_pests
-             python manage.py resolve_backfill_review
              python manage.py collectstatic --noinput
              sudo systemctl restart '${SERVICE_NAME}'
              sleep 3
              sudo systemctl is-active --quiet '${SERVICE_NAME}'
              sudo systemctl status '${SERVICE_NAME}' --no-pager | head -n 20
              curl -fsS --retry 10 --retry-delay 3 --retry-connrefused '${HEALTH_URL}'
+             echo
+             echo '[deploy] operational reset DRY RUN (read-only; no --execute)'
+             python manage.py reset_operational_data
              echo
              echo \"[deploy] success commit=\$(git rev-parse HEAD)\""
