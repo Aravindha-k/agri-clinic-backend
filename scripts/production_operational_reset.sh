@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# Production operational reset with mandatory backup gates.
-# Run ON EC2 from the Django project root via the ops workflow.
+# Production operational reset helpers. Run ON EC2 from Django project root.
+#
+# Usage:
+#   OPS_MODE=backup  ./scripts/production_operational_reset.sh
+#   OPS_MODE=reset   ./scripts/production_operational_reset.sh
+#   OPS_MODE=all     ./scripts/production_operational_reset.sh  # backup+s3+reset
 #
 # Required env:
 #   EXPECTED_SHA
-#   CONFIRM_EXECUTE          (= RESET KAVYA OPERATIONAL DATA)
-#   ALLOW_PRODUCTION_RESET   (= YES)
+# For reset/all:
+#   CONFIRM_EXECUTE=RESET KAVYA OPERATIONAL DATA
+#   ALLOW_PRODUCTION_RESET=YES
 #
 # Never prints DB passwords, AWS secrets, or password hashes.
 set -Eeuo pipefail
 
+OPS_MODE="${OPS_MODE:-all}"
 EXPECTED_SHA="${EXPECTED_SHA:?EXPECTED_SHA required}"
-CONFIRM_EXECUTE="${CONFIRM_EXECUTE:?CONFIRM_EXECUTE required}"
-ALLOW_PRODUCTION_RESET="${ALLOW_PRODUCTION_RESET:?ALLOW_PRODUCTION_RESET required}"
 REQUIRED_PHRASE="RESET KAVYA OPERATIONAL DATA"
 PYTHON="${PYTHON_BIN:-./.venv/bin/python}"
 
@@ -38,19 +42,21 @@ if grep -E "manage\.py import_business_locations|manage\.py resolve_backfill_rev
 fi
 log "Reviewed reset implementation present; auto location imports absent from deploy."
 
-[ "$ALLOW_PRODUCTION_RESET" = "YES" ] || fail "ALLOW_PRODUCTION_RESET must be YES"
-[ "$CONFIRM_EXECUTE" = "$REQUIRED_PHRASE" ] || fail "CONFIRM_EXECUTE phrase mismatch"
+do_backup() {
+  mkdir -p backups/manual
+  if [ -n "${BACKUP_FILE:-}" ] && [ -f "${BACKUP_FILE}" ]; then
+    log "Using existing BACKUP_FILE=${BACKUP_FILE}"
+  else
+    STAMP="$(date -u +"%Y%m%d_%H%M%S")"
+    BACKUP_FILE="backups/manual/pre_operational_reset_${STAMP}.dump"
+    [ ! -e "$BACKUP_FILE" ] || fail "Backup path already exists: ${BACKUP_FILE}"
+  fi
+  export BACKUP_FILE
+  BACKUP_STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  export BACKUP_STARTED_AT
 
-mkdir -p backups/manual
-STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-BACKUP_FILE="backups/manual/pre_operational_reset_${STAMP}.dump"
-[ ! -e "$BACKUP_FILE" ] || fail "Backup path already exists: ${BACKUP_FILE}"
-export BACKUP_FILE
-BACKUP_STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-export BACKUP_STARTED_AT
-
-log "Creating PostgreSQL custom-format backup: ${BACKUP_FILE}"
-"$PYTHON" <<'PY'
+  log "Creating PostgreSQL custom-format backup: ${BACKUP_FILE}"
+  "$PYTHON" <<'PY'
 import os
 import subprocess
 import sys
@@ -101,13 +107,13 @@ if proc.returncode != 0:
 print("[ops-reset] pg_dump exit=0")
 PY
 
-[ -f "$BACKUP_FILE" ] || fail "Backup file missing after pg_dump"
-BACKUP_SIZE="$(stat -c%s "$BACKUP_FILE")"
-log "BACKUP SIZE bytes: ${BACKUP_SIZE}"
-[ "${BACKUP_SIZE}" -ge 100000 ] || fail "Backup size ${BACKUP_SIZE} not plausibly non-trivial. STOP."
+  [ -f "$BACKUP_FILE" ] || fail "Backup file missing after pg_dump"
+  BACKUP_SIZE="$(stat -c%s "$BACKUP_FILE")"
+  log "BACKUP SIZE bytes: ${BACKUP_SIZE}"
+  [ "${BACKUP_SIZE}" -ge 100000 ] || fail "Backup size ${BACKUP_SIZE} not plausibly non-trivial. STOP."
 
-log "Verifying pg_restore -l + Django table names"
-"$PYTHON" <<'PY'
+  log "Verifying pg_restore -l + Django table names"
+  "$PYTHON" <<'PY'
 import os
 import subprocess
 import sys
@@ -157,10 +163,14 @@ print(f"[ops-reset] BACKUP STARTED AT: {os.environ.get('BACKUP_STARTED_AT')} (be
 print("[ops-reset] BACKUP: PASS")
 print(f"[ops-reset] BACKUP FILE: {backup}")
 print(f"[ops-reset] BACKUP SIZE: {backup.stat().st_size}")
+# Emit machine-readable path for scp step
+print(f"BACKUP_FILE_PATH={backup}")
 PY
+}
 
-log "Copying backup off-server to S3 (required gate)"
-"$PYTHON" <<'PY'
+do_s3_offsite() {
+  log "Copying backup off-server to S3"
+  "$PYTHON" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -189,63 +199,40 @@ sk = (
 
 if prefix:
     uri = prefix.rstrip("/") + "/" + backup.name
-else:
-    if not bucket:
-        print(
-            "[ops-reset] ERROR: No established off-server destination "
-            "(AWS_STORAGE_BUCKET_NAME / S3_BACKUP_URI_PREFIX unset on server). STOP before reset.",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
+elif bucket:
     uri = f"s3://{bucket}/agri-clinic/db-backups/{backup.name}"
-
-parsed = urlparse(uri)
-if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/"):
-    print(f"[ops-reset] ERROR: invalid S3 URI shape", file=sys.stderr)
+else:
+    print("[ops-reset] S3 offsite unavailable (no bucket)")
     raise SystemExit(2)
 
-try:
-    import boto3
-except ImportError:
-    print("[ops-reset] ERROR: boto3 not installed on server", file=sys.stderr)
-    raise SystemExit(3)
+parsed = urlparse(uri)
+import boto3
 
 kwargs = {"region_name": str(region)}
 if ak and sk:
     kwargs["aws_access_key_id"] = ak
     kwargs["aws_secret_access_key"] = sk
-
 client = boto3.client("s3", **kwargs)
 bkt = parsed.netloc
 key = parsed.path.lstrip("/")
-try:
-    client.upload_file(str(backup), bkt, key)
-    head = client.head_object(Bucket=bkt, Key=key)
-except Exception as exc:
-    print(
-        f"[ops-reset] ERROR: off-server S3 copy failed ({type(exc).__name__}). STOP before reset.",
-        file=sys.stderr,
-    )
-    raise SystemExit(3)
-
+client.upload_file(str(backup), bkt, key)
+head = client.head_object(Bucket=bkt, Key=key)
 size = int(head.get("ContentLength") or 0)
 if size < 100000:
-    print(
-        f"[ops-reset] ERROR: off-server object size {size} not plausible. STOP.",
-        file=sys.stderr,
-    )
+    print(f"[ops-reset] ERROR: off-server object size {size} not plausible", file=sys.stderr)
     raise SystemExit(3)
-
-# URI only — never credentials.
 print(f"[ops-reset] OFF-SERVER BACKUP URI: {uri}")
 print(f"[ops-reset] OFF-SERVER BACKUP SIZE: {size}")
 print("[ops-reset] OFF-SERVER BACKUP: PASS")
 PY
+}
 
-log "Capturing pre-reset critical counts"
-"$PYTHON" <<'PY'
-import os
+do_prereset_counts() {
+  log "Capturing pre-reset critical counts"
+  "$PYTHON" <<'PY'
 import sys
+
+import os
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 import django
@@ -285,28 +272,36 @@ for k in (
     print(f"{k}: {plan.preserve.get(k)}")
 print("PRE-RESET COUNTS: PASS")
 PY
+}
 
-log "Executing approved reset"
-set +e
-"$PYTHON" manage.py reset_operational_data \
-  --execute \
-  --confirm-phrase="${REQUIRED_PHRASE}" \
-  --allow-production
-RESET_RC=$?
-set -e
-if [ "$RESET_RC" -ne 0 ]; then
-  log "RESET COMMAND: FAIL"
-  log "TRANSACTION: ROLLED BACK"
-  fail "reset_operational_data failed with exit ${RESET_RC}"
-fi
-log "RESET COMMAND: PASS"
-log "TRANSACTION: COMMITTED"
+do_reset() {
+  CONFIRM_EXECUTE="${CONFIRM_EXECUTE:?CONFIRM_EXECUTE required}"
+  ALLOW_PRODUCTION_RESET="${ALLOW_PRODUCTION_RESET:?ALLOW_PRODUCTION_RESET required}"
+  [ "$ALLOW_PRODUCTION_RESET" = "YES" ] || fail "ALLOW_PRODUCTION_RESET must be YES"
+  [ "$CONFIRM_EXECUTE" = "$REQUIRED_PHRASE" ] || fail "CONFIRM_EXECUTE phrase mismatch"
 
-log "Post-reset verification"
-"$PYTHON" <<'PY'
-import sys
+  do_prereset_counts
 
+  log "Executing approved reset"
+  set +e
+  "$PYTHON" manage.py reset_operational_data \
+    --execute \
+    --confirm-phrase="${REQUIRED_PHRASE}" \
+    --allow-production
+  RESET_RC=$?
+  set -e
+  if [ "$RESET_RC" -ne 0 ]; then
+    log "RESET COMMAND: FAIL"
+    log "TRANSACTION: ROLLED BACK"
+    fail "reset_operational_data failed with exit ${RESET_RC}"
+  fi
+  log "RESET COMMAND: PASS"
+  log "TRANSACTION: COMMITTED"
+
+  log "Post-reset verification"
+  "$PYTHON" <<'PY'
 import os
+import sys
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 import django
@@ -425,15 +420,39 @@ if nonzero:
 print("OTHER OPERATIONAL MODELS: all audited models are zero")
 PY
 
-log "Django check + healthz"
-"$PYTHON" manage.py check
-curl -fsS --retry 5 --retry-delay 2 --retry-connrefused http://127.0.0.1:8000/healthz/
-echo
-log "DJANGO CHECK: PASS"
-log "HEALTH: PASS"
-log "ADMIN LOGIN: NOT TESTED"
-log "EMPLOYEE LOGIN: NOT TESTED"
-log "PHYSICAL MEDIA DELETED: NO"
-log "EXCEL IMPORTED: NO"
-log "MOBILE DEPLOYED: NO"
-log "STOP."
+  log "Django check + healthz"
+  "$PYTHON" manage.py check
+  curl -fsS --retry 5 --retry-delay 2 --retry-connrefused http://127.0.0.1:8000/healthz/
+  echo
+  log "DJANGO CHECK: PASS"
+  log "HEALTH: PASS"
+  log "ADMIN LOGIN: NOT TESTED"
+  log "EMPLOYEE LOGIN: NOT TESTED"
+  log "PHYSICAL MEDIA DELETED: NO"
+  log "EXCEL IMPORTED: NO"
+  log "MOBILE DEPLOYED: NO"
+  log "STOP."
+}
+
+case "$OPS_MODE" in
+  backup)
+    do_backup
+    ;;
+  reset)
+    do_reset
+    ;;
+  all)
+    do_backup
+    set +e
+    do_s3_offsite
+    s3_rc=$?
+    set -e
+    if [ "$s3_rc" -ne 0 ]; then
+      fail "S3 offsite required for OPS_MODE=all but unavailable/failed. Use workflow encrypted offsite path."
+    fi
+    do_reset
+    ;;
+  *)
+    fail "Unknown OPS_MODE=${OPS_MODE}"
+    ;;
+esac
