@@ -64,6 +64,7 @@ class Village(BaseMaster):
         related_name="villages",
         null=True,
         blank=True,
+        help_text="DEPRECATED. Not used for operational location.",
     )
     taluk = models.ForeignKey(
         Taluk,
@@ -71,6 +72,7 @@ class Village(BaseMaster):
         related_name="villages",
         null=True,
         blank=True,
+        help_text="DEPRECATED. Not used for operational location.",
     )
     official_code = models.CharField(
         max_length=32,
@@ -84,7 +86,18 @@ class Village(BaseMaster):
         default="",
         help_text="Official PDF/page URL for this village row.",
     )
-    firka_name = models.CharField(max_length=255, blank=True, default="")
+    firka_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="DEPRECATED. Not used for operational location.",
+    )
+    name_ta = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Tamil village name. Canonical bilingual field for operational Village.",
+    )
 
     class Meta:
         ordering = ["name"]

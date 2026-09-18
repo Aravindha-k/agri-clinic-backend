@@ -251,8 +251,6 @@ class VisitDetailUpdateAPI(DeviceSessionRequiredMixin, APIView):
                 visit.farmer_name = farmer.name
             if not visit.farmer_phone:
                 visit.farmer_phone = farmer.phone
-            if not visit.district_id:
-                visit.district = farmer.district
             if not visit.village_id:
                 visit.village = farmer.village
             if visit.land_name:

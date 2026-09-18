@@ -125,7 +125,7 @@ class ReadOnlyViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
 
 class FarmerViewSet(AdminModelViewSet):
     serializer_class = AdminFarmerSerializer
-    search_fields = ["farmer_code", "name", "phone", "village__name", "district__name", "taluk__name"]
+    search_fields = ["farmer_code", "name", "phone", "village__name", "village__name_ta"]
     filterset_fields = ["district", "village", "assigned_employee"]
     ordering_fields = ["created_at", "updated_at", "name", "farmer_code"]
     queryset = (

@@ -33,7 +33,7 @@ def village_wise_visits(start_date=None, end_date=None):
 
 
 def crop_problem_report(start_date=None, end_date=None):
-    qs = Visit.objects.select_related("employee", "district", "village", "crop")
+    qs = Visit.objects.select_related("employee", "village", "crop")
 
     if start_date:
         qs = qs.filter(visit_date__gte=start_date)

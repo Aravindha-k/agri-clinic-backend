@@ -155,7 +155,7 @@ class VillageViewSet(BaseMasterViewSet):
     queryset = Village.objects.select_related("district", "taluk").all()
     serializer_class = VillageSerializer
     filterset_fields = ["district", "taluk", "is_active"] if HAS_DJANGO_FILTER else []
-    search_fields = ["name", "official_code"]
+    search_fields = ["name", "name_ta", "official_code"]
     ordering_fields = ["name"]
     ordering = ["name"]
 
@@ -199,7 +199,7 @@ class FarmerViewSet(BaseMasterViewSet):
         "village", "district", "taluk", "assigned_employee", "created_by_employee"
     ).all()
     serializer_class = FarmerSerializer
-    search_fields = ["name", "phone", "farmer_code", "village__name"]
+    search_fields = ["name", "phone", "farmer_code", "village__name", "village__name_ta"]
     ordering_fields = ["name", "created_at", "phone", "farmer_code"]
     ordering = ["name"]
     filterset_fields = (

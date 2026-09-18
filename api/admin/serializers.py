@@ -358,6 +358,9 @@ class AdminVisitSerializer(serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
+    village_name_ta = serializers.CharField(
+        source="village.name_ta", read_only=True, default=""
+    )
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
@@ -506,6 +509,9 @@ class AdminFarmerSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
+    village_name_ta = serializers.CharField(
+        source="village.name_ta", read_only=True, default=""
+    )
     assigned_employee_name = serializers.CharField(
         source="assigned_employee.username", read_only=True, default=""
     )
@@ -523,6 +529,7 @@ class AdminFarmerSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "taluk_name",
             "village",
             "village_name",
+            "village_name_ta",
             "address",
             "gps_location",
             "total_land_area",

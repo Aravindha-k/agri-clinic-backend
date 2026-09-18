@@ -44,8 +44,6 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
         farmer = Farmer.objects.create(
             name=name or "Unknown",
             phone=digits,
-            district=visit.district,
-            taluk=getattr(visit.village, "taluk", None) if visit.village_id else None,
             village=visit.village,
             created_by_employee=employee,
             assigned_employee=employee,
@@ -55,8 +53,6 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
         farmer = Farmer.objects.create(
             name=name,
             phone=f"V{visit.pk}",
-            district=visit.district,
-            taluk=getattr(visit.village, "taluk", None) if visit.village_id else None,
             village=visit.village,
             created_by_employee=employee,
             assigned_employee=employee,
@@ -90,20 +86,10 @@ def sync_visit_farmer_master(visit: Visit) -> Visit:
         ):
             master_updates["phone"] = phone
 
-    if visit.district_id and farmer.district_id != visit.district_id:
-        master_updates["district_id"] = visit.district_id
-    elif farmer.district_id and not visit.district_id:
-        visit_updates["district_id"] = farmer.district_id
-
     if visit.village_id and farmer.village_id != visit.village_id:
         master_updates["village_id"] = visit.village_id
     elif farmer.village_id and not visit.village_id:
         visit_updates["village_id"] = farmer.village_id
-
-    if visit.village_id:
-        village_taluk_id = getattr(visit.village, "taluk_id", None)
-        if village_taluk_id and farmer.taluk_id != village_taluk_id:
-            master_updates["taluk_id"] = village_taluk_id
 
     if master_updates:
         Farmer.objects.filter(pk=farmer.pk).update(**master_updates)

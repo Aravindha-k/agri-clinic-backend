@@ -81,7 +81,7 @@ class CropProblemReportAPI(APIView):
     summary="Admin report summary aggregates",
     description=(
         "Server-side visit aggregates for the Admin Reports page. "
-        "Supports from/to (or start_date/end_date), employee, and district filters. "
+        "Supports from/to (or start_date/end_date), employee, and village filters. "
         "Does not return raw visit rows."
     ),
     parameters=[
@@ -89,7 +89,7 @@ class CropProblemReportAPI(APIView):
         OpenApiParameter("to", OpenApiTypes.DATE, description="End date YYYY-MM-DD"),
         *_DATE_PARAMS,
         OpenApiParameter("employee", OpenApiTypes.STR, description="User id or employee_id"),
-        OpenApiParameter("district", OpenApiTypes.STR, description="District id or name"),
+        OpenApiParameter("village", OpenApiTypes.STR, description="Village id or name"),
     ],
     responses={200: SIMPLE_SUCCESS},
 )
@@ -102,6 +102,6 @@ class AdminReportSummaryAPI(APIView):
             start=start,
             end=end,
             employee=request.query_params.get("employee"),
-            district=request.query_params.get("district"),
+            village=request.query_params.get("village"),
         )
         return success_response(data=data)

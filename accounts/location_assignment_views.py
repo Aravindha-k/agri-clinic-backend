@@ -14,33 +14,17 @@ from accounts.location_assignments import (
     assignment_rows_for_employee,
     assignment_summary_from_rows,
     employee_summary_payload,
-    expand_assignment_groups,
+    expand_village_ids,
+    extract_village_ids_from_payload,
     field_employee_queryset,
     filter_employees_for_assignment_list,
-    group_assignments_for_response,
     legacy_incomplete_assignment_count,
     replace_employee_location_assignments,
+    village_payload_from_rows,
 )
 from accounts.models import EmployeeProfile
 from utils.permissions import IsStaffAdmin
 from utils.response import error_response, not_found_response, success_response
-
-
-class AssignmentGroupSerializerMixin:
-    """Shared validation for hierarchy assignment payload."""
-
-    @staticmethod
-    def validate_payload(data: dict) -> list[dict]:
-        groups = data.get("assignments")
-        if groups is None:
-            raise LocationAssignmentValidationError(
-                {"assignments": "This field is required."}
-            )
-        if not isinstance(groups, list):
-            raise LocationAssignmentValidationError(
-                {"assignments": "Must be a list of assignment groups."}
-            )
-        return groups
 
 
 @extend_schema(
@@ -48,8 +32,8 @@ class AssignmentGroupSerializerMixin:
     summary="Admin — list employee location assignment summaries",
     parameters=[
         OpenApiParameter("employee", OpenApiTypes.INT, description="EmployeeProfile id"),
-        OpenApiParameter("district", OpenApiTypes.INT, description="District id filter"),
-        OpenApiParameter("taluk", OpenApiTypes.INT, description="Taluk id filter"),
+        OpenApiParameter("district", OpenApiTypes.INT, description="Legacy district id filter"),
+        OpenApiParameter("taluk", OpenApiTypes.INT, description="Legacy taluk id filter"),
         OpenApiParameter("village", OpenApiTypes.INT, description="Village id filter"),
         OpenApiParameter("search", OpenApiTypes.STR, description="Employee id/name search"),
         OpenApiParameter("page", OpenApiTypes.INT),
@@ -90,13 +74,13 @@ class AdminEmployeeLocationAssignmentListAPI(APIView):
                 {
                     "employee": employee_summary_payload(profile),
                     "location_assignment_summary": {
+                        "village_count": profile.location_village_count,
                         "district_count": profile.location_district_count,
                         "taluk_count": profile.location_taluk_count,
-                        "village_count": profile.location_village_count,
                     },
                     "location_assignment_preview": previews.get(
                         profile.id,
-                        {"districts": [], "taluks": [], "villages": []},
+                        {"villages": [], "districts": [], "taluks": []},
                     ),
                 }
             )
@@ -109,11 +93,14 @@ class AdminEmployeeLocationAssignmentListAPI(APIView):
     tags=["Employee Location Assignments"],
     summary="Admin — employee location assignment detail",
 )
-class AdminEmployeeLocationAssignmentDetailAPI(APIView, AssignmentGroupSerializerMixin):
+class AdminEmployeeLocationAssignmentDetailAPI(APIView):
     """
     GET /api/v1/admin/employees/{pk}/location-assignments/
     PUT /api/v1/admin/employees/{pk}/location-assignments/
     PATCH /api/v1/admin/employees/{pk}/location-assignments/
+
+    Preferred write payload: {"village_ids": [1, 2, 3]}
+    Legacy assignments wrapper is still accepted; district/taluk are ignored.
     """
 
     permission_classes = [IsStaffAdmin]
@@ -125,21 +112,25 @@ class AdminEmployeeLocationAssignmentDetailAPI(APIView, AssignmentGroupSerialize
             .first()
         )
 
+    def _detail_payload(self, employee: EmployeeProfile, rows=None) -> dict:
+        if rows is None:
+            rows = list(assignment_rows_for_employee(employee.id))
+        villages = village_payload_from_rows(rows)
+        return {
+            "employee": employee_summary_payload(employee),
+            "location_assignment_summary": assignment_summary_from_rows(rows),
+            "legacy_incomplete_count": legacy_incomplete_assignment_count(
+                employee.id
+            ),
+            "villages": villages,
+            "assignments": villages,
+        }
+
     def get(self, request, pk: int):
         employee = self._get_field_employee(pk)
         if not employee:
             return not_found_response("Employee not found.")
-        rows = list(assignment_rows_for_employee(employee.id))
-        return success_response(
-            data={
-                "employee": employee_summary_payload(employee),
-                "location_assignment_summary": assignment_summary_from_rows(rows),
-                "legacy_incomplete_count": legacy_incomplete_assignment_count(
-                    employee.id
-                ),
-                "assignments": group_assignments_for_response(rows),
-            }
-        )
+        return success_response(data=self._detail_payload(employee))
 
     def put(self, request, pk: int):
         return self._replace(request, pk)
@@ -153,12 +144,13 @@ class AdminEmployeeLocationAssignmentDetailAPI(APIView, AssignmentGroupSerialize
             return not_found_response("Employee not found.")
 
         try:
-            groups = self.validate_payload(request.data)
-            # Validate before mutating
-            expand_assignment_groups(groups)
+            village_ids = extract_village_ids_from_payload(
+                request.data if isinstance(request.data, dict) else {}
+            )
+            expand_village_ids(village_ids)
             rows = replace_employee_location_assignments(
                 employee=employee,
-                assignment_groups=groups,
+                village_ids=village_ids,
                 actor=request.user,
             )
         except LocationAssignmentValidationError as exc:
@@ -170,14 +162,7 @@ class AdminEmployeeLocationAssignmentDetailAPI(APIView, AssignmentGroupSerialize
             )
 
         return success_response(
-            data={
-                "employee": employee_summary_payload(employee),
-                "location_assignment_summary": assignment_summary_from_rows(rows),
-                "legacy_incomplete_count": legacy_incomplete_assignment_count(
-                    employee.id
-                ),
-                "assignments": group_assignments_for_response(rows),
-            },
+            data=self._detail_payload(employee, rows=rows),
             message="Location assignments updated.",
         )
 

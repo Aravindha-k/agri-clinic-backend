@@ -12,9 +12,9 @@ from utils.schema import SIMPLE_SUCCESS, error_schema
 
 @extend_schema(
     tags=["Mobile", "Territory"],
-    summary="Logged-in employee's assigned territory",
+    summary="Logged-in employee's assigned villages",
     description=(
-        "Districts, taluks, and villages assigned to the authenticated field "
+        "Active villages operationally assigned to the authenticated field "
         "employee. Empty when no villages are assigned (fail-closed)."
     ),
     responses={200: SIMPLE_SUCCESS, 403: error_schema("Forbidden")},

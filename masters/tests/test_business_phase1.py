@@ -111,7 +111,7 @@ class FarmerLocationValidationTests(TestCase):
         assign_operational_territory(self.emp, self.v1)
         self.client = login_mobile_client(employee_id="F-LOC-1", password=STRONG)
 
-    def test_ignores_client_district_taluk_and_derives_from_village(self):
+    def test_ignores_client_district_taluk_and_binds_village_only(self):
         resp = self.client.post(
             "/api/v1/farmers/",
             {
@@ -126,8 +126,8 @@ class FarmerLocationValidationTests(TestCase):
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED), resp.data)
         farmer = Farmer.objects.get(phone="9888888801")
         self.assertEqual(farmer.village_id, self.v1.id)
-        self.assertEqual(farmer.taluk_id, self.t1.id)
-        self.assertEqual(farmer.district_id, self.d1.id)
+        self.assertIsNone(farmer.taluk_id)
+        self.assertIsNone(farmer.district_id)
 
     def test_accepts_valid_hierarchy(self):
         resp = self.client.post(
@@ -143,19 +143,23 @@ class FarmerLocationValidationTests(TestCase):
         )
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
 
-    def test_village_without_taluk_rejected(self):
+    def test_village_without_taluk_can_be_used_when_assigned(self):
         no_taluk = Village.objects.create(name="NoTalukVillage", district=self.d1, taluk=None)
+        assign_operational_territory(self.emp, no_taluk)
         resp = self.client.post(
             "/api/v1/farmers/",
             {
                 "name": "Missing Taluk",
                 "phone": "9888888803",
-                "district": self.d1.id,
                 "village": no_taluk.id,
             },
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        farmer = Farmer.objects.get(phone="9888888803")
+        self.assertEqual(farmer.village_id, no_taluk.id)
+        self.assertIsNone(farmer.taluk_id)
+        self.assertIsNone(farmer.district_id)
 
     def test_legacy_null_taluk_list_detail_and_unrelated_patch(self):
         emp = User.objects.get(username="farm_emp")
@@ -216,7 +220,8 @@ class FarmerLocationValidationTests(TestCase):
         )
         self.assertEqual(complete.status_code, 200)
         farmer.refresh_from_db()
-        self.assertEqual(farmer.taluk_id, self.t1.id)
+        self.assertIsNone(farmer.taluk_id)
+        self.assertIsNone(farmer.district_id)
         self.assertEqual(farmer.village_id, self.v1.id)
 
 

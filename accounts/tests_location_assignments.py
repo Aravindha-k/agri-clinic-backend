@@ -165,9 +165,12 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
         resp = self.admin_client.put(self.detail_url(), payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()["data"]
-        self.assertEqual(data["location_assignment_summary"]["district_count"], 2)
-        self.assertEqual(data["location_assignment_summary"]["taluk_count"], 3)
         self.assertEqual(data["location_assignment_summary"]["village_count"], 4)
+        self.assertEqual(data["location_assignment_summary"]["district_count"], 0)
+        self.assertEqual(data["location_assignment_summary"]["taluk_count"], 0)
+        ids = {row["id"] for row in data["villages"]}
+        self.assertEqual(ids, {self.v_a.id, self.v_b.id, self.v_c.id, self.v_d.id})
+        self.assertTrue(all("name_ta" in row and "is_active" in row for row in data["villages"]))
         self.assertEqual(
             EmployeeLocationAssignment.objects.filter(
                 employee=self.field_profile
@@ -231,12 +234,9 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         rows = EmployeeLocationAssignment.objects.filter(employee=self.field_profile)
         self.assertEqual(rows.count(), 1)
-        self.assertEqual(rows.first().district_id, self.d2.id)
-        self.assertFalse(
-            EmployeeLocationAssignment.objects.filter(
-                employee=self.field_profile, district=self.d1
-            ).exists()
-        )
+        self.assertEqual(rows.first().village_id, self.v_d.id)
+        self.assertIsNone(rows.first().district_id)
+        self.assertIsNone(rows.first().taluk_id)
 
     def test_removing_taluk_drops_child_villages(self):
         first = {
@@ -272,8 +272,9 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
             EmployeeLocationAssignment.objects.filter(employee=self.field_profile)
         )
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0].taluk_id, self.t_tindi.id)
         self.assertEqual(rows[0].village_id, self.v_c.id)
+        self.assertIsNone(rows[0].taluk_id)
+        self.assertIsNone(rows[0].district_id)
 
     def test_exact_replacement_update(self):
         first = {
@@ -299,7 +300,8 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         rows = EmployeeLocationAssignment.objects.filter(employee=self.field_profile)
         self.assertEqual(rows.count(), 1)
-        self.assertEqual(rows.first().district_id, self.d2.id)
+        self.assertEqual(rows.first().village_id, self.v_d.id)
+        self.assertIsNone(rows.first().district_id)
 
     def test_duplicate_groups_deduped(self):
         payload = {
@@ -338,7 +340,7 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
         resp = self.admin_client.put(self.detail_url(), payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-    def test_wrong_village_for_taluk_rejected(self):
+    def test_wrong_village_for_taluk_still_assigns_village(self):
         payload = {
             "assignments": [
                 {
@@ -349,20 +351,53 @@ class EmployeeLocationAssignmentCrudTests(EmployeeLocationAssignmentFixtures):
             ]
         }
         resp = self.admin_client.put(self.detail_url(), payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        row = EmployeeLocationAssignment.objects.get(employee=self.field_profile)
+        self.assertEqual(row.village_id, self.v_a.id)
 
-    def test_legacy_village_without_taluk_rejected(self):
-        payload = {
-            "assignments": [
-                {
-                    "district_id": self.d1.id,
-                    "taluk_id": self.t_gingee.id,
-                    "village_ids": [self.v_legacy.id],
-                }
-            ]
-        }
+    def test_legacy_village_without_taluk_can_be_assigned(self):
+        payload = {"village_ids": [self.v_legacy.id]}
         resp = self.admin_client.put(self.detail_url(), payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.json())
+        row = EmployeeLocationAssignment.objects.get(employee=self.field_profile)
+        self.assertEqual(row.village_id, self.v_legacy.id)
+        self.assertTrue(row.is_operational)
+
+    def test_village_ids_payload_without_district(self):
+        payload = {"village_ids": [self.v_a.id, self.v_c.id, self.v_a.id]}
+        resp = self.admin_client.put(self.detail_url(), payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.json())
+        data = resp.json()["data"]
+        self.assertEqual(data["location_assignment_summary"]["village_count"], 2)
+        ids = {row["id"] for row in data["villages"]}
+        self.assertEqual(ids, {self.v_a.id, self.v_c.id})
+        self.assertTrue(all(row["is_active"] for row in data["villages"]))
+        for row in EmployeeLocationAssignment.objects.filter(employee=self.field_profile):
+            self.assertIsNone(row.district_id)
+            self.assertIsNone(row.taluk_id)
+
+    def test_village_ids_full_replacement_drops_removed_villages(self):
+        first = self.admin_client.put(
+            self.detail_url(),
+            {"village_ids": [self.v_a.id, self.v_b.id]},
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.json())
+        first_ids = {row["id"] for row in first.json()["data"]["villages"]}
+        self.assertEqual(first_ids, {self.v_a.id, self.v_b.id})
+        second = self.admin_client.put(
+            self.detail_url(),
+            {"village_ids": [self.v_b.id]},
+            format="json",
+        )
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.json())
+        data = second.json()["data"]
+        self.assertEqual({row["id"] for row in data["villages"]}, {self.v_b.id})
+        remaining = EmployeeLocationAssignment.objects.filter(employee=self.field_profile)
+        self.assertEqual(remaining.count(), 1)
+        self.assertEqual(remaining.first().village_id, self.v_b.id)
+        self.assertIsNone(remaining.first().district_id)
+        self.assertIsNone(remaining.first().taluk_id)
 
     def test_inactive_village_rejected(self):
         payload = {
@@ -401,16 +436,15 @@ class EmployeeLocationAssignmentListTests(EmployeeLocationAssignmentFixtures):
             if r["employee"]["employee_id"] == self.field_profile.employee_id
         )
         summary = row["location_assignment_summary"]
-        self.assertEqual(summary["district_count"], 1)
-        self.assertEqual(summary["taluk_count"], 1)
         self.assertEqual(summary["village_count"], 2)
         preview = row["location_assignment_preview"]
-        self.assertEqual(preview["districts"], [{"id": self.d1.id, "name": "Villupuram"}])
-        self.assertEqual(preview["taluks"], [{"id": self.t_gingee.id, "name": "Gingee"}])
+        self.assertEqual(preview["districts"], [])
+        self.assertEqual(preview["taluks"], [])
         self.assertEqual(
             {v["name"] for v in preview["villages"]},
             {"Village A", "Village B"},
         )
+        self.assertTrue(all("name_ta" in v and "is_active" in v for v in preview["villages"]))
         self.assertNotIn("assignments", row)
 
     def test_list_preview_capped_and_empty_when_unassigned(self):
@@ -437,9 +471,10 @@ class EmployeeLocationAssignmentListTests(EmployeeLocationAssignmentFixtures):
             for r in resp.json()["data"]["results"]
             if r["employee"]["employee_id"] == self.field_profile.employee_id
         )
-        self.assertEqual(row["location_assignment_summary"]["taluk_count"], 4)
-        self.assertEqual(len(row["location_assignment_preview"]["taluks"]), 3)
+        self.assertEqual(row["location_assignment_summary"]["village_count"], 4)
         self.assertEqual(len(row["location_assignment_preview"]["villages"]), 3)
+        self.assertEqual(row["location_assignment_preview"]["taluks"], [])
+        self.assertEqual(row["location_assignment_preview"]["districts"], [])
 
         unassigned = make_field_employee(username="empty01", employee_id="KAC-EMPTY")
         resp_empty = self.admin_client.get(LIST_URL)
@@ -521,8 +556,8 @@ class EmployeeLocationAssignmentOperationalTests(EmployeeLocationAssignmentFixtu
         row = EmployeeLocationAssignment.objects.get(employee=self.field_profile)
         self.assertTrue(row.is_operational)
         self.assertEqual(row.village_id, self.v_a.id)
-        self.assertEqual(row.taluk_id, self.t_gingee.id)
-        self.assertEqual(row.district_id, self.d1.id)
+        self.assertIsNone(row.taluk_id)
+        self.assertIsNone(row.district_id)
 
     def test_farmer_directory_unscoped_audit_queryset_unchanged(self):
         from farmers.helpers import farmers_directory_queryset

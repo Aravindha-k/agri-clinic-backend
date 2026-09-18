@@ -31,16 +31,12 @@ def get_or_create_farmer_for_field_visit(
     if archived:
         raise ValueError("archived farmer cannot be used for a new visit")
 
-    taluk = village.taluk if village.taluk_id else None
-    district = taluk.district if taluk is not None else (
-        village.district if village.district_id else None
-    )
     farmer = Farmer(
         name=(name or "").strip() or "Farmer",
         phone=phone_digits,
         village=village,
-        district=district,
-        taluk=taluk,
+        district=None,
+        taluk=None,
         is_active=True,
         created_by_employee=created_by if created_by and not created_by.is_staff else None,
     )

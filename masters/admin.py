@@ -18,9 +18,9 @@ class DistrictAdmin(admin.ModelAdmin):
 
 @admin.register(Village)
 class VillageAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "district", "is_active")
-    search_fields = ("name", "district__name")
-    list_filter = ("district", "is_active")
+    list_display = ("id", "name", "name_ta", "is_active")
+    search_fields = ("name", "name_ta")
+    list_filter = ("is_active",)
 
 
 @admin.register(Crop)

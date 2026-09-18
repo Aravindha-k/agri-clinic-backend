@@ -348,6 +348,9 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
+    village_name_ta = serializers.CharField(
+        source="village.name_ta", read_only=True, default=""
+    )
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
@@ -374,6 +377,7 @@ class FarmerVisitSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "village_name",
+            "village_name_ta",
             "district_name",
             "crop",
             "crop_info",
@@ -451,6 +455,9 @@ class FarmerListSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
+    village_name_ta = serializers.CharField(
+        source="village.name_ta", read_only=True, default=""
+    )
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=""
     )
@@ -498,6 +505,7 @@ class FarmerListSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "mobile",
             "village",
             "village_name",
+            "village_name_ta",
             "district_name",
             "taluk_name",
             "crop_name",
@@ -532,6 +540,9 @@ class FarmerDetailSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=""
     )
+    village_name_ta = serializers.CharField(
+        source="village.name_ta", read_only=True, default=""
+    )
     assigned_employee_name = serializers.CharField(
         source="assigned_employee.username", read_only=True, default=""
     )
@@ -553,6 +564,7 @@ class FarmerDetailSerializer(ProfilePhotoUrlMixin, serializers.ModelSerializer):
             "taluk_name",
             "village",
             "village_name",
+            "village_name_ta",
             "address",
             "gps_location",
             "total_land_area",
@@ -637,7 +649,7 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "district": {"required": False, "allow_null": True},
             "taluk": {"required": False, "allow_null": True},
-            "village": {"required": False, "allow_null": True},
+            "village": {"required": True},
         }
 
     def validate_gps_location(self, value):
@@ -659,17 +671,14 @@ class FarmerCreateSerializer(serializers.ModelSerializer):
         return phone
 
     def validate(self, attrs):
-        from accounts.territory import user_requires_territory_scope
         from masters.serializers import (
             _enforce_employee_farmer_village,
             bind_farmer_location_from_village,
         )
 
         request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        require_village = user_requires_territory_scope(user)
         attrs = bind_farmer_location_from_village(
-            attrs, require_village=require_village
+            attrs, require_village=True
         )
         return _enforce_employee_farmer_village(attrs, request)
 

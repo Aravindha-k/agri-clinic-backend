@@ -8,11 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.models import EmployeeLocationAssignment, EmployeeProfile
-from accounts.territory import (
-    get_employee_assigned_district_ids,
-    get_employee_assigned_taluk_ids,
-    get_employee_assigned_village_ids,
-)
+from accounts.territory import get_employee_assigned_village_ids
 from masters.models import Crop, District, Farmer, ProblemCategory, ProblemMaster, Taluk, Village
 from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.models import Visit
@@ -164,18 +160,10 @@ class EmployeeTerritoryIsolationTests(TestCase):
             rows = data["data"].get("results", data["data"])
         return {row["id"] for row in rows}
 
-    def test_territory_helpers_derive_from_villages(self):
+    def test_territory_helpers_are_village_only(self):
         self.assertEqual(
             get_employee_assigned_village_ids(self.emp_a),
             frozenset({self.village_a1.id, self.village_a2.id}),
-        )
-        self.assertEqual(
-            get_employee_assigned_taluk_ids(self.emp_a),
-            frozenset({self.taluk_a.id}),
-        )
-        self.assertEqual(
-            get_employee_assigned_district_ids(self.emp_a),
-            frozenset({self.district_a.id}),
         )
         self.assertEqual(
             get_employee_assigned_village_ids(self.emp_b),
@@ -197,37 +185,25 @@ class EmployeeTerritoryIsolationTests(TestCase):
     def test_mobile_territory_employee_a(self):
         resp = self.client_a.get("/api/v1/mobile/territory/")
         self.assertEqual(resp.status_code, 200)
-        districts = resp.json()["data"]["districts"]
-        self.assertEqual(len(districts), 1)
-        self.assertEqual(districts[0]["id"], self.district_a.id)
-        villages = {
-            v["id"]
-            for taluk in districts[0]["taluks"]
-            for v in taluk["villages"]
-        }
-        self.assertEqual(villages, {self.village_a1.id, self.village_a2.id})
-        self.assertNotIn(self.village_b1.id, villages)
+        villages = resp.json()["data"]["villages"]
+        village_ids = {v["id"] for v in villages}
+        self.assertEqual(village_ids, {self.village_a1.id, self.village_a2.id})
+        self.assertNotIn(self.village_b1.id, village_ids)
+        self.assertTrue(all("name_ta" in row for row in villages))
+        self.assertTrue(all("is_active" in row for row in villages))
 
     def test_mobile_territory_employee_b(self):
         resp = self.client_b.get("/api/v1/mobile/territory/")
         self.assertEqual(resp.status_code, 200)
-        villages = {
-            v["id"]
-            for d in resp.json()["data"]["districts"]
-            for t in d["taluks"]
-            for v in t["villages"]
-        }
-        self.assertEqual(villages, {self.village_b1.id})
-        self.assertNotIn(self.village_b2.id, villages)
-        districts = resp.json()["data"]["districts"]
-        self.assertEqual(len(districts), 1)
-        self.assertEqual(districts[0]["id"], self.district_b.id)
-        self.assertNotIn(self.district_a.id, {d["id"] for d in districts})
+        village_ids = {v["id"] for v in resp.json()["data"]["villages"]}
+        self.assertEqual(village_ids, {self.village_b1.id})
+        self.assertNotIn(self.village_b2.id, village_ids)
+        self.assertNotIn(self.village_a1.id, village_ids)
 
     def test_empty_assignment_returns_empty_not_all(self):
         resp = self.client_empty.get("/api/v1/mobile/territory/")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["data"]["districts"], [])
+        self.assertEqual(resp.json()["data"]["villages"], [])
 
         farmers = self.client_empty.get("/api/v1/mobile/farmers/", {"page_size": 100})
         self.assertEqual(farmers.status_code, 200)
@@ -334,7 +310,7 @@ class EmployeeTerritoryIsolationTests(TestCase):
         self.farmer_a1.refresh_from_db()
         self.assertEqual(self.farmer_a1.village_id, self.village_a1.id)
 
-    def test_employee_a_create_farmer_derives_district_taluk(self):
+    def test_employee_a_create_farmer_village_only(self):
         resp = self.client_a.post(
             "/api/v1/farmers/",
             {
@@ -349,8 +325,8 @@ class EmployeeTerritoryIsolationTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
         farmer = Farmer.objects.get(phone="9111888001")
         self.assertEqual(farmer.village_id, self.village_a1.id)
-        self.assertEqual(farmer.taluk_id, self.taluk_a.id)
-        self.assertEqual(farmer.district_id, self.district_a.id)
+        self.assertIsNone(farmer.taluk_id)
+        self.assertIsNone(farmer.district_id)
 
     def test_employee_a_cannot_create_visit_in_b1(self):
         resp = self.client_a.post(
@@ -495,4 +471,84 @@ class EmployeeTerritoryIsolationTests(TestCase):
         self.profile_empty.save()
         self.assertEqual(get_employee_assigned_village_ids(self.emp_empty), frozenset())
         resp = self.client_empty.get("/api/v1/mobile/territory/")
-        self.assertEqual(resp.json()["data"]["districts"], [])
+        self.assertEqual(resp.json()["data"]["villages"], [])
+
+    def test_named_villages_abc_employee_isolation(self):
+        village_a = Village.objects.create(name="Village A", name_ta="கிராமம் ஏ")
+        village_b = Village.objects.create(name="Village B", name_ta="கிராமம் பி")
+        village_c = Village.objects.create(name="Village C", name_ta="கிராமம் சி")
+        EmployeeLocationAssignment.objects.filter(employee=self.profile_a).delete()
+        EmployeeLocationAssignment.objects.filter(employee=self.profile_b).delete()
+        assign_operational_territory(self.emp_a, village_a)
+        assign_operational_territory(self.emp_a, village_b)
+        assign_operational_territory(self.emp_b, village_c)
+
+        farmer_a = Farmer.objects.create(
+            name="Farmer A", phone="9111800001", village=village_a
+        )
+        farmer_b = Farmer.objects.create(
+            name="Farmer B", phone="9111800002", village=village_b
+        )
+        Farmer.objects.create(name="Farmer C", phone="9111800003", village=village_c)
+
+        client_a = login_mobile_client(employee_id="EMP-A", password=STRONG)
+        client_b = login_mobile_client(employee_id="EMP-B", password=STRONG)
+
+        a_villages = {row["name"] for row in client_a.get("/api/v1/mobile/territory/").json()["data"]["villages"]}
+        self.assertEqual(a_villages, {"Village A", "Village B"})
+        b_villages = {row["name"] for row in client_b.get("/api/v1/mobile/territory/").json()["data"]["villages"]}
+        self.assertEqual(b_villages, {"Village C"})
+
+        a_farmers = self._farmer_ids(client_a.get("/api/v1/mobile/farmers/", {"page_size": 100}))
+        self.assertEqual(a_farmers, {farmer_a.id, farmer_b.id})
+
+        blocked = client_a.post(
+            "/api/v1/farmers/",
+            {"name": "Into C", "phone": "9111800099", "village": village_c.id},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+
+        visit_ok = client_a.post(
+            "/api/v1/mobile/visits/",
+            self._visit_payload(farmer_a, village_a),
+            format="json",
+        )
+        self.assertIn(visit_ok.status_code, {status.HTTP_200_OK, status.HTTP_201_CREATED}, visit_ok.data)
+        visit_blocked = client_a.post(
+            "/api/v1/mobile/visits/",
+            self._visit_payload(farmer_a, village_c),
+            format="json",
+        )
+        self.assertEqual(visit_blocked.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_village_without_taluk_is_operational(self):
+        village = Village.objects.create(name="Standalone Kedar", name_ta="கேடார்")
+        assign_operational_territory(self.emp_empty, village)
+        self.assertEqual(
+            get_employee_assigned_village_ids(self.emp_empty),
+            frozenset({village.id}),
+        )
+        resp = self.client_empty.get("/api/v1/mobile/territory/")
+        rows = resp.json()["data"]["villages"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "Standalone Kedar")
+        self.assertEqual(rows[0]["name_ta"], "கேடார்")
+        self.assertTrue(rows[0]["is_active"])
+
+    def test_tamil_village_prefix_search(self):
+        self.village_a1.name_ta = "கேடார்"
+        self.village_a1.save(update_fields=["name_ta"])
+        resp = self.admin_client.get("/api/v1/masters/villages/", {"search": "கேட"})
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        data = body.get("data", body)
+        rows = data.get("results", data)
+        names = {row["name"] for row in rows}
+        self.assertIn(self.village_a1.name, names)
+        miss = self.admin_client.get("/api/v1/masters/villages/", {"search": "டார்"})
+        miss_body = miss.json()
+        miss_data = miss_body.get("data", miss_body)
+        miss_rows = miss_data.get("results", miss_data)
+        self.assertNotIn(self.village_a1.name, {row["name"] for row in miss_rows})
+

@@ -1,9 +1,8 @@
 """
 Employee location assignment service.
 
-Operational territory is village-based. District/taluk on stored rows are
-copied from Village → Taluk → District. District-only and taluk-only
-payloads are rejected for new writes.
+Operational territory is Employee ↔ Village. District/taluk on stored rows
+are leftover nullable columns and are not required for new writes.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from django.db.models import Count, Q, QuerySet
 from rest_framework import serializers
 
 from accounts.models import EmployeeLocationAssignment, EmployeeProfile
-from masters.models import District, Taluk, Village
+from masters.models import Village
 from utils.prefix_search import (
     EMPLOYEE_PROFILE_SEARCH_FIELDS,
     prefix_search_q,
@@ -26,7 +25,7 @@ from utils.prefix_search import (
 
 
 class LocationAssignmentValidationError(serializers.ValidationError):
-    """Raised when assignment payload fails hierarchy or master validation."""
+    """Raised when assignment payload fails master validation."""
 
 
 # Compact list preview caps — counts in location_assignment_summary remain authoritative.
@@ -52,8 +51,8 @@ def assignment_rows_for_employee(employee_id: int) -> QuerySet[EmployeeLocationA
             is_operational=True,
             village_id__isnull=False,
         )
-        .select_related("district", "taluk", "village", "employee__user")
-        .order_by("district__name", "taluk__name", "village__name")
+        .select_related("village", "employee__user")
+        .order_by("village__name")
     )
 
 
@@ -66,7 +65,7 @@ def legacy_incomplete_assignment_count(employee_id: int) -> int:
 
 
 def annotate_assignment_counts(qs: QuerySet[EmployeeProfile]) -> QuerySet[EmployeeProfile]:
-    """Attach district/taluk/village counts from operational village-level rows."""
+    """Attach leftover district/taluk counts plus operational village counts."""
     operational = Q(
         location_assignments__is_active=True,
         location_assignments__is_operational=True,
@@ -92,7 +91,7 @@ def annotate_assignment_counts(qs: QuerySet[EmployeeProfile]) -> QuerySet[Employ
 
 
 def _distinct_district_count(rows: list[EmployeeLocationAssignment]) -> int:
-    return len({r.district_id for r in rows})
+    return len({r.district_id for r in rows if r.district_id})
 
 
 def _distinct_taluk_count(rows: list[EmployeeLocationAssignment]) -> int:
@@ -120,9 +119,9 @@ def employee_summary_payload(profile: EmployeeProfile) -> dict[str, Any]:
 
 def assignment_summary_from_rows(rows: list[EmployeeLocationAssignment]) -> dict[str, int]:
     return {
+        "village_count": _distinct_village_count(rows),
         "district_count": _distinct_district_count(rows),
         "taluk_count": _distinct_taluk_count(rows),
-        "village_count": _distinct_village_count(rows),
     }
 
 
@@ -140,23 +139,26 @@ def assignment_preview_from_rows(
     taluk_limit: int = PREVIEW_TALUK_LIMIT,
     village_limit: int = PREVIEW_VILLAGE_LIMIT,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Compact id/name preview for list rows — capped, counts remain authoritative."""
-    districts: dict[int, str] = {}
-    taluks: dict[int, str] = {}
-    villages: dict[int, str] = {}
+    """Compact village preview for list rows — capped, counts remain authoritative."""
+    villages: dict[int, dict[str, Any]] = {}
 
     for row in rows:
-        if row.district_id and row.district_id not in districts:
-            districts[row.district_id] = row.district.name
-        if row.taluk_id and row.taluk_id not in taluks:
-            taluks[row.taluk_id] = row.taluk.name
-        if row.village_id and row.village_id not in villages:
-            villages[row.village_id] = row.village.name
+        if not row.village_id or row.village_id in villages or not row.village:
+            continue
+        villages[row.village_id] = {
+            "id": row.village_id,
+            "name": row.village.name,
+            "name_ta": getattr(row.village, "name_ta", "") or "",
+            "is_active": row.village.is_active,
+        }
 
+    village_list = sorted(
+        villages.values(), key=lambda item: item["name"].lower()
+    )[:village_limit]
     return {
-        "districts": _sorted_name_items(districts)[:district_limit],
-        "taluks": _sorted_name_items(taluks)[:taluk_limit],
-        "villages": _sorted_name_items(villages)[:village_limit],
+        "villages": village_list,
+        "districts": [],
+        "taluks": [],
     }
 
 
@@ -178,11 +180,9 @@ def assignment_previews_for_employees(
             is_operational=True,
             village_id__isnull=False,
         )
-        .select_related("district", "taluk", "village")
+        .select_related("village")
         .order_by(
             "employee_id",
-            "district__name",
-            "taluk__name",
             "village__name",
         )
     )
@@ -202,223 +202,161 @@ def assignment_previews_for_employees(
     }
 
 
+def village_payload_from_rows(
+    rows: list[EmployeeLocationAssignment],
+) -> list[dict[str, Any]]:
+    villages: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for row in rows:
+        if not row.village_id or row.village_id in seen:
+            continue
+        seen.add(row.village_id)
+        villages.append(
+            {
+                "id": row.village_id,
+                "name": row.village.name,
+                "name_ta": getattr(row.village, "name_ta", "") or "",
+                "is_active": row.village.is_active,
+            }
+        )
+    villages.sort(key=lambda item: item["name"].lower())
+    return villages
+
+
 def group_assignments_for_response(
     rows: list[EmployeeLocationAssignment],
 ) -> list[dict[str, Any]]:
-    """
-    Group flat assignment rows into district → taluk → villages hierarchy.
-
-    District-only rows appear as assignments with taluk=null and villages=[].
-    Taluk-only rows appear with villages=[].
-    """
-    grouped: dict[tuple[int, int | None], dict[str, Any]] = {}
-
-    for row in rows:
-        key = (row.district_id, row.taluk_id)
-        if key not in grouped:
-            grouped[key] = {
-                "district": {"id": row.district_id, "name": row.district.name},
-                "taluk": (
-                    {"id": row.taluk_id, "name": row.taluk.name}
-                    if row.taluk_id
-                    else None
-                ),
-                "villages": [],
-            }
-        if row.village_id:
-            grouped[key]["villages"].append(
-                {"id": row.village_id, "name": row.village.name}
-            )
-
-    result = list(grouped.values())
-    for item in result:
-        item["villages"].sort(key=lambda v: v["name"].lower())
-    result.sort(
-        key=lambda g: (
-            g["district"]["name"].lower(),
-            (g["taluk"] or {"name": ""})["name"].lower(),
-        )
-    )
-    return result
+    """Compatibility wrapper: operational assignments are a village list."""
+    return village_payload_from_rows(rows)
 
 
-def _validate_active_master(obj, label: str) -> None:
-    if not obj.is_active:
-        raise LocationAssignmentValidationError(
-            {label: f"{label} '{obj.name}' is inactive and cannot be newly assigned."}
-        )
-
-
-def _validate_village(village: Village, district: District, taluk: Taluk | None) -> None:
-    if village.taluk_id is None:
-        raise LocationAssignmentValidationError(
-            {
-                "village_ids": (
-                    f"Village '{village.name}' has no taluk and cannot be assigned."
-                )
-            }
-        )
-    if village.taluk_id != taluk.id:
-        raise LocationAssignmentValidationError(
-            {
-                "village_ids": (
-                    f"Village '{village.name}' does not belong to taluk "
-                    f"'{taluk.name}'."
-                )
-            }
-        )
-    if village.taluk.district_id != district.id:
-        raise LocationAssignmentValidationError(
-            {
-                "village_ids": (
-                    f"Village '{village.name}' does not belong to district "
-                    f"'{district.name}'."
-                )
-            }
-        )
-    _validate_active_master(village, "village")
-
-
-def _validate_taluk(taluk: Taluk, district: District) -> None:
-    if taluk.district_id != district.id:
-        raise LocationAssignmentValidationError(
-            {
-                "taluk_id": (
-                    f"Taluk '{taluk.name}' does not belong to district "
-                    f"'{district.name}'."
-                )
-            }
-        )
-    _validate_active_master(taluk, "taluk")
-
-
-def _validate_district(district: District) -> None:
-    _validate_active_master(district, "district")
-
-
-def expand_assignment_groups(
-    assignment_groups: list[dict[str, Any]],
-) -> list[tuple[int, int | None, int | None]]:
-    """
-    Expand hierarchy payload groups into normalized row tuples:
-    (district_id, taluk_id|None, village_id|None).
-    """
-    rows: list[tuple[int, int | None, int | None]] = []
-    seen: set[tuple[int, int | None, int | None]] = set()
-
-    district_cache: dict[int, District] = {}
-    taluk_cache: dict[int, Taluk] = {}
-    village_cache: dict[int, Village] = {}
-
-    for index, group in enumerate(assignment_groups):
-        prefix = f"assignments[{index}]"
-        district_id = group.get("district_id")
-        taluk_id = group.get("taluk_id")
-        village_ids = group.get("village_ids") or []
-
-        if not district_id:
+def _coerce_int_ids(values: list[Any], *, field: str = "village_ids") -> list[int]:
+    ids: list[int] = []
+    seen: set[int] = set()
+    for raw in values:
+        try:
+            village_id = int(raw)
+        except (TypeError, ValueError):
             raise LocationAssignmentValidationError(
-                {prefix: "district_id is required for each assignment group."}
+                {field: f"Invalid village id: {raw!r}."}
+            ) from None
+        if village_id not in seen:
+            seen.add(village_id)
+            ids.append(village_id)
+    return ids
+
+
+def extract_village_ids_from_payload(data: dict[str, Any]) -> list[int]:
+    """
+    Accept preferred {village_ids: [...]} or the legacy assignments wrapper.
+
+    District/taluk on the wrapper are ignored. Groups without village_ids
+    are rejected so district-only / taluk-only writes cannot grant territory.
+    """
+    if "village_ids" in data:
+        ids = data.get("village_ids")
+        if ids is None:
+            ids = []
+        if not isinstance(ids, list):
+            raise LocationAssignmentValidationError(
+                {"village_ids": "Must be a list of village ids."}
             )
+        return _coerce_int_ids(ids)
 
-        district = district_cache.get(district_id)
-        if district is None:
-            district = District.objects.filter(pk=district_id).first()
-            if not district:
-                raise LocationAssignmentValidationError(
-                    {f"{prefix}.district_id": "District not found."}
-                )
-            district_cache[district_id] = district
-        _validate_district(district)
-
-        taluk = None
-        if taluk_id:
-            taluk = taluk_cache.get(taluk_id)
-            if taluk is None:
-                taluk = Taluk.objects.filter(pk=taluk_id).select_related("district").first()
-                if not taluk:
-                    raise LocationAssignmentValidationError(
-                        {f"{prefix}.taluk_id": "Taluk not found."}
-                    )
-                taluk_cache[taluk_id] = taluk
-            _validate_taluk(taluk, district)
-
-        if village_ids:
-            if not taluk_id:
-                raise LocationAssignmentValidationError(
-                    {
-                        f"{prefix}.taluk_id": (
-                            "taluk_id is required when village_ids are provided."
-                        )
-                    }
-                )
-            for village_id in village_ids:
-                village = village_cache.get(village_id)
-                if village is None:
-                    village = (
-                        Village.objects.filter(pk=village_id)
-                        .select_related("taluk", "taluk__district")
-                        .first()
-                    )
-                    if not village:
-                        raise LocationAssignmentValidationError(
-                            {
-                                f"{prefix}.village_ids": (
-                                    f"Village id {village_id} not found."
-                                )
-                            }
-                        )
-                    village_cache[village_id] = village
-                _validate_village(village, district, taluk)
-                # Persist village as source of truth; copy district/taluk from master.
-                key = (
-                    village.taluk.district_id,
-                    village.taluk_id,
-                    village.id,
-                )
-                if key not in seen:
-                    seen.add(key)
-                    rows.append(key)
-        else:
+    groups = data.get("assignments")
+    if groups is None:
+        raise LocationAssignmentValidationError(
+            {"village_ids": "village_ids is required."}
+        )
+    if not isinstance(groups, list):
+        raise LocationAssignmentValidationError(
+            {"assignments": "Must be a list of assignment groups."}
+        )
+    collected: list[Any] = []
+    for index, group in enumerate(groups):
+        if not isinstance(group, dict):
+            raise LocationAssignmentValidationError(
+                {f"assignments[{index}]": "Must be an object."}
+            )
+        village_ids = group.get("village_ids") or []
+        if not village_ids:
             raise LocationAssignmentValidationError(
                 {
-                    f"{prefix}.village_ids": (
+                    f"assignments[{index}].village_ids": (
                         "village_ids are required. District-only and taluk-only "
                         "assignments are not operational."
                     )
                 }
             )
+        collected.extend(village_ids)
+    return _coerce_int_ids(collected)
 
-    return rows
+
+def expand_village_ids(village_ids: list[int]) -> list[Village]:
+    """Validate villages exist and are active. District/Taluk are not required."""
+    villages: list[Village] = []
+    seen: set[int] = set()
+    for village_id in village_ids:
+        if village_id in seen:
+            continue
+        village = Village.objects.filter(pk=village_id).first()
+        if not village:
+            raise LocationAssignmentValidationError(
+                {"village_ids": f"Village id {village_id} not found."}
+            )
+        if not village.is_active:
+            raise LocationAssignmentValidationError(
+                {
+                    "village_ids": (
+                        f"Village '{village.name}' is inactive and cannot be newly assigned."
+                    )
+                }
+            )
+        seen.add(village.id)
+        villages.append(village)
+    return villages
+
+
+def expand_assignment_groups(
+    assignment_groups: list[dict[str, Any]],
+) -> list[Village]:
+    """Compatibility wrapper around extract + expand for assignment groups."""
+    village_ids = extract_village_ids_from_payload({"assignments": assignment_groups})
+    return expand_village_ids(village_ids)
 
 
 @transaction.atomic
 def replace_employee_location_assignments(
     *,
     employee: EmployeeProfile,
-    assignment_groups: list[dict[str, Any]],
+    village_ids: list[int] | None = None,
+    assignment_groups: list[dict[str, Any]] | None = None,
     actor: User | None = None,
 ) -> list[EmployeeLocationAssignment]:
     """
-    Atomically replace all active assignments for an employee.
+    Atomically replace operational assignments for an employee.
 
-    Existing rows are hard-deleted and replaced with the validated final set.
+    Stored source is Employee ↔ Village. District/taluk are left null on
+    new operational writes and are not derived from Village.
     """
-    expanded = expand_assignment_groups(assignment_groups)
+    if village_ids is None:
+        village_ids = extract_village_ids_from_payload(
+            {"assignments": assignment_groups or []}
+        )
+    villages = expand_village_ids(village_ids)
 
-    # Replace operational village rows only. Leave incomplete historical rows.
     EmployeeLocationAssignment.objects.filter(
         employee=employee, is_operational=True
     ).delete()
 
     created: list[EmployeeLocationAssignment] = []
-    for district_id, taluk_id, village_id in expanded:
+    for village in villages:
         created.append(
             EmployeeLocationAssignment.objects.create(
                 employee=employee,
-                district_id=district_id,
-                taluk_id=taluk_id,
-                village_id=village_id,
+                village=village,
+                district_id=None,
+                taluk_id=None,
                 is_active=True,
                 is_operational=True,
                 created_by=actor,

@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
-from masters.models import Crop, District, Farmer, Village
+from masters.models import Crop, Farmer, Village
 from visits.models import Visit, VisitMedia
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -35,15 +35,13 @@ class AdminReportSummaryTests(APITestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.admin)
 
-        self.d1 = District.objects.create(name="Rep District 1")
-        self.d2 = District.objects.create(name="Rep District 2")
-        v1 = Village.objects.create(name="Rep Village 1", district=self.d1)
-        v2 = Village.objects.create(name="Rep Village 2", district=self.d2)
+        self.village_a = Village.objects.create(name="Rep Village 1")
+        self.village_b = Village.objects.create(name="Rep Village 2")
         self.farmer1 = Farmer.objects.create(
-            name="F1", phone="9333000001", district=self.d1, village=v1
+            name="F1", phone="9333000001", village=self.village_a
         )
         self.farmer2 = Farmer.objects.create(
-            name="F2", phone="9333000002", district=self.d2, village=v2
+            name="F2", phone="9333000002", village=self.village_b
         )
         self.crop_rice = Crop.objects.create(name_en="Rice", name_ta="Rice", is_active=True)
         self.crop_millet = Crop.objects.create(
@@ -52,10 +50,10 @@ class AdminReportSummaryTests(APITestCase):
         self.today = timezone.localdate()
         self.old = self.today - timedelta(days=10)
 
-        self.v1 = self._visit(self.emp_a, self.farmer1, self.d1, v1, self.crop_rice, self.today)
-        self.v2 = self._visit(self.emp_a, self.farmer1, self.d1, v1, self.crop_rice, self.today)
-        self.v3 = self._visit(self.emp_b, self.farmer2, self.d2, v2, self.crop_millet, self.today)
-        self.v_old = self._visit(self.emp_b, self.farmer2, self.d2, v2, self.crop_millet, self.old)
+        self.v1 = self._visit(self.emp_a, self.farmer1, self.village_a, self.crop_rice, self.today)
+        self.v2 = self._visit(self.emp_a, self.farmer1, self.village_a, self.crop_rice, self.today)
+        self.v3 = self._visit(self.emp_b, self.farmer2, self.village_b, self.crop_millet, self.today)
+        self.v_old = self._visit(self.emp_b, self.farmer2, self.village_b, self.crop_millet, self.old)
 
         VisitMedia.objects.create(
             visit=self.v1,
@@ -66,7 +64,7 @@ class AdminReportSummaryTests(APITestCase):
             original_filename="x.png",
         )
 
-    def _visit(self, emp, farmer, district, village, crop, visit_date, **extra):
+    def _visit(self, emp, farmer, village, crop, visit_date, **extra):
         return Visit.objects.create(
             employee=emp,
             farmer=farmer,
@@ -74,7 +72,6 @@ class AdminReportSummaryTests(APITestCase):
             crop=crop,
             latitude=11.0,
             longitude=78.0,
-            district=district,
             village=village,
             visit_date=visit_date,
             **extra,
@@ -101,6 +98,9 @@ class AdminReportSummaryTests(APITestCase):
         self.assertEqual(sum(x["count"] for x in data["visits_by_employee"]), 3)
         self.assertEqual(sum(x["count"] for x in data["visits_by_crop"]), 3)
         self.assertEqual(sum(x["count"] for x in data["visits_by_day"]), 3)
+        by_village = {row["village"]: row["count"] for row in data["visits_by_village"]}
+        self.assertEqual(by_village.get("Rep Village 1"), 2)
+        self.assertEqual(by_village.get("Rep Village 2"), 1)
 
     def test_employee_filter(self):
         r = self.client.get(
@@ -117,17 +117,21 @@ class AdminReportSummaryTests(APITestCase):
         self.assertEqual(len(data["visits_by_employee"]), 1)
         self.assertEqual(data["visits_by_employee"][0]["employee_code"], "REP-A")
 
-    def test_district_filter(self):
+    def test_village_filter(self):
         r = self.client.get(
             self.url,
             {
                 "from": self.today.isoformat(),
                 "to": self.today.isoformat(),
-                "district": self.d2.id,
+                "village": self.village_b.id,
             },
         )
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data["data"]["totals"]["visits"], 1)
+        by_village = {
+            row["village"]: row["count"] for row in r.data["data"]["visits_by_village"]
+        }
+        self.assertEqual(by_village, {"Rep Village 2": 1})
 
     def test_invalid_date(self):
         r = self.client.get(self.url, {"from": "not-a-date"})

@@ -171,11 +171,11 @@ class EmployeeLocationAssignment(models.Model):
     """
     Operational employee territory. Source of truth is village-level rows.
 
-    New writes persist one row per assigned village. District and taluk on
-    the row are denormalized copies of Village → Taluk → District.
+    New writes persist Employee ↔ Village. District and taluk are legacy
+    nullable columns and are not required for operational assignments.
 
-    Incomplete rows (no village, or village without a live Taluk/District)
-    may remain with is_operational=False and must not grant territory.
+    Incomplete rows (no village) remain is_operational=False and must not
+    grant territory.
     """
 
     employee = models.ForeignKey(
@@ -186,7 +186,10 @@ class EmployeeLocationAssignment(models.Model):
     district = models.ForeignKey(
         "masters.District",
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="employee_location_assignments",
+        help_text="DEPRECATED. Not used for operational territory.",
     )
     taluk = models.ForeignKey(
         "masters.Taluk",
@@ -194,6 +197,7 @@ class EmployeeLocationAssignment(models.Model):
         null=True,
         blank=True,
         related_name="employee_location_assignments",
+        help_text="DEPRECATED. Not used for operational territory.",
     )
     village = models.ForeignKey(
         "masters.Village",
@@ -207,8 +211,8 @@ class EmployeeLocationAssignment(models.Model):
         default=True,
         db_index=True,
         help_text=(
-            "True only for village-level rows with a valid District→Taluk→Village "
-            "hierarchy. Legacy district-only/taluk-only rows are False."
+            "True only for village-level Employee ↔ Village rows. "
+            "Legacy district-only/taluk-only rows are False."
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -254,9 +258,6 @@ class EmployeeLocationAssignment(models.Model):
         ]
 
     def __str__(self):
-        parts = [self.district.name]
-        if self.taluk_id:
-            parts.append(self.taluk.name)
         if self.village_id:
-            parts.append(self.village.name)
-        return f"{self.employee.employee_id}: {' / '.join(parts)}"
+            return f"{self.employee.employee_id}: {self.village.name}"
+        return f"{self.employee.employee_id}: incomplete"

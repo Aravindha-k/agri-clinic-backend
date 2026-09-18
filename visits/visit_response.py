@@ -137,41 +137,32 @@ def build_field_visit_snapshot(visit: Visit) -> dict:
 
 def build_visit_location_block(visit: Visit) -> Dict[str, Any]:
     """
-    Canonical visit location names for admin/mobile detail.
+    Canonical visit location for admin/mobile detail.
 
-    Visit stores district + village FKs only. Taluk is derived from the village
-    master row when present, then farmer.taluk as fallback.
+    Operational location is Village only. Stored Visit.district is leftover
+    historical data and is returned when present, never derived.
     """
     district_id = visit.district_id
     district_name = ""
     if visit.district_id:
         district_name = visit.district.name
-    elif visit.farmer_id and visit.farmer.district_id:
-        district_id = visit.farmer.district_id
-        district_name = visit.farmer.district.name
 
     village_id = visit.village_id
     village_name = visit.village.name if visit.village_id else ""
+    village_name_ta = visit.village.name_ta if visit.village_id else ""
     if not village_name and visit.farmer_id and visit.farmer.village_id:
         village_id = visit.farmer.village_id
         village_name = visit.farmer.village.name
-
-    taluk_id = None
-    taluk_name = ""
-    if visit.village_id and visit.village.taluk_id:
-        taluk_id = visit.village.taluk_id
-        taluk_name = visit.village.taluk.name
-    elif visit.farmer_id and visit.farmer.taluk_id:
-        taluk_id = visit.farmer.taluk_id
-        taluk_name = visit.farmer.taluk.name
+        village_name_ta = visit.farmer.village.name_ta or ""
 
     return {
         "district_id": district_id,
         "district_name": district_name,
-        "taluk_id": taluk_id,
-        "taluk_name": taluk_name,
+        "taluk_id": None,
+        "taluk_name": "",
         "village_id": village_id,
         "village_name": village_name,
+        "village_name_ta": village_name_ta or "",
     }
 
 

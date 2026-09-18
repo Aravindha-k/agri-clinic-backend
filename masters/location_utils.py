@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.db.models import Exists, OuterRef, Q
 
-from masters.models import CropProblem, ProblemMaster
+from masters.models import CropProblem, ProblemMaster, Village
 
 
 def models_Q_crop_filter(crop_id):
@@ -47,6 +47,17 @@ def problem_allowed_for_crop(problem: ProblemMaster, crop_id: int | None) -> boo
 
 def normalize_village_name(name: str) -> str:
     return " ".join((name or "").strip().split()).casefold()
+
+
+def find_village_by_normalized_name(name: str) -> Village | None:
+    """Match an existing village by trimmed, case-insensitive name."""
+    target = normalize_village_name(name)
+    if not target:
+        return None
+    for village in Village.objects.only("id", "name").iterator():
+        if normalize_village_name(village.name) == target:
+            return village
+    return None
 
 
 def village_identity_key(*, taluk_id: int, official_code: str, name: str) -> str:

@@ -1,7 +1,6 @@
 from rest_framework.test import APIClient
 
 from accounts.models import EmployeeLocationAssignment
-from masters.models import Taluk
 
 
 def login_mobile_client(*, employee_id: str, password: str = "x") -> APIClient:
@@ -27,26 +26,13 @@ def login_mobile_client(*, employee_id: str, password: str = "x") -> APIClient:
 
 def assign_operational_territory(user, village):
     """Give a field employee operational village-level territory for tests."""
-    if village.taluk_id is None:
-        district = village.district
-        if district is None:
-            raise ValueError("village must have district or taluk for test assignment")
-        taluk, _ = Taluk.objects.get_or_create(
-            name=f"TestTaluk-{village.pk}",
-            district=district,
-            defaults={"is_active": True},
-        )
-        village.taluk = taluk
-        village.save()
-    village.refresh_from_db()
     profile = user.employee_profile
-    district = village.taluk.district
     EmployeeLocationAssignment.objects.update_or_create(
         employee=profile,
         village=village,
         defaults={
-            "district": district,
-            "taluk": village.taluk,
+            "district_id": None,
+            "taluk_id": None,
             "is_active": True,
             "is_operational": True,
         },

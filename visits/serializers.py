@@ -107,6 +107,7 @@ class VisitSerializer(serializers.ModelSerializer):
         source="employee.employee_profile.phone", read_only=True, default=""
     )
     village_name = serializers.CharField(source="village.name", read_only=True)
+    village_name_ta = serializers.CharField(source="village.name_ta", read_only=True)
     district_name = serializers.CharField(source="district.name", read_only=True)
     crop_info = serializers.SerializerMethodField()
     crop_name = serializers.SerializerMethodField()
@@ -132,6 +133,7 @@ class VisitSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "local_sync_id": {"required": False, "allow_null": True, "allow_blank": True},
             "crop": {"required": False, "allow_null": True},
+            "district": {"required": False, "allow_null": True},
             "latitude": {"required": False, "allow_null": True},
             "longitude": {"required": False, "allow_null": True},
             "follow_up_required": {"required": False, "allow_null": True},

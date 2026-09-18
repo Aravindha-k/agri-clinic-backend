@@ -49,10 +49,6 @@ def resolve_farmer_for_visit(
     village = _coerce_village(data.get("village"))
     if village is not None:
         data["village"] = village
-        if village.taluk_id and village.taluk and village.taluk.district_id:
-            data["district"] = village.taluk.district
-        elif village.district_id:
-            data["district"] = village.district
 
     scope_territory = user_requires_territory_scope(employee)
     if scope_territory and village is not None:
@@ -154,10 +150,14 @@ def resolve_farmer_for_visit(
         if village is None and farmer.village_id:
             data["village"] = farmer.village
             village = farmer.village
-        if village is not None and village.taluk_id:
-            data.setdefault("district", village.taluk.district)
-        else:
-            data.setdefault("district", farmer.district)
+        if (
+            village is not None
+            and farmer.village_id
+            and farmer.village_id != getattr(village, "pk", village)
+        ):
+            raise FarmerResolutionError(
+                {"village": "Visit village must match the farmer's village."}
+            )
     return farmer
 
 
@@ -174,10 +174,6 @@ def _coerce_village(value: Any) -> Village | None:
     if value is None or isinstance(value, Village):
         return value
     try:
-        return (
-            Village.objects.select_related("taluk", "taluk__district", "district")
-            .filter(pk=value)
-            .first()
-        )
+        return Village.objects.filter(pk=value).first()
     except (TypeError, ValueError):
         return None

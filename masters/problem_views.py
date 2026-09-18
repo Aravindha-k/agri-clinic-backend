@@ -69,9 +69,7 @@ class VisitFormOptionsAPI(APIView):
         category_id = request.query_params.get("category_id")
         crop_id = request.query_params.get("crop_id")
 
-        villages = Village.objects.filter(is_active=True).select_related(
-            "district", "taluk"
-        )
+        villages = Village.objects.filter(is_active=True)
         from accounts.territory import filter_villages_for_user
 
         villages = filter_villages_for_user(villages, request.user)
@@ -83,10 +81,8 @@ class VisitFormOptionsAPI(APIView):
             {
                 "id": v.id,
                 "name": v.name,
-                "district_id": v.district_id,
-                "district_name": v.district.name if v.district_id else "",
-                "taluk_id": v.taluk_id,
-                "taluk_name": v.taluk.name if v.taluk_id else "",
+                "name_ta": v.name_ta or "",
+                "is_active": v.is_active,
             }
             for v in villages
         ]
@@ -113,9 +109,7 @@ class VillageDropdownAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        villages = Village.objects.filter(is_active=True).select_related(
-            "district", "taluk"
-        )
+        villages = Village.objects.filter(is_active=True)
         from accounts.territory import filter_villages_for_user
 
         villages = filter_villages_for_user(villages, request.user)
@@ -123,10 +117,8 @@ class VillageDropdownAPI(APIView):
             {
                 "id": v.id,
                 "name": v.name,
-                "district_id": v.district_id,
-                "district_name": v.district.name if v.district_id else "",
-                "taluk_id": v.taluk_id,
-                "taluk_name": v.taluk.name if v.taluk_id else "",
+                "name_ta": v.name_ta or "",
+                "is_active": v.is_active,
             }
             for v in villages.order_by("name")
         ]

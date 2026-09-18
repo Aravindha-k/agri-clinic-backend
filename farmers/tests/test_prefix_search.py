@@ -134,11 +134,11 @@ class FarmerDirectoryPrefixSearchTests(PrefixSearchTestMixin, TestCase):
             self.assertEqual(resp.status_code, 200, resp.data)
             self.assertNotIn(self.target.id, self._farmer_ids(resp))
 
-    def test_prefix_village_district_phone_match(self):
+    def test_prefix_village_and_phone_match(self):
         resp = self._search("Ked")
         self.assertIn(self.target.id, self._farmer_ids(resp))
         resp = self._search("Vill")
-        self.assertIn(self.target.id, self._farmer_ids(resp))
+        self.assertNotIn(self.target.id, self._farmer_ids(resp))
         resp = self._search("962")
         self.assertIn(self.target.id, self._farmer_ids(resp))
 

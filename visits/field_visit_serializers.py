@@ -118,6 +118,7 @@ class FieldVisitSubmitSerializer(serializers.ModelSerializer):
             "farmer_age": {"required": False},
             "village": {"required": False},
             "crop": {"required": False},
+            "district": {"required": False, "allow_null": True},
             "land_area": {"required": False},
             "problem_category": {"required": False},
             "problem_master": {"required": False},

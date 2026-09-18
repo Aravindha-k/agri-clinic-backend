@@ -42,7 +42,7 @@ def filtered_submitted_visits(
     start: date | None = None,
     end: date | None = None,
     employee=None,
-    district=None,
+    village=None,
 ):
     qs = submitted_visits_qs(Visit.objects.all())
     qs = apply_visit_date_range(qs, start, end)
@@ -51,17 +51,16 @@ def filtered_submitted_visits(
     if emp_q is not None:
         qs = qs.filter(emp_q)
 
-    if district is not None and str(district).strip():
-        d = str(district).strip()
-        if d.isdigit():
-            qs = qs.filter(district_id=int(d))
+    if village is not None and str(village).strip():
+        v = str(village).strip()
+        if v.isdigit():
+            qs = qs.filter(village_id=int(v))
         else:
-            qs = qs.filter(district__name__iexact=d)
+            qs = qs.filter(village__name__iexact=v)
 
     return qs.select_related(
         "employee",
         "employee__employee_profile",
-        "district",
         "village",
         "crop",
         "farmer",
@@ -73,10 +72,10 @@ def build_admin_report_summary(
     start: date | None = None,
     end: date | None = None,
     employee=None,
-    district=None,
+    village=None,
 ) -> dict:
     qs = filtered_submitted_visits(
-        start=start, end=end, employee=employee, district=district
+        start=start, end=end, employee=employee, village=village
     )
 
     has_media = VisitMedia.objects.filter(visit_id=OuterRef("pk"))
@@ -136,14 +135,13 @@ def build_admin_report_summary(
         )
     ]
 
-    visits_by_district = [
+    visits_by_village = [
         {
-            "district_id": row["district_id"],
-            "district_name": row["district__name"] or "—",
+            "village": row["village__name"] or "—",
             "count": row["count"],
         }
         for row in (
-            qs.values("district_id", "district__name")
+            qs.values("village__name")
             .annotate(count=Count("id"))
             .order_by("-count")[:50]
         )
@@ -203,7 +201,7 @@ def build_admin_report_summary(
         },
         "visits_by_day": visits_by_day,
         "visits_by_employee": visits_by_employee,
-        "visits_by_district": visits_by_district,
+        "visits_by_village": visits_by_village,
         "visits_by_crop": visits_by_crop,
         "farmer_coverage_by_village": farmer_coverage_by_village,
     }

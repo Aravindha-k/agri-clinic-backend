@@ -73,15 +73,17 @@ class AdminVisitDetailContractTests(APITestCase):
 
         self.assertEqual(data["district"], self.district.id)
         self.assertEqual(data["district_name"], "Trichy")
-        self.assertEqual(data["taluk_name"], "Lalgudi")
+        self.assertEqual(data.get("taluk_name") or "", "")
         self.assertEqual(data["village_name"], "Kedar")
+        self.assertIn(data.get("village_name_ta"), ("", None))
         self.assertNotEqual(data["district_name"], str(self.district.id))
 
-    def test_taluk_from_village_when_farmer_taluk_missing(self):
+    def test_taluk_is_not_derived_from_village(self):
         Farmer.objects.filter(pk=self.farmer.pk).update(taluk=None)
         resp = self.client.get(f"/api/v1/admin/visits/{self.visit.id}/")
         data = resp.json()
-        self.assertEqual(data["taluk_name"], "Lalgudi")
+        self.assertEqual(data.get("taluk_name") or "", "")
+        self.assertEqual(data["village_name"], "Kedar")
 
     def test_unified_evidence_on_detail_matches_count(self):
         resp = self.client.get(f"/api/v1/admin/visits/{self.visit.id}/")

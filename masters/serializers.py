@@ -47,14 +47,23 @@ class TalukSerializer(serializers.ModelSerializer):
 
 
 class VillageSerializer(serializers.ModelSerializer):
-    district_name = serializers.CharField(source="district.name", read_only=True)
-    taluk_name = serializers.CharField(source="taluk.name", read_only=True)
+    tamil_name = serializers.CharField(
+        required=False, allow_blank=True, write_only=True
+    )
+    district_name = serializers.CharField(
+        source="district.name", read_only=True, default="", allow_null=True
+    )
+    taluk_name = serializers.CharField(
+        source="taluk.name", read_only=True, default="", allow_null=True
+    )
 
     class Meta:
         model = Village
         fields = [
             "id",
             "name",
+            "name_ta",
+            "tamil_name",
             "official_code",
             "district",
             "district_name",
@@ -64,24 +73,42 @@ class VillageSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("created_at", "updated_at")
         extra_kwargs = {
-            "district": {"required": False},
-            "taluk": {"required": False},
+            "district": {"required": False, "allow_null": True},
+            "taluk": {"required": False, "allow_null": True},
+            "name_ta": {"required": False, "allow_blank": True},
         }
 
+    def to_internal_value(self, data):
+        if hasattr(data, "copy"):
+            data = data.copy()
+        else:
+            data = dict(data)
+        if not (data.get("name_ta") or "").strip() and data.get("tamil_name"):
+            data["name_ta"] = data.get("tamil_name")
+        return super().to_internal_value(data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["tamil_name"] = instance.name_ta or ""
+        return data
+
+    def validate_name(self, value):
+        from masters.location_utils import find_village_by_normalized_name
+
+        value = " ".join((value or "").strip().split())
+        if not value:
+            raise serializers.ValidationError("Village name is required.")
+        existing = find_village_by_normalized_name(value)
+        if existing and (self.instance is None or existing.pk != self.instance.pk):
+            raise serializers.ValidationError("A village with this name already exists.")
+        return value
+
     def validate(self, attrs):
+        attrs.pop("tamil_name", None)
+        # Operational create/update does not require district/taluk/firka.
+        # If a legacy taluk is supplied, keep Village.district consistent.
         taluk = attrs.get("taluk")
-        if taluk is None and self.instance is not None:
-            taluk = self.instance.taluk
-        if self.instance is None and taluk is None:
-            raise serializers.ValidationError(
-                {"taluk": "Taluk is required for a new village."}
-            )
-        if taluk is not None:
-            if not taluk.district_id:
-                raise serializers.ValidationError(
-                    {"taluk": "Taluk must belong to a district."}
-                )
-            attrs["taluk"] = taluk
+        if taluk is not None and getattr(taluk, "district_id", None):
             attrs["district"] = taluk.district
         return attrs
 
@@ -89,7 +116,7 @@ class VillageSerializer(serializers.ModelSerializer):
 class VillageLightweightSerializer(serializers.ModelSerializer):
     class Meta:
         model = Village
-        fields = ["id", "name", "official_code"]
+        fields = ["id", "name", "name_ta", "is_active", "official_code"]
 
 
 class CropSerializer(serializers.ModelSerializer):
@@ -126,25 +153,12 @@ def bind_farmer_location_from_village(
     attrs, instance=None, *, require_village=False
 ):
     """
-    Derive Farmer.district / Farmer.taluk from Village.
-
-    Client-supplied district/taluk are ignored when a village is present.
-    Villages without an active Taluk/District cannot be newly assigned.
+    Bind Farmer.village. District/taluk are not operational and are left
+    null on new village assignment.
     """
     village = attrs.get("village", getattr(instance, "village", None) if instance else None)
     if village is not None and not isinstance(village, Village):
-        village = (
-            Village.objects.filter(pk=getattr(village, "pk", village))
-            .select_related("taluk", "taluk__district")
-            .first()
-        )
-        attrs["village"] = village
-    elif isinstance(village, Village) and village.taluk_id and getattr(village, "taluk", None) is None:
-        village = (
-            Village.objects.filter(pk=village.pk)
-            .select_related("taluk", "taluk__district")
-            .first()
-        )
+        village = Village.objects.filter(pk=getattr(village, "pk", village)).first()
         attrs["village"] = village
 
     if require_village and not village:
@@ -157,27 +171,10 @@ def bind_farmer_location_from_village(
         raise serializers.ValidationError(
             {"village": "Inactive village cannot be newly assigned."}
         )
-    if not village.taluk_id:
-        raise serializers.ValidationError(
-            {"village": "Village does not belong to a taluk."}
-        )
-    taluk = village.taluk
-    if taluk is None:
-        taluk = (
-            Taluk.objects.select_related("district").filter(pk=village.taluk_id).first()
-        )
-    if not taluk or not taluk.is_active:
-        raise serializers.ValidationError(
-            {"village": "Village does not belong to an active taluk."}
-        )
-    district = taluk.district
-    if not district or not district.is_active:
-        raise serializers.ValidationError(
-            {"village": "Village does not belong to an active district."}
-        )
     attrs["village"] = village
-    attrs["taluk"] = taluk
-    attrs["district"] = district
+    if assigning_village:
+        attrs["taluk"] = None
+        attrs["district"] = None
     return attrs
 
 
@@ -198,56 +195,25 @@ def _enforce_employee_farmer_village(attrs, request, instance=None):
 
 
 def validate_farmer_location_hierarchy(attrs, instance=None, *, require_complete=False):
-    """Validate district/taluk/village consistency. Inactive values cannot be newly assigned.
+    """Village-only location validation. District/taluk are not operational.
 
     require_complete: new farmers, or an edit that changes location fields, must
-    supply a full District -> Taluk -> Village hierarchy. Do not silently infer
-    Taluk from village name. Unrelated PATCH of an existing legacy farmer
-    (taluk NULL) must still succeed.
+    supply Village. Unrelated PATCH of an existing farmer must still succeed.
     """
-    district = attrs.get("district", getattr(instance, "district", None) if instance else None)
-    taluk = attrs.get("taluk", getattr(instance, "taluk", None) if instance else None)
     village = attrs.get("village", getattr(instance, "village", None) if instance else None)
 
-    # Resolve PKs that arrived as ints.
-    if isinstance(district, int):
-        district = District.objects.filter(pk=district).first()
-        attrs["district"] = district
-    if isinstance(taluk, int):
-        taluk = Taluk.objects.filter(pk=taluk).first()
-        attrs["taluk"] = taluk
     if isinstance(village, int):
         village = Village.objects.filter(pk=village).first()
         attrs["village"] = village
 
     errors = {}
-    assigning_district = "district" in attrs and attrs["district"] is not None
-    assigning_taluk = "taluk" in attrs and attrs["taluk"] is not None
     assigning_village = "village" in attrs and attrs["village"] is not None
 
-    if assigning_district and district and not district.is_active:
-        errors["district"] = "Inactive district cannot be newly assigned."
-    if assigning_taluk and taluk and not taluk.is_active:
-        errors["taluk"] = "Inactive taluk cannot be newly assigned."
     if assigning_village and village and not village.is_active:
         errors["village"] = "Inactive village cannot be newly assigned."
 
-    if require_complete:
-        if not district:
-            errors["district"] = "District is required."
-        if not taluk:
-            errors["taluk"] = "Taluk is required."
-        if not village:
-            errors["village"] = "Village is required."
-        elif not village.taluk_id:
-            errors["village"] = "Village does not belong to a taluk."
-
-    if taluk and district and taluk.district_id != district.id:
-        errors["taluk"] = "Taluk does not belong to the selected district."
-    if village and taluk and village.taluk_id and village.taluk_id != taluk.id:
-        errors["village"] = "Village does not belong to the selected taluk."
-    if village and district and village.district_id and village.district_id != district.id:
-        errors["village"] = "Village does not belong to the selected district."
+    if require_complete and not village:
+        errors["village"] = "Village is required."
 
     if errors:
         raise serializers.ValidationError(errors)
@@ -257,6 +223,9 @@ def validate_farmer_location_hierarchy(attrs, instance=None, *, require_complete
 class FarmerSerializer(serializers.ModelSerializer):
     village_name = serializers.CharField(
         source="village.name", read_only=True, default=None
+    )
+    village_name_ta = serializers.CharField(
+        source="village.name_ta", read_only=True, default=""
     )
     district_name = serializers.CharField(
         source="district.name", read_only=True, default=None

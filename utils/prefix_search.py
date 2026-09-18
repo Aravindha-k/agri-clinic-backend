@@ -10,8 +10,7 @@ FARMER_DIRECTORY_SEARCH_FIELDS = (
     "phone",
     "farmer_code",
     "village__name",
-    "district__name",
-    "taluk__name",
+    "village__name_ta",
 )
 
 EMPLOYEE_PROFILE_SEARCH_FIELDS = (
@@ -32,6 +31,7 @@ VISIT_SELECTOR_SEARCH_FIELDS = (
     "farmer_phone",
     "notes",
     "village__name",
+    "village__name_ta",
 )
 
 VISIT_LIST_SEARCH_FIELDS = (
@@ -44,6 +44,7 @@ VISIT_LIST_SEARCH_FIELDS = (
     "employee__last_name",
     "employee__employee_profile__employee_id",
     "village__name",
+    "village__name_ta",
     "crop__name_en",
     "crop__name_ta",
 )
@@ -52,6 +53,7 @@ FARMER_VISIT_LIST_SEARCH_FIELDS = (
     "farmer__name",
     "farmer_name",
     "farmer__village__name",
+    "farmer__village__name_ta",
     "field__land_name",
     "employee__username",
     "employee__employee_profile__employee_id",
