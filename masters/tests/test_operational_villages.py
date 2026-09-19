@@ -113,9 +113,10 @@ class OperationalVillageImportTests(TestCase):
         sheet.append(
             ["S NO", "Field staff", "Village", "village tamil name", "Firka", "Taluk", "District"]
         )
-        sheet.append([1, "Ravi", "Kedar", "கேடார்", "Firka X", "Vanur", "Villupuram"])
-        sheet.append([2, "Ravi", " kedar ", "ignored-dupe", "Firka Y", "Vanur", "Villupuram"])
-        sheet.append([3, "Kavya", "Ananthapuram", "ஆனந்தபுரம்", "Firka Z", "Tindivanam", "Villupuram"])
+        # Blank Field staff => village-only rows (no employee assignment).
+        sheet.append([1, "", "Kedar", "கேடார்", "Firka X", "Vanur", "Villupuram"])
+        sheet.append([2, "", " kedar ", "", "Firka Y", "Vanur", "Villupuram"])
+        sheet.append([3, "", "Ananthapuram", "ஆனந்தபுரம்", "Firka Z", "Tindivanam", "Villupuram"])
         book.save(path)
         book.close()
         return path

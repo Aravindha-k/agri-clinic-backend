@@ -17,6 +17,10 @@ from .views import (
 )
 from masters.problem_views import VisitFormOptionsAPI
 from masters.problem_item_views import ProblemItemViewSet, ProblemItemImportAPI
+from masters.village_import_views import (
+    VillageImportConfirmAPI,
+    VillageImportValidateAPI,
+)
 from .dev_reset import DevResetTestBusinessDataAPI
 from visits.attachment_views import AdminVisitAttachmentListAPI
 from accounts.profile_photos import AdminEmployeePhotoAPI
@@ -99,6 +103,16 @@ urlpatterns = [
         "problem-items/import/",
         ProblemItemImportAPI.as_view(),
         name="admin-problem-items-import",
+    ),
+    path(
+        "villages/import/validate/",
+        VillageImportValidateAPI.as_view(),
+        name="admin-villages-import-validate",
+    ),
+    path(
+        "villages/import/confirm/",
+        VillageImportConfirmAPI.as_view(),
+        name="admin-villages-import-confirm",
     ),
     path(
         "dev/reset-test-data/",
