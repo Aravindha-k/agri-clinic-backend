@@ -1,0 +1,164 @@
+name: Ops Village Import Dry-Run
+
+# Manual-only. Dry-run against production DB. Never uses --execute.
+# Does not deploy. Overlays importer files temporarily, then restores via git.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_dry_run:
+        description: "Type DRY-RUN-ONLY to proceed"
+        required: true
+        type: string
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  village-import-dryrun:
+    name: Production village import dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: inputs.confirm_dry_run == 'DRY-RUN-ONLY'
+
+    steps:
+      - name: Checkout importer sources
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Upload workbook + importer overlay
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
+          REMOTE_TMP="/tmp/village_import_dryrun_$$"
+          WORKBOOK="imports/Village visit app(2).xlsx"
+
+          test -f "${WORKBOOK}"
+
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            "mkdir -p '${REMOTE_TMP}'"
+
+          scp -i ~/.ssh/deploy_key -P "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${WORKBOOK}" \
+            "masters/operational_village_import.py" \
+            "masters/management/commands/import_operational_villages.py" \
+            "${EC2_USER}@${EC2_HOST}:${REMOTE_TMP}/"
+
+          # Stash remote tmp path for next step
+          echo "REMOTE_TMP=${REMOTE_TMP}" >> "$GITHUB_ENV"
+          echo "DEPLOY_PATH=${DEPLOY_PATH}" >> "$GITHUB_ENV"
+          echo "PORT=${PORT}" >> "$GITHUB_ENV"
+
+      - name: Run production dry-run (zero writes)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            "set -euo pipefail
+             DEPLOY_PATH='${DEPLOY_PATH}'
+             REMOTE_TMP='${REMOTE_TMP}'
+             cd \"\${DEPLOY_PATH}\"
+             source .venv/bin/activate
+
+             echo '[village-dryrun] PRODUCTION DB CONFIRMATION'
+             python - <<'PY'
+             import os
+             from urllib.parse import urlsplit
+             import django
+             os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+             django.setup()
+             from django.conf import settings
+             from accounts.models import EmployeeLocationAssignment, EmployeeProfile
+             from masters.models import Village
+
+             db_url = getattr(settings, 'DATABASE_URL', '') or ''
+             host = (urlsplit(db_url).hostname or '').strip() or '(unset)'
+             app_env = (os.getenv('APP_ENV') or '').strip().lower()
+             print(f'APP_ENV={app_env or \"(unset)\"}')
+             print(f'DATABASE_URL host={host}')
+             print(f'IS_PRODUCTION-like={app_env in {\"prod\",\"production\",\"aws\"} or host not in {\"localhost\",\"127.0.0.1\",\"::1\",\"(unset)\"}}')
+             print(f'BEFORE Village={Village.objects.count()}')
+             print(f'BEFORE EmployeeLocationAssignment={EmployeeLocationAssignment.objects.count()}')
+             print('EMPLOYEE PROFILE RESOLUTION:')
+             wanted = {
+                 'Kaviyarasan': 'KAC-0003',
+                 'Sasikumar': 'KAC-0004',
+                 'Sathish': 'KAC-0005',
+                 'Selvamani': 'KAC-0006',
+             }
+             for name, code in wanted.items():
+                 qs = EmployeeProfile.objects.select_related('user').filter(employee_id=code)
+                 if qs.count() != 1:
+                     print(f'  {name}: STOP employee_id={code} count={qs.count()}')
+                     continue
+                 p = qs.get()
+                 full = (p.user.get_full_name() or p.user.first_name or '').strip()
+                 print(f'  {name}: pk={p.pk} employee_id={p.employee_id} user={p.user.username} full_name={full!r}')
+             print('ALL EmployeeProfile codes:')
+             for p in EmployeeProfile.objects.select_related('user').order_by('employee_id'):
+                 full = (p.user.get_full_name() or p.user.first_name or '').strip()
+                 print(f'  {p.employee_id} pk={p.pk} name={full!r} user={p.user.username}')
+             PY
+
+             # Overlay importer onto deploy tree (not a git deploy)
+             mkdir -p masters/management/commands
+             cp \"\${REMOTE_TMP}/operational_village_import.py\" masters/operational_village_import.py
+             cp \"\${REMOTE_TMP}/import_operational_villages.py\" masters/management/commands/import_operational_villages.py
+             XLSX=\"\${REMOTE_TMP}/Village visit app(2).xlsx\"
+             test -f \"\${XLSX}\"
+
+             echo
+             echo '[village-dryrun] RUNNING import_operational_villages (NO --execute)'
+             python manage.py import_operational_villages \"\${XLSX}\"
+             DRY_EXIT=\$?
+
+             echo
+             echo '[village-dryrun] AFTER COUNTS'
+             python - <<'PY'
+             import os
+             import django
+             os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+             django.setup()
+             from accounts.models import EmployeeLocationAssignment
+             from masters.models import Village
+             print(f'AFTER Village={Village.objects.count()}')
+             print(f'AFTER EmployeeLocationAssignment={EmployeeLocationAssignment.objects.count()}')
+             PY
+
+             # Restore tree: remove overlay files that are not in HEAD
+             git checkout -- masters/ 2>/dev/null || true
+             rm -f masters/operational_village_import.py
+             rm -f masters/management/commands/import_operational_villages.py
+             # If they existed in HEAD, restore them
+             git checkout HEAD -- masters/operational_village_import.py masters/management/commands/import_operational_villages.py 2>/dev/null || true
+             rm -rf \"\${REMOTE_TMP}\"
+
+             echo \"[village-dryrun] overlay cleaned; dry-run exit=\${DRY_EXIT}\"
+             exit \"\${DRY_EXIT}\"
+            "
