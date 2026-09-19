@@ -116,6 +116,7 @@ class TamilConflict:
     display_name: str
     tamil_values: list[str]
     excel_rows: list[int]
+    affected_employees: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -123,6 +124,7 @@ class TamilConflict:
             "village_key": self.village_key,
             "tamil_values": self.tamil_values,
             "excel_rows": self.excel_rows,
+            "affected_employees": self.affected_employees,
         }
 
 
@@ -162,6 +164,9 @@ class ImportPlan:
     tamil_names_present: int = 0
     tamil_names_blank: int = 0
     tamil_name_conflicts: list[TamilConflict] = field(default_factory=list)
+    skipped_conflicted_villages: int = 0
+    skipped_conflicted_rows: int = 0
+    skipped_conflicted_assignments: int = 0
     employees_matched: list[str] = field(default_factory=list)
     employees_not_found: list[str] = field(default_factory=list)
     ambiguous_employees: list[str] = field(default_factory=list)
@@ -184,16 +189,24 @@ class ImportPlan:
     def has_blocking_errors(self) -> bool:
         return bool(self.blocking_errors)
 
+    @property
+    def eligible_villages(self) -> int:
+        return self.villages_to_create + self.villages_existing
+
     def preview_dict(self) -> dict[str, Any]:
         return {
             "total_rows": self.total_rows,
             "valid_rows": self.valid_rows,
             "unique_villages": self.unique_villages,
+            "eligible_villages": self.eligible_villages,
             "villages_to_create": self.villages_to_create,
             "villages_existing": self.villages_existing,
             "tamil_names_present": self.tamil_names_present,
             "tamil_names_blank": self.tamil_names_blank,
             "tamil_name_conflicts": [c.as_dict() for c in self.tamil_name_conflicts],
+            "skipped_conflicted_villages": self.skipped_conflicted_villages,
+            "skipped_conflicted_rows": self.skipped_conflicted_rows,
+            "skipped_conflicted_assignments": self.skipped_conflicted_assignments,
             "employees_matched": self.employees_matched,
             "employees_not_found": self.employees_not_found,
             "ambiguous_employees": self.ambiguous_employees,
@@ -208,9 +221,20 @@ class ImportPlan:
             "warnings": self.warnings,
             "errors": self.errors,
             "blocking_errors": self.blocking_errors,
+            "skippable_errors": (
+                ["TAMIL_NAME_CONFLICT"] if self.tamil_name_conflicts else []
+            ),
             "blank_tamil_villages": self.blank_tamil_villages,
             "row_results": [r.as_dict() for r in self.row_results],
             "can_confirm": not self.has_blocking_errors,
+        }
+
+    def skip_summary_dict(self) -> dict[str, Any]:
+        return {
+            "skipped_conflicted_villages": self.skipped_conflicted_villages,
+            "skipped_conflicted_rows": self.skipped_conflicted_rows,
+            "skipped_conflicted_assignments": self.skipped_conflicted_assignments,
+            "tamil_name_conflicts": [c.as_dict() for c in self.tamil_name_conflicts],
         }
 
     def to_cache_payload(self) -> dict[str, Any]:
@@ -223,6 +247,7 @@ class ImportPlan:
                 [emp_pk, vkey] for emp_pk, vkey in self.assignment_keys
             ],
             "blocking_errors": list(self.blocking_errors),
+            "skip_summary": self.skip_summary_dict(),
             "preview": {
                 "total_rows": self.total_rows,
                 "valid_rows": self.valid_rows,
@@ -231,6 +256,9 @@ class ImportPlan:
                 "villages_existing": self.villages_existing,
                 "assignments_to_create": self.assignments_to_create,
                 "assignments_existing": self.assignments_existing,
+                "skipped_conflicted_villages": self.skipped_conflicted_villages,
+                "skipped_conflicted_rows": self.skipped_conflicted_rows,
+                "skipped_conflicted_assignments": self.skipped_conflicted_assignments,
             },
         }
 
@@ -254,6 +282,24 @@ class ImportPlan:
         plan.villages_existing = int(preview.get("villages_existing") or 0)
         plan.assignments_to_create = int(preview.get("assignments_to_create") or 0)
         plan.assignments_existing = int(preview.get("assignments_existing") or 0)
+        plan.skipped_conflicted_villages = int(
+            preview.get("skipped_conflicted_villages") or 0
+        )
+        plan.skipped_conflicted_rows = int(preview.get("skipped_conflicted_rows") or 0)
+        plan.skipped_conflicted_assignments = int(
+            preview.get("skipped_conflicted_assignments") or 0
+        )
+        skip = payload.get("skip_summary") or {}
+        plan.tamil_name_conflicts = [
+            TamilConflict(
+                village_key=item.get("village_key") or "",
+                display_name=item.get("village") or "",
+                tamil_values=list(item.get("tamil_values") or []),
+                excel_rows=list(item.get("excel_rows") or []),
+                affected_employees=list(item.get("affected_employees") or []),
+            )
+            for item in (skip.get("tamil_name_conflicts") or [])
+        ]
         return plan
 
 
@@ -577,22 +623,23 @@ def _build_plan(source: Path | BinaryIO | str) -> ImportPlan:
         plan.employees_not_found = sorted(not_found_labels, key=str.casefold)
         plan.ambiguous_employees = sorted(ambiguous_labels, key=str.casefold)
 
-        # Village aggregation + Tamil conflicts
+        # Village aggregation + Tamil conflicts (conflicts skip that village only)
+        conflicted_keys: set[str] = set()
         for vkey, meta in village_meta.items():
             plan.unique_villages += 1
             tamils = sorted(meta["tamils"])
             chosen_ta = ""
+            conflict: TamilConflict | None = None
+
             if len(tamils) > 1:
                 conflict_rows: list[int] = []
                 for ta in tamils:
                     conflict_rows.extend(meta["tamil_rows"].get(ta, []))
-                plan.tamil_name_conflicts.append(
-                    TamilConflict(
-                        village_key=vkey,
-                        display_name=meta["display_name"],
-                        tamil_values=tamils,
-                        excel_rows=sorted(set(conflict_rows)),
-                    )
+                conflict = TamilConflict(
+                    village_key=vkey,
+                    display_name=meta["display_name"],
+                    tamil_values=tamils,
+                    excel_rows=sorted(set(conflict_rows)),
                 )
             elif len(tamils) == 1:
                 plan.tamil_names_present += 1
@@ -602,32 +649,45 @@ def _build_plan(source: Path | BinaryIO | str) -> ImportPlan:
                 plan.blank_tamil_villages.append(meta["display_name"])
 
             existing = village_db.get(vkey)
+            if (
+                conflict is None
+                and existing
+                and chosen_ta
+                and (existing.name_ta or "").strip()
+                and normalize_person_name(existing.name_ta)
+                != normalize_person_name(chosen_ta)
+            ):
+                conflict = TamilConflict(
+                    village_key=vkey,
+                    display_name=meta["display_name"],
+                    tamil_values=sorted(
+                        {
+                            (existing.name_ta or "").strip(),
+                            chosen_ta,
+                        }
+                    ),
+                    excel_rows=list(meta["rows"]),
+                )
+
+            if conflict is not None:
+                conflict.affected_employees = sorted(
+                    staff_labels_by_village.get(vkey, set()), key=str.casefold
+                )
+                plan.tamil_name_conflicts.append(conflict)
+                conflicted_keys.add(vkey)
+                plan.warnings.append(
+                    "TAMIL_NAME_CONFLICT skipped village "
+                    f"{conflict.display_name!r} values={conflict.tamil_values} "
+                    f"rows={conflict.excel_rows}"
+                )
+                continue
+
             if existing:
                 plan.villages_existing += 1
                 if not existing.is_active:
                     plan.village_reactivate.append(vkey)
                 if chosen_ta and not (existing.name_ta or "").strip():
                     plan.village_update_ta[vkey] = chosen_ta
-                elif (
-                    chosen_ta
-                    and (existing.name_ta or "").strip()
-                    and normalize_person_name(existing.name_ta)
-                    != normalize_person_name(chosen_ta)
-                ):
-                    if not any(c.village_key == vkey for c in plan.tamil_name_conflicts):
-                        plan.tamil_name_conflicts.append(
-                            TamilConflict(
-                                village_key=vkey,
-                                display_name=meta["display_name"],
-                                tamil_values=sorted(
-                                    {
-                                        (existing.name_ta or "").strip(),
-                                        chosen_ta,
-                                    }
-                                ),
-                                excel_rows=list(meta["rows"]),
-                            )
-                        )
             else:
                 plan.villages_to_create += 1
                 plan.village_create[vkey] = {
@@ -639,7 +699,25 @@ def _build_plan(source: Path | BinaryIO | str) -> ImportPlan:
             if len(labels) > 1:
                 plan.shared_villages[meta["display_name"]] = labels
 
+        plan.skipped_conflicted_villages = len(conflicted_keys)
+        plan.skipped_conflicted_rows = sum(
+            len(village_meta[vkey]["rows"]) for vkey in conflicted_keys
+        )
+
+        conflicted_row_nums: set[int] = set()
+        for vkey in conflicted_keys:
+            conflicted_row_nums.update(village_meta[vkey]["rows"])
+        for result in plan.row_results:
+            if result.excel_row in conflicted_row_nums and result.status != "error":
+                result.status = "skipped"
+                if "TAMIL_NAME_CONFLICT" not in result.messages:
+                    result.messages.append("TAMIL_NAME_CONFLICT")
+
         for pair, _label in assignment_labels.items():
+            _emp_pk, vkey = pair
+            if vkey in conflicted_keys:
+                plan.skipped_conflicted_assignments += 1
+                continue
             if pair in existing_assignments:
                 plan.assignments_existing += 1
             else:
@@ -652,10 +730,8 @@ def _build_plan(source: Path | BinaryIO | str) -> ImportPlan:
             plan.blocking_errors.append("AMBIGUOUS_EMPLOYEE")
         if any("EMPLOYEE_MISMATCH" in e for e in plan.errors):
             plan.blocking_errors.append("EMPLOYEE_MISMATCH")
-        if plan.tamil_name_conflicts:
-            plan.blocking_errors.append("TAMIL_NAME_CONFLICT")
-        # INVALID_MISSING_VILLAGE rows are skipped/reported; they do not block
-        # confirm of the remaining valid rows.
+        # TAMIL_NAME_CONFLICT is skippable: conflicted villages are excluded from
+        # the executable plan and do not block confirm of remaining rows.
 
         plan.plan_fingerprint = _fingerprint_plan(plan)
         return plan
@@ -799,7 +875,11 @@ def execute_plan(plan: ImportPlan) -> dict[str, int]:
         "villages_reused": reused_villages,
         "assignments_created": created_assignments,
         "assignments_reused": reused_assignments,
-        "rows_processed": plan.valid_rows,
+        "rows_processed": plan.valid_rows - plan.skipped_conflicted_rows,
+        "skipped_conflicted_villages": plan.skipped_conflicted_villages,
+        "skipped_conflicted_rows": plan.skipped_conflicted_rows,
+        "skipped_conflicted_assignments": plan.skipped_conflicted_assignments,
+        "tamil_name_conflicts": [c.as_dict() for c in plan.tamil_name_conflicts],
     }
 
 
@@ -893,9 +973,16 @@ def format_plan(plan: ImportPlan, *, dry_run: bool) -> str:
     lines.append(f"tamil_name_conflicts: {len(plan.tamil_name_conflicts)}")
     for c in plan.tamil_name_conflicts:
         lines.append(
-            f"  TAMIL_NAME_CONFLICT: {c.display_name} | "
-            f"values={c.tamil_values} | rows={c.excel_rows}"
+            f"  TAMIL_NAME_CONFLICT (skipped): {c.display_name} | "
+            f"values={c.tamil_values} | rows={c.excel_rows} | "
+            f"employees={c.affected_employees}"
         )
+    lines.append(f"skipped_conflicted_villages: {plan.skipped_conflicted_villages}")
+    lines.append(f"skipped_conflicted_rows: {plan.skipped_conflicted_rows}")
+    lines.append(
+        f"skipped_conflicted_assignments: {plan.skipped_conflicted_assignments}"
+    )
+    lines.append(f"eligible_villages: {plan.eligible_villages}")
     lines.append(f"employees_matched: {plan.employees_matched or 'none'}")
     lines.append(f"employees_not_found: {plan.employees_not_found or 'none'}")
     lines.append(f"ambiguous_employees: {plan.ambiguous_employees or 'none'}")

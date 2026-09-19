@@ -371,15 +371,155 @@ class VillageImportApiTests(TestCase):
                     [
                         ["KAC-0004", "Sasikumar", "Manaveli", "மணவெளி"],
                         ["KAC-0003", "Kaviyarasan", "Manaveli", "மனவெளி"],
+                        ["KAC-0004", "Sasikumar", "SafeVillage", "பாதுகாப்பு"],
                     ]
                 )
             },
             format="multipart",
         )
         data = validate.json()["data"]
-        self.assertIn("TAMIL_NAME_CONFLICT", data["blocking_errors"])
+        self.assertNotIn("TAMIL_NAME_CONFLICT", data["blocking_errors"])
+        self.assertIn("TAMIL_NAME_CONFLICT", data["skippable_errors"])
         self.assertEqual(len(data["tamil_name_conflicts"]), 1)
-        self.assertIsNone(data["import_token"])
+        self.assertEqual(data["skipped_conflicted_villages"], 1)
+        self.assertEqual(data["skipped_conflicted_assignments"], 2)
+        self.assertEqual(data["villages_to_create"], 1)
+        self.assertEqual(data["assignments_to_create"], 1)
+        self.assertTrue(data["can_confirm"])
+        self.assertIsNotNone(data["import_token"])
+        confirm = self.client.post(
+            CONFIRM_URL, {"import_token": data["import_token"]}, format="json"
+        )
+        self.assertEqual(confirm.status_code, status.HTTP_200_OK, confirm.data)
+        names = set(Village.objects.values_list("name", flat=True))
+        self.assertEqual(names, {"SafeVillage"})
+        self.assertFalse(Village.objects.filter(name__iexact="manaveli").exists())
+        self.assertEqual(EmployeeLocationAssignment.objects.count(), 1)
+        body = confirm.json()["data"]
+        self.assertEqual(body["skipped_conflicted_villages"], 1)
+        self.assertEqual(body["skipped_conflicted_assignments"], 2)
+
+    def test_multiple_tamil_conflicts_skip_only_those_villages(self):
+        validate = self.client.post(
+            VALIDATE_URL,
+            {
+                "file": self._canonical(
+                    [
+                        ["KAC-0004", "Sasikumar", "Manaveli", "மணவெளி"],
+                        ["KAC-0003", "Kaviyarasan", "Manaveli", "மனவெளி"],
+                        ["KAC-0004", "Sasikumar", "Kaspakaranai", "கஸ்பாகாரணை"],
+                        ["KAC-0003", "Kaviyarasan", "Kaspakaranai", "கஸ்பாகாரனை"],
+                        ["KAC-0004", "Sasikumar", "OkOne", "ஒன்று"],
+                        ["KAC-0003", "Kaviyarasan", "OkTwo", "இரண்டு"],
+                        [
+                            "KAC-0004",
+                            "Sasikumar",
+                            "Madagadipattu",
+                            "மட",
+                        ],
+                        [
+                            "KAC-0003",
+                            "Kaviyarasan",
+                            "Madagadipattu",
+                            "மட",
+                        ],
+                    ]
+                )
+            },
+            format="multipart",
+        )
+        data = validate.json()["data"]
+        self.assertEqual(data["skipped_conflicted_villages"], 2)
+        self.assertEqual(data["skipped_conflicted_assignments"], 4)
+        self.assertEqual(data["villages_to_create"], 3)
+        self.assertEqual(data["assignments_to_create"], 4)
+        self.assertTrue(data["can_confirm"])
+        token = data["import_token"]
+        confirm = self.client.post(CONFIRM_URL, {"import_token": token}, format="json")
+        self.assertEqual(confirm.status_code, status.HTTP_200_OK, confirm.data)
+        names = set(Village.objects.values_list("name", flat=True))
+        self.assertEqual(names, {"OkOne", "OkTwo", "Madagadipattu"})
+        self.assertFalse(Village.objects.filter(name__iexact="manaveli").exists())
+        self.assertFalse(Village.objects.filter(name__iexact="kaspakaranai").exists())
+        self.assertEqual(EmployeeLocationAssignment.objects.count(), 4)
+
+    def test_token_excludes_conflicted_village_from_executable_plan(self):
+        from masters.operational_village_import import (
+            IMPORT_CACHE_PREFIX,
+        )
+        from django.core.cache import cache as dj_cache
+
+        validate = self.client.post(
+            VALIDATE_URL,
+            {
+                "file": self._canonical(
+                    [
+                        ["KAC-0004", "Sasikumar", "Manaveli", "மணவெளி"],
+                        ["KAC-0003", "Kaviyarasan", "Manaveli", "மனவெளி"],
+                        ["KAC-0004", "Sasikumar", "SafeVillage", "பாதுகாப்பு"],
+                    ]
+                )
+            },
+            format="multipart",
+        )
+        token = validate.json()["data"]["import_token"]
+        payload = dj_cache.get(f"{IMPORT_CACHE_PREFIX}{token}")
+        self.assertIsNotNone(payload)
+        create_keys = set((payload["plan"]["village_create"] or {}).keys())
+        self.assertNotIn("manaveli", create_keys)
+        self.assertIn("safevillage", create_keys)
+        assign_vkeys = {vkey for _emp, vkey in payload["plan"]["assignment_keys"]}
+        self.assertNotIn("manaveli", assign_vkeys)
+
+    def test_corrected_conflict_imports_previously_skipped_village(self):
+        # First import skips Manaveli, creates SafeVillage
+        v1 = self.client.post(
+            VALIDATE_URL,
+            {
+                "file": self._canonical(
+                    [
+                        ["KAC-0004", "Sasikumar", "Manaveli", "மணவெளி"],
+                        ["KAC-0003", "Kaviyarasan", "Manaveli", "மனவெளி"],
+                        ["KAC-0004", "Sasikumar", "SafeVillage", "பாதுகாப்பு"],
+                    ]
+                )
+            },
+            format="multipart",
+        )
+        self.client.post(
+            CONFIRM_URL,
+            {"import_token": v1.json()["data"]["import_token"]},
+            format="json",
+        )
+        self.assertEqual(Village.objects.count(), 1)
+
+        # Corrected Tamil — same value on both rows
+        v2 = self.client.post(
+            VALIDATE_URL,
+            {
+                "file": self._canonical(
+                    [
+                        ["KAC-0004", "Sasikumar", "Manaveli", "மணவெளி"],
+                        ["KAC-0003", "Kaviyarasan", "Manaveli", "மணவெளி"],
+                        ["KAC-0004", "Sasikumar", "SafeVillage", "பாதுகாப்பு"],
+                    ]
+                )
+            },
+            format="multipart",
+        )
+        data = v2.json()["data"]
+        self.assertEqual(data["skipped_conflicted_villages"], 0)
+        self.assertEqual(data["villages_to_create"], 1)
+        self.assertEqual(data["villages_existing"], 1)
+        self.assertEqual(data["assignments_to_create"], 2)
+        self.assertEqual(data["assignments_existing"], 1)
+        c2 = self.client.post(
+            CONFIRM_URL, {"import_token": data["import_token"]}, format="json"
+        )
+        self.assertEqual(c2.status_code, status.HTTP_200_OK, c2.data)
+        self.assertEqual(Village.objects.count(), 2)
+        self.assertTrue(Village.objects.filter(name="Manaveli").exists())
+        self.assertEqual(EmployeeLocationAssignment.objects.count(), 3)
 
     def test_blank_plus_nonblank_tamil_ok(self):
         validate = self.client.post(
@@ -396,6 +536,7 @@ class VillageImportApiTests(TestCase):
         )
         data = validate.json()["data"]
         self.assertNotIn("TAMIL_NAME_CONFLICT", data["blocking_errors"])
+        self.assertEqual(data["skipped_conflicted_villages"], 0)
         token = data["import_token"]
         self.client.post(CONFIRM_URL, {"import_token": token}, format="json")
         self.assertEqual(Village.objects.get(name="Shared").name_ta, "தமிழ்")
@@ -440,7 +581,7 @@ class VillageImportApiTests(TestCase):
         # Build a plan then inject blocking error before execute via service
         upload = self._canonical([["KAC-0004", "Sasikumar", "RollbackVille", ""]])
         plan = collect_plan(upload)
-        plan.blocking_errors.append("TAMIL_NAME_CONFLICT")
+        plan.blocking_errors.append("EMPLOYEE_NOT_FOUND")
         with self.assertRaises(Exception):
             execute_plan(plan)
         self.assertEqual(Village.objects.count(), 0)
