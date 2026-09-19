@@ -25,6 +25,16 @@ jobs:
       - name: Checkout importer sources
         uses: actions/checkout@v4
 
+      - name: Fetch workbook from ops branch if missing
+        run: |
+          set -euo pipefail
+          WORKBOOK="imports/Village visit app(2).xlsx"
+          if [ ! -f "${WORKBOOK}" ]; then
+            git fetch --depth 1 origin ops/village-import-dryrun
+            git checkout origin/ops/village-import-dryrun -- "${WORKBOOK}"
+          fi
+          test -f "${WORKBOOK}"
+
       - name: Configure SSH
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
