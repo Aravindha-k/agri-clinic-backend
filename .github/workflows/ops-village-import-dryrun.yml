@@ -54,10 +54,13 @@ jobs:
           set -euo pipefail
           PORT="${EC2_PORT:-22}"
           DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
-          REMOTE_TMP="/tmp/village_import_dryrun_$$"
+          REMOTE_TMP="/tmp/village_import_dryrun_${GITHUB_RUN_ID}"
           WORKBOOK="imports/Village visit app(2).xlsx"
-
           test -f "${WORKBOOK}"
+          test -f "masters/operational_village_import.py"
+          test -f "masters/management/commands/import_operational_villages.py"
+          test -f "scripts/village_import_before_counts.py"
+          test -f "scripts/village_import_after_counts.py"
 
           ssh -i ~/.ssh/deploy_key \
             -p "${PORT}" \
@@ -72,9 +75,10 @@ jobs:
             "${WORKBOOK}" \
             "masters/operational_village_import.py" \
             "masters/management/commands/import_operational_villages.py" \
+            "scripts/village_import_before_counts.py" \
+            "scripts/village_import_after_counts.py" \
             "${EC2_USER}@${EC2_HOST}:${REMOTE_TMP}/"
 
-          # Stash remote tmp path for next step
           echo "REMOTE_TMP=${REMOTE_TMP}" >> "$GITHUB_ENV"
           echo "DEPLOY_PATH=${DEPLOY_PATH}" >> "$GITHUB_ENV"
           echo "PORT=${PORT}" >> "$GITHUB_ENV"
@@ -91,52 +95,13 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             "${EC2_USER}@${EC2_HOST}" \
             "set -euo pipefail
-             DEPLOY_PATH='${DEPLOY_PATH}'
-             REMOTE_TMP='${REMOTE_TMP}'
-             cd \"\${DEPLOY_PATH}\"
+             cd '${DEPLOY_PATH}'
              source .venv/bin/activate
+             REMOTE_TMP='${REMOTE_TMP}'
 
              echo '[village-dryrun] PRODUCTION DB CONFIRMATION'
-             python - <<'PY'
-             import os
-             from urllib.parse import urlsplit
-             import django
-             os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-             django.setup()
-             from django.conf import settings
-             from accounts.models import EmployeeLocationAssignment, EmployeeProfile
-             from masters.models import Village
+             PYTHONPATH=. python \"\${REMOTE_TMP}/village_import_before_counts.py\"
 
-             db_url = getattr(settings, 'DATABASE_URL', '') or ''
-             host = (urlsplit(db_url).hostname or '').strip() or '(unset)'
-             app_env = (os.getenv('APP_ENV') or '').strip().lower()
-             print(f'APP_ENV={app_env or \"(unset)\"}')
-             print(f'DATABASE_URL host={host}')
-             print(f'IS_PRODUCTION-like={app_env in {\"prod\",\"production\",\"aws\"} or host not in {\"localhost\",\"127.0.0.1\",\"::1\",\"(unset)\"}}')
-             print(f'BEFORE Village={Village.objects.count()}')
-             print(f'BEFORE EmployeeLocationAssignment={EmployeeLocationAssignment.objects.count()}')
-             print('EMPLOYEE PROFILE RESOLUTION:')
-             wanted = {
-                 'Kaviyarasan': 'KAC-0003',
-                 'Sasikumar': 'KAC-0004',
-                 'Sathish': 'KAC-0005',
-                 'Selvamani': 'KAC-0006',
-             }
-             for name, code in wanted.items():
-                 qs = EmployeeProfile.objects.select_related('user').filter(employee_id=code)
-                 if qs.count() != 1:
-                     print(f'  {name}: STOP employee_id={code} count={qs.count()}')
-                     continue
-                 p = qs.get()
-                 full = (p.user.get_full_name() or p.user.first_name or '').strip()
-                 print(f'  {name}: pk={p.pk} employee_id={p.employee_id} user={p.user.username} full_name={full!r}')
-             print('ALL EmployeeProfile codes:')
-             for p in EmployeeProfile.objects.select_related('user').order_by('employee_id'):
-                 full = (p.user.get_full_name() or p.user.first_name or '').strip()
-                 print(f'  {p.employee_id} pk={p.pk} name={full!r} user={p.user.username}')
-             PY
-
-             # Overlay importer onto deploy tree (not a git deploy)
              mkdir -p masters/management/commands
              cp \"\${REMOTE_TMP}/operational_village_import.py\" masters/operational_village_import.py
              cp \"\${REMOTE_TMP}/import_operational_villages.py\" masters/management/commands/import_operational_villages.py
@@ -145,27 +110,18 @@ jobs:
 
              echo
              echo '[village-dryrun] RUNNING import_operational_villages (NO --execute)'
+             set +e
              python manage.py import_operational_villages \"\${XLSX}\"
              DRY_EXIT=\$?
+             set -e
 
              echo
              echo '[village-dryrun] AFTER COUNTS'
-             python - <<'PY'
-             import os
-             import django
-             os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-             django.setup()
-             from accounts.models import EmployeeLocationAssignment
-             from masters.models import Village
-             print(f'AFTER Village={Village.objects.count()}')
-             print(f'AFTER EmployeeLocationAssignment={EmployeeLocationAssignment.objects.count()}')
-             PY
+             PYTHONPATH=. python \"\${REMOTE_TMP}/village_import_after_counts.py\"
 
-             # Restore tree: remove overlay files that are not in HEAD
              git checkout -- masters/ 2>/dev/null || true
              rm -f masters/operational_village_import.py
              rm -f masters/management/commands/import_operational_villages.py
-             # If they existed in HEAD, restore them
              git checkout HEAD -- masters/operational_village_import.py masters/management/commands/import_operational_villages.py 2>/dev/null || true
              rm -rf \"\${REMOTE_TMP}\"
 
