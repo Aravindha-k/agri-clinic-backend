@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import transaction
 from openpyxl import load_workbook
 
@@ -34,7 +34,19 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MiB
 MAX_EXCEL_ROWS = 10_000
 IMPORT_TOKEN_TTL_SECONDS = 30 * 60
 IMPORT_CACHE_PREFIX = "village_import_plan:v1:"
+IMPORT_TOKEN_CACHE_ALIAS = "import_tokens"
 ALLOWED_EXTENSIONS = (".xlsx",)
+
+
+def _import_token_cache():
+    """
+    Process-shared cache for validate→confirm tokens.
+
+    Must not use LocMemCache/default process memory: Gunicorn workers do not
+    share LocMem, so confirm on another worker would raise TOKEN_INVALID.
+    Configured as CACHES['import_tokens'] (Redis or FileBasedCache).
+    """
+    return caches[IMPORT_TOKEN_CACHE_ALIAS]
 
 VILLAGE_HEADERS = {
     "village",
@@ -896,7 +908,7 @@ def store_import_plan(*, plan: ImportPlan, user_id: int) -> str:
             code="BLOCKING_ERRORS",
         )
     token = secrets.token_urlsafe(32)
-    cache.set(
+    _import_token_cache().set(
         f"{IMPORT_CACHE_PREFIX}{token}",
         {
             "user_id": int(user_id),
@@ -912,7 +924,8 @@ def load_and_consume_import_plan(*, token: str, user_id: int) -> ImportPlan:
     if not token or not str(token).strip():
         raise VillageImportError("import_token is required.", code="TOKEN_REQUIRED")
     key = f"{IMPORT_CACHE_PREFIX}{token.strip()}"
-    payload = cache.get(key)
+    token_cache = _import_token_cache()
+    payload = token_cache.get(key)
     if not payload:
         raise VillageImportError(
             "Import token is invalid or expired.",
@@ -930,7 +943,7 @@ def load_and_consume_import_plan(*, token: str, user_id: int) -> ImportPlan:
         )
     # Consume before execute to prevent concurrent double-confirm.
     payload["consumed"] = True
-    cache.set(key, payload, timeout=IMPORT_TOKEN_TTL_SECONDS)
+    token_cache.set(key, payload, timeout=IMPORT_TOKEN_TTL_SECONDS)
     plan = ImportPlan.from_cache_payload(payload["plan"])
     if plan.has_blocking_errors:
         raise VillageImportError(
@@ -942,7 +955,7 @@ def load_and_consume_import_plan(*, token: str, user_id: int) -> ImportPlan:
 
 def discard_import_token(token: str) -> None:
     if token:
-        cache.delete(f"{IMPORT_CACHE_PREFIX}{token.strip()}")
+        _import_token_cache().delete(f"{IMPORT_CACHE_PREFIX}{token.strip()}")
 
 
 # ---------------------------------------------------------------------------

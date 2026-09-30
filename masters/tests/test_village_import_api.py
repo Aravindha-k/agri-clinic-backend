@@ -5,7 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 
 from django.contrib.auth.models import User
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from openpyxl import Workbook
@@ -14,7 +14,11 @@ from rest_framework.test import APIClient
 
 from accounts.models import EmployeeLocationAssignment, EmployeeProfile
 from masters.models import Village
-from masters.operational_village_import import collect_plan, execute_plan
+from masters.operational_village_import import (
+    IMPORT_TOKEN_CACHE_ALIAS,
+    collect_plan,
+    execute_plan,
+)
 
 STRONG = "SecurePass1!"
 VALIDATE_URL = "/api/v1/admin/villages/import/validate/"
@@ -44,6 +48,7 @@ def _xlsx_upload(headers: list[str], rows: list[list], name: str = "villages.xls
 class VillageImportApiTests(TestCase):
     def setUp(self):
         cache.clear()
+        caches[IMPORT_TOKEN_CACHE_ALIAS].clear()
         self.admin = User.objects.create_user(
             username="import_admin", password=STRONG, is_staff=True
         )
@@ -446,8 +451,8 @@ class VillageImportApiTests(TestCase):
     def test_token_excludes_conflicted_village_from_executable_plan(self):
         from masters.operational_village_import import (
             IMPORT_CACHE_PREFIX,
+            IMPORT_TOKEN_CACHE_ALIAS,
         )
-        from django.core.cache import cache as dj_cache
 
         validate = self.client.post(
             VALIDATE_URL,
@@ -463,7 +468,7 @@ class VillageImportApiTests(TestCase):
             format="multipart",
         )
         token = validate.json()["data"]["import_token"]
-        payload = dj_cache.get(f"{IMPORT_CACHE_PREFIX}{token}")
+        payload = caches[IMPORT_TOKEN_CACHE_ALIAS].get(f"{IMPORT_CACHE_PREFIX}{token}")
         self.assertIsNotNone(payload)
         create_keys = set((payload["plan"]["village_create"] or {}).keys())
         self.assertNotIn("manaveli", create_keys)

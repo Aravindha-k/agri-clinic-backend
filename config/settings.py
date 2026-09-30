@@ -660,6 +660,16 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # REDIS / CACHE
 # --------------------------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "").strip()
+# Cross-process store for Admin village import validate→confirm tokens.
+# LocMemCache is per-Gunicorn-worker and causes TOKEN_INVALID on confirm
+# when validate and confirm hit different workers. Prefer Redis when
+# configured; otherwise FileBasedCache on local disk (shared on one EC2).
+_IMPORT_TOKENS_CACHE_DIR = str(BASE_DIR / ".cache" / "import_tokens")
+_FILEBASED_IMPORT_TOKENS = {
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": _IMPORT_TOKENS_CACHE_DIR,
+    "TIMEOUT": 30 * 60,
+}
 
 if REDIS_URL:
     try:
@@ -671,19 +681,27 @@ if REDIS_URL:
                 "LOCATION": REDIS_URL,
                 "TIMEOUT": 300,
                 "KEY_PREFIX": "agri_clinic",
-            }
+            },
+            "import_tokens": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": REDIS_URL,
+                "TIMEOUT": 30 * 60,
+                "KEY_PREFIX": "agri_clinic_import",
+            },
         }
     except ImportError:
         CACHES = {
             "default": {
                 "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            }
+            },
+            "import_tokens": dict(_FILEBASED_IMPORT_TOKENS),
         }
 else:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        }
+        },
+        "import_tokens": dict(_FILEBASED_IMPORT_TOKENS),
     }
 
 # --------------------------------------------------
