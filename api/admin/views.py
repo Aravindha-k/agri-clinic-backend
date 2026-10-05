@@ -251,16 +251,21 @@ class VisitViewSet(
     tags=["Admin", "Visits"],
     summary="Field Visits management activity summary",
     description=(
-        "Admin-only daily aggregate for the Field Visits management screen. "
+        "Admin-only aggregate for the Field Visits management screen. "
+        "Pass either `date=YYYY-MM-DD` (single day, backward compatible) or "
+        "`start_date` + `end_date` (inclusive Asia/Kolkata visit-date range). "
+        "Do not combine date with start_date/end_date. "
         "Roster is eligible field employees (User.pk as user_id); visit metrics "
-        "use submitted_visits_qs + Asia/Kolkata visit_date semantics. "
-        "gps_verified matches reports gps_compliant (non-null lat/lng). "
-        "latest_visit_at is Max(Visit.created_at) for that employee/day."
+        "use submitted_visits_qs. gps_verified matches reports gps_compliant "
+        "(non-null lat/lng). latest_visit_at is Max(Visit.created_at) in range."
     ),
     responses={200: SIMPLE_SUCCESS},
 )
 class VisitActivitySummaryAPI(APIView):
-    """GET /api/v1/admin/visits/activity-summary/?date=YYYY-MM-DD"""
+    """
+    GET /api/v1/admin/visits/activity-summary/?date=YYYY-MM-DD
+    GET /api/v1/admin/visits/activity-summary/?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+    """
 
     permission_classes = [IsStaffAdmin]
 
@@ -270,15 +275,68 @@ class VisitActivitySummaryAPI(APIView):
         from visits.activity_summary import build_visit_activity_summary
         from visits.date_filters import parse_optional_iso_date
 
-        raw = request.query_params.get("date")
-        if raw is None or not str(raw).strip():
+        params = request.query_params
+        raw_date = params.get("date")
+        raw_start = params.get("start_date")
+        raw_end = params.get("end_date")
+
+        has_date = raw_date is not None and str(raw_date).strip() != ""
+        has_start = raw_start is not None and str(raw_start).strip() != ""
+        has_end = raw_end is not None and str(raw_end).strip() != ""
+
+        if has_date and (has_start or has_end):
             raise ValidationError(
-                {"date": "This field is required. Use YYYY-MM-DD."},
-                code="required",
+                {
+                    "non_field_errors": (
+                        "Provide either date= or start_date+end_date, not both."
+                    )
+                },
+                code="invalid",
             )
-        target_date = parse_optional_iso_date(raw, field_name="date")
-        data = build_visit_activity_summary(target_date=target_date)
-        return success_response(data=data)
+
+        if has_date:
+            target_date = parse_optional_iso_date(raw_date, field_name="date")
+            metrics = build_visit_activity_summary(
+                start_date=target_date, end_date=target_date
+            )
+            data = {"date": target_date.isoformat(), **metrics}
+            return success_response(data=data)
+
+        if has_start or has_end:
+            if not (has_start and has_end):
+                raise ValidationError(
+                    {
+                        "start_date": "Both start_date and end_date are required.",
+                        "end_date": "Both start_date and end_date are required.",
+                    },
+                    code="required",
+                )
+            start_date = parse_optional_iso_date(raw_start, field_name="start_date")
+            end_date = parse_optional_iso_date(raw_end, field_name="end_date")
+            if start_date > end_date:
+                raise ValidationError(
+                    {"start_date": "start_date must be on or before end_date."},
+                    code="invalid",
+                )
+            metrics = build_visit_activity_summary(
+                start_date=start_date, end_date=end_date
+            )
+            data = {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                **metrics,
+            }
+            return success_response(data=data)
+
+        raise ValidationError(
+            {
+                "date": (
+                    "Provide date=YYYY-MM-DD or start_date and end_date "
+                    "(YYYY-MM-DD)."
+                )
+            },
+            code="required",
+        )
 
 
 class CropIssueViewSet(AdminModelViewSet):
