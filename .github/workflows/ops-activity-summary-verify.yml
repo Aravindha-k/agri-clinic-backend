@@ -1,0 +1,143 @@
+name: Ops Activity Summary Verify
+
+# Manual/one-shot read-only production verification. Does not deploy or mutate data.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify activity-summary on EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Read-only activity-summary verification
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            "set -euo pipefail
+             cd '${DEPLOY_PATH}'
+             source .venv/bin/activate
+             python - <<'PY'
+          import json
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          import django, os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          django.setup()
+
+          from django.contrib.auth import get_user_model
+          from rest_framework_simplejwt.tokens import AccessToken
+          from accounts.models import EmployeeProfile
+          from visits.date_filters import apply_visit_date_range
+          from visits.submitted import submitted_visits_qs
+          from reports.summary import build_admin_report_summary
+
+          today = datetime.now(ZoneInfo('Asia/Kolkata')).date()
+          print('HEAD=', os.popen('git rev-parse HEAD').read().strip())
+          print('DATE=', today.isoformat())
+
+          # healthz local
+          with urlopen('http://127.0.0.1:8000/healthz/', timeout=20) as r:
+              print('HEALTH_STATUS=', r.status)
+              print('HEALTH_BODY=', r.read().decode())
+
+          User = get_user_model()
+          admin = User.objects.filter(is_staff=True, is_active=True).order_by('id').first()
+          assert admin is not None
+          token = str(AccessToken.for_user(admin))
+          auth = {'Authorization': f'Bearer {token}'}
+
+          url = 'http://127.0.0.1:8000/api/v1/admin/visits/activity-summary/?' + urlencode({'date': today.isoformat()})
+          req = Request(url, headers=auth)
+          with urlopen(req, timeout=45) as r:
+              body = json.loads(r.read().decode())
+              print('SUMMARY_STATUS=', r.status)
+          payload = body.get('data') if isinstance(body.get('data'), dict) else body
+          employees = payload.get('employees') or []
+          print('DATE=', payload.get('date'))
+          print('TOTAL_VISITS=', payload.get('total_visits'))
+          print('ACTIVE_STAFF=', payload.get('active_staff'))
+          print('NO_VISITS=', payload.get('no_visits'))
+          print('GPS_VERIFIED=', payload.get('gps_verified'))
+          print('EMPLOYEE_COUNT=', len(employees))
+          print('EMPLOYEES_JSON=')
+          print(json.dumps(employees, indent=2, default=str))
+
+          sum_counts = sum(int(e.get('visit_count') or 0) for e in employees)
+          active = sum(1 for e in employees if int(e.get('visit_count') or 0) > 0)
+          zeros = sum(1 for e in employees if int(e.get('visit_count') or 0) == 0)
+          ordered = [int(e.get('visit_count') or 0) for e in employees]
+          print('CHECK_SUM_EQUALS_TOTAL=', sum_counts == int(payload.get('total_visits') or 0), sum_counts)
+          print('CHECK_ACTIVE_STAFF=', active == int(payload.get('active_staff') or 0), active)
+          print('CHECK_NO_VISITS=', zeros == int(payload.get('no_visits') or 0), zeros)
+          print('CHECK_ORDER_DESC=', ordered == sorted(ordered, reverse=True))
+          print('CHECK_ZERO_LATEST_NULL=', all(e.get('latest_visit_at') is None for e in employees if int(e.get('visit_count') or 0) == 0))
+          print('CHECK_ZERO_INCLUDED=', zeros >= 1 or len(employees) == active)
+
+          pick = next((e for e in employees if int(e.get('visit_count') or 0) > 0), None)
+          if pick:
+              vurl = 'http://127.0.0.1:8000/api/v1/admin/visits/?' + urlencode({
+                  'employee': pick['user_id'],
+                  'start_date': today.isoformat(),
+                  'end_date': today.isoformat(),
+                  'page_size': 1,
+              })
+              with urlopen(Request(vurl, headers=auth), timeout=45) as r:
+                  visits = json.loads(r.read().decode())
+                  print('ADMIN_VISITS_STATUS=', r.status)
+              print('COMPARE_USER_ID=', pick.get('user_id'))
+              print('COMPARE_EMPLOYEE_ID=', pick.get('employee_id'))
+              print('COMPARE_SUMMARY_COUNT=', pick.get('visit_count'))
+              print('COMPARE_ADMIN_VISITS_COUNT=', visits.get('count'))
+              print('COMPARE_MATCH=', visits.get('count') == pick.get('visit_count'))
+              # ORM cross-check same filters
+              qs = apply_visit_date_range(
+                  submitted_visits_qs().filter(employee_id=pick['user_id']),
+                  start=today, end=today,
+              )
+              print('COMPARE_ORM_COUNT=', qs.count())
+              prof = EmployeeProfile.objects.filter(employee_id=pick.get('employee_id')).first()
+              if prof:
+                  print('USER_PK_CONTRACT=', pick.get('user_id'), 'profile_user_id=', prof.user_id, 'profile_pk=', prof.pk,
+                        'is_user_pk=', pick.get('user_id') == prof.user_id,
+                        'not_profile_pk=', pick.get('user_id') != prof.pk)
+
+          rurl = 'http://127.0.0.1:8000/api/v1/reports/summary/?' + urlencode({'from': today.isoformat(), 'to': today.isoformat()})
+          with urlopen(Request(rurl, headers=auth), timeout=45) as r:
+              reports = json.loads(r.read().decode())
+              print('REPORTS_STATUS=', r.status)
+          rdata = reports.get('data') if isinstance(reports.get('data'), dict) else reports
+          totals = (rdata or {}).get('totals') or {}
+          print('REPORTS_TOTALS_VISITS=', totals.get('visits'))
+          print('REPORTS_GPS_COMPLIANT=', totals.get('gps_compliant'))
+          # also builder smoke
+          rep = build_admin_report_summary(start=today, end=today)
+          print('REPORTS_BUILDER_VISITS=', rep['totals']['visits'])
+          PY"
