@@ -5,6 +5,7 @@ from .views import (
     FarmerViewSet,
     FarmerFieldViewSet,
     VisitViewSet,
+    VisitActivitySummaryAPI,
     CropIssueViewSet,
     CropViewSet,
     FieldCropViewSet,
@@ -68,6 +69,11 @@ urlpatterns = [
         "crop-issues/",
         CropIssueViewSet.as_view({"get": "list"}),
         name="admin-crop-issue-list",
+    ),
+    path(
+        "visits/activity-summary/",
+        VisitActivitySummaryAPI.as_view(),
+        name="admin-visit-activity-summary",
     ),
     path(
         "visits/<int:visit_id>/attachments/",

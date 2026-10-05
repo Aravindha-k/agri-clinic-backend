@@ -247,6 +247,40 @@ class VisitViewSet(
         return success_response(message="Visit deleted")
 
 
+@extend_schema(
+    tags=["Admin", "Visits"],
+    summary="Field Visits management activity summary",
+    description=(
+        "Admin-only daily aggregate for the Field Visits management screen. "
+        "Roster is eligible field employees (User.pk as user_id); visit metrics "
+        "use submitted_visits_qs + Asia/Kolkata visit_date semantics. "
+        "gps_verified matches reports gps_compliant (non-null lat/lng). "
+        "latest_visit_at is Max(Visit.created_at) for that employee/day."
+    ),
+    responses={200: SIMPLE_SUCCESS},
+)
+class VisitActivitySummaryAPI(APIView):
+    """GET /api/v1/admin/visits/activity-summary/?date=YYYY-MM-DD"""
+
+    permission_classes = [IsStaffAdmin]
+
+    def get(self, request):
+        from rest_framework.exceptions import ValidationError
+
+        from visits.activity_summary import build_visit_activity_summary
+        from visits.date_filters import parse_optional_iso_date
+
+        raw = request.query_params.get("date")
+        if raw is None or not str(raw).strip():
+            raise ValidationError(
+                {"date": "This field is required. Use YYYY-MM-DD."},
+                code="required",
+            )
+        target_date = parse_optional_iso_date(raw, field_name="date")
+        data = build_visit_activity_summary(target_date=target_date)
+        return success_response(data=data)
+
+
 class CropIssueViewSet(AdminModelViewSet):
     """Admin CRUD for crop issues."""
 
