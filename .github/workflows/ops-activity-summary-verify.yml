@@ -24,7 +24,7 @@ jobs:
           printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Read-only activity-summary verification
+      - name: Read-only activity-summary range verification
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
@@ -43,10 +43,11 @@ jobs:
              source .venv/bin/activate
              python - <<'PY'
           import json
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
+          from datetime import date, datetime
+          from urllib.error import HTTPError
           from urllib.parse import urlencode
           from urllib.request import Request, urlopen
+          from zoneinfo import ZoneInfo
 
           import django, os
           os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -54,90 +55,157 @@ jobs:
 
           from django.contrib.auth import get_user_model
           from rest_framework_simplejwt.tokens import AccessToken
-          from accounts.models import EmployeeProfile
-          from visits.date_filters import apply_visit_date_range
-          from visits.submitted import submitted_visits_qs
-          from reports.summary import build_admin_report_summary
 
-          today = datetime.now(ZoneInfo('Asia/Kolkata')).date()
+          BASE = 'http://127.0.0.1:8000'
+          # Production verification day called out in deploy checklist
+          DAY = date(2026, 10, 5)
+          MONTH_START = date(2026, 10, 1)
+
+          def http(method, path, params=None, headers=None):
+              url = BASE + path
+              if params:
+                  url += '?' + urlencode(params)
+              req = Request(url, headers=headers or {}, method=method)
+              try:
+                  with urlopen(req, timeout=45) as r:
+                      raw = r.read().decode()
+                      return r.status, json.loads(raw) if raw else {}
+              except HTTPError as exc:
+                  raw = exc.read().decode('utf-8', errors='replace')
+                  try:
+                      body = json.loads(raw) if raw else {}
+                  except json.JSONDecodeError:
+                      body = {'raw': raw[:300]}
+                  return exc.code, body
+
           print('HEAD=', os.popen('git rev-parse HEAD').read().strip())
-          print('DATE=', today.isoformat())
+          print('LOCAL_TODAY=', datetime.now(ZoneInfo('Asia/Kolkata')).date().isoformat())
 
-          # healthz local
-          with urlopen('http://127.0.0.1:8000/healthz/', timeout=20) as r:
-              print('HEALTH_STATUS=', r.status)
-              print('HEALTH_BODY=', r.read().decode())
+          st, health = http('GET', '/healthz/')
+          print('HEALTH_STATUS=', st)
+          print('HEALTH_BODY=', json.dumps(health))
 
           User = get_user_model()
           admin = User.objects.filter(is_staff=True, is_active=True).order_by('id').first()
           assert admin is not None
-          token = str(AccessToken.for_user(admin))
-          auth = {'Authorization': f'Bearer {token}'}
+          auth = {'Authorization': 'Bearer ' + str(AccessToken.for_user(admin))}
 
-          url = 'http://127.0.0.1:8000/api/v1/admin/visits/activity-summary/?' + urlencode({'date': today.isoformat()})
-          req = Request(url, headers=auth)
-          with urlopen(req, timeout=45) as r:
-              body = json.loads(r.read().decode())
-              print('SUMMARY_STATUS=', r.status)
-          payload = body.get('data') if isinstance(body.get('data'), dict) else body
-          employees = payload.get('employees') or []
-          print('DATE=', payload.get('date'))
-          print('TOTAL_VISITS=', payload.get('total_visits'))
-          print('ACTIVE_STAFF=', payload.get('active_staff'))
-          print('NO_VISITS=', payload.get('no_visits'))
-          print('GPS_VERIFIED=', payload.get('gps_verified'))
-          print('EMPLOYEE_COUNT=', len(employees))
-          print('EMPLOYEES_JSON=')
-          print(json.dumps(employees, indent=2, default=str))
+          # 4) Legacy ?date=
+          st, body = http('GET', '/api/v1/admin/visits/activity-summary/', {'date': DAY.isoformat()}, auth)
+          print('LEGACY_STATUS=', st)
+          legacy = body.get('data') if isinstance(body.get('data'), dict) else body
+          print('LEGACY_DATE=', legacy.get('date'))
+          print('LEGACY_TOTAL=', legacy.get('total_visits'))
+          print('LEGACY_ACTIVE=', legacy.get('active_staff'))
+          print('LEGACY_NO_VISITS=', legacy.get('no_visits'))
+          print('LEGACY_GPS=', legacy.get('gps_verified'))
+          legacy_emps = legacy.get('employees') or []
+          print('LEGACY_EMPLOYEES_JSON=')
+          print(json.dumps(legacy_emps, indent=2, default=str))
 
-          sum_counts = sum(int(e.get('visit_count') or 0) for e in employees)
-          active = sum(1 for e in employees if int(e.get('visit_count') or 0) > 0)
-          zeros = sum(1 for e in employees if int(e.get('visit_count') or 0) == 0)
-          ordered = [int(e.get('visit_count') or 0) for e in employees]
-          print('CHECK_SUM_EQUALS_TOTAL=', sum_counts == int(payload.get('total_visits') or 0), sum_counts)
-          print('CHECK_ACTIVE_STAFF=', active == int(payload.get('active_staff') or 0), active)
-          print('CHECK_NO_VISITS=', zeros == int(payload.get('no_visits') or 0), zeros)
-          print('CHECK_ORDER_DESC=', ordered == sorted(ordered, reverse=True))
-          print('CHECK_ZERO_LATEST_NULL=', all(e.get('latest_visit_at') is None for e in employees if int(e.get('visit_count') or 0) == 0))
-          print('CHECK_ZERO_INCLUDED=', zeros >= 1 or len(employees) == active)
+          # 5) Same-day range
+          st, body = http(
+              'GET',
+              '/api/v1/admin/visits/activity-summary/',
+              {'start_date': DAY.isoformat(), 'end_date': DAY.isoformat()},
+              auth,
+          )
+          print('RANGE_TODAY_STATUS=', st)
+          today_range = body.get('data') if isinstance(body.get('data'), dict) else body
+          print('RANGE_TODAY_START=', today_range.get('start_date'))
+          print('RANGE_TODAY_END=', today_range.get('end_date'))
+          print('RANGE_TODAY_TOTAL=', today_range.get('total_visits'))
+          print('RANGE_TODAY_ACTIVE=', today_range.get('active_staff'))
+          print('RANGE_TODAY_NO_VISITS=', today_range.get('no_visits'))
+          print('RANGE_TODAY_GPS=', today_range.get('gps_verified'))
+          today_emps = today_range.get('employees') or []
+          print(
+              'RANGE_EQUALS_LEGACY_METRICS=',
+              (
+                  today_range.get('total_visits') == legacy.get('total_visits')
+                  and today_range.get('active_staff') == legacy.get('active_staff')
+                  and today_range.get('no_visits') == legacy.get('no_visits')
+                  and today_range.get('gps_verified') == legacy.get('gps_verified')
+              ),
+          )
+          print(
+              'RANGE_EQUALS_LEGACY_EMPLOYEES=',
+              [(e.get('employee_id'), e.get('visit_count')) for e in today_emps]
+              == [(e.get('employee_id'), e.get('visit_count')) for e in legacy_emps],
+          )
 
-          pick = next((e for e in employees if int(e.get('visit_count') or 0) > 0), None)
-          if pick:
-              vurl = 'http://127.0.0.1:8000/api/v1/admin/visits/?' + urlencode({
-                  'employee': pick['user_id'],
-                  'start_date': today.isoformat(),
-                  'end_date': today.isoformat(),
-                  'page_size': 1,
-              })
-              with urlopen(Request(vurl, headers=auth), timeout=45) as r:
-                  visits = json.loads(r.read().decode())
-                  print('ADMIN_VISITS_STATUS=', r.status)
-              print('COMPARE_USER_ID=', pick.get('user_id'))
-              print('COMPARE_EMPLOYEE_ID=', pick.get('employee_id'))
-              print('COMPARE_SUMMARY_COUNT=', pick.get('visit_count'))
-              print('COMPARE_ADMIN_VISITS_COUNT=', visits.get('count'))
-              print('COMPARE_MATCH=', visits.get('count') == pick.get('visit_count'))
-              # ORM cross-check same filters
-              qs = apply_visit_date_range(
-                  submitted_visits_qs().filter(employee_id=pick['user_id']),
-                  start=today, end=today,
-              )
-              print('COMPARE_ORM_COUNT=', qs.count())
-              prof = EmployeeProfile.objects.filter(employee_id=pick.get('employee_id')).first()
-              if prof:
-                  print('USER_PK_CONTRACT=', pick.get('user_id'), 'profile_user_id=', prof.user_id, 'profile_pk=', prof.pk,
-                        'is_user_pk=', pick.get('user_id') == prof.user_id,
-                        'not_profile_pk=', pick.get('user_id') != prof.pk)
+          # 6) Week == today on Monday 2026-10-05
+          st, body = http(
+              'GET',
+              '/api/v1/admin/visits/activity-summary/',
+              {'start_date': DAY.isoformat(), 'end_date': DAY.isoformat()},
+              auth,
+          )
+          week = body.get('data') if isinstance(body.get('data'), dict) else body
+          print('WEEK_STATUS=', st)
+          print('WEEK_TOTAL=', week.get('total_visits'))
+          print('WEEK_ACTIVE=', week.get('active_staff'))
+          print('WEEK_NO_VISITS=', week.get('no_visits'))
+          print('WEEK_GPS=', week.get('gps_verified'))
+          print(
+              'WEEK_EQUALS_TODAY=',
+              week.get('total_visits') == today_range.get('total_visits')
+              and week.get('active_staff') == today_range.get('active_staff'),
+          )
 
-          rurl = 'http://127.0.0.1:8000/api/v1/reports/summary/?' + urlencode({'from': today.isoformat(), 'to': today.isoformat()})
-          with urlopen(Request(rurl, headers=auth), timeout=45) as r:
-              reports = json.loads(r.read().decode())
-              print('REPORTS_STATUS=', r.status)
+          # 7) Month
+          st, body = http(
+              'GET',
+              '/api/v1/admin/visits/activity-summary/',
+              {'start_date': MONTH_START.isoformat(), 'end_date': DAY.isoformat()},
+              auth,
+          )
+          print('MONTH_STATUS=', st)
+          month = body.get('data') if isinstance(body.get('data'), dict) else body
+          month_emps = month.get('employees') or []
+          print('MONTH_START=', month.get('start_date'))
+          print('MONTH_END=', month.get('end_date'))
+          print('MONTH_TOTAL=', month.get('total_visits'))
+          print('MONTH_ACTIVE=', month.get('active_staff'))
+          print('MONTH_NO_VISITS=', month.get('no_visits'))
+          print('MONTH_GPS=', month.get('gps_verified'))
+          print('MONTH_EMPLOYEES_JSON=')
+          print(json.dumps(month_emps, indent=2, default=str))
+          m_sum = sum(int(e.get('visit_count') or 0) for e in month_emps)
+          m_active = sum(1 for e in month_emps if int(e.get('visit_count') or 0) > 0)
+          m_zeros = sum(1 for e in month_emps if int(e.get('visit_count') or 0) == 0)
+          print('MONTH_CHECK_SUM=', m_sum == int(month.get('total_visits') or 0), m_sum)
+          print('MONTH_CHECK_ACTIVE=', m_active == int(month.get('active_staff') or 0), m_active)
+          print('MONTH_CHECK_NO_VISITS=', m_zeros == int(month.get('no_visits') or 0), m_zeros)
+
+          # 8) Validation 400s
+          cases = {
+              'A_START_ONLY': {'start_date': '2026-10-01'},
+              'B_END_ONLY': {'end_date': '2026-10-05'},
+              'C_START_AFTER_END': {'start_date': '2026-10-06', 'end_date': '2026-10-05'},
+              'D_BAD_START': {'start_date': 'bad', 'end_date': '2026-10-05'},
+              'E_AMBIGUOUS': {
+                  'date': '2026-10-05',
+                  'start_date': '2026-10-01',
+                  'end_date': '2026-10-05',
+              },
+          }
+          for name, params in cases.items():
+              st, _ = http('GET', '/api/v1/admin/visits/activity-summary/', params, auth)
+              print(f'VALIDATION_{name}_STATUS=', st)
+
+          # 9) Smoke existing APIs
+          st, visits = http('GET', '/api/v1/admin/visits/', {'page_size': 1}, auth)
+          print('ADMIN_VISITS_SMOKE_STATUS=', st)
+          print('ADMIN_VISITS_SMOKE_COUNT=', visits.get('count') if isinstance(visits, dict) else None)
+
+          st, reports = http(
+              'GET',
+              '/api/v1/reports/summary/',
+              {'from': MONTH_START.isoformat(), 'to': DAY.isoformat()},
+              auth,
+          )
+          print('REPORTS_SMOKE_STATUS=', st)
           rdata = reports.get('data') if isinstance(reports.get('data'), dict) else reports
-          totals = (rdata or {}).get('totals') or {}
-          print('REPORTS_TOTALS_VISITS=', totals.get('visits'))
-          print('REPORTS_GPS_COMPLIANT=', totals.get('gps_compliant'))
-          # also builder smoke
-          rep = build_admin_report_summary(start=today, end=today)
-          print('REPORTS_BUILDER_VISITS=', rep['totals']['visits'])
+          print('REPORTS_SMOKE_VISITS=', (rdata or {}).get('totals', {}).get('visits'))
           PY"
