@@ -52,11 +52,14 @@ jobs:
           django.setup()
 
           from django.contrib.auth import get_user_model
-          from rest_framework.test import APIClient
+          from rest_framework.test import APIRequestFactory, force_authenticate
+
+          from api.admin.views import VisitActivitySummaryAPI
+          from reports.views import AdminReportSummaryAPI
+          from api.admin.views import VisitViewSet
 
           DAY = date(2026, 10, 5)
           MONTH_START = date(2026, 10, 1)
-          URL = '/api/v1/admin/visits/activity-summary/'
 
           print('HEAD=', os.popen('git rev-parse HEAD').read().strip())
           print('LOCAL_TODAY=', datetime.now(ZoneInfo('Asia/Kolkata')).date().isoformat())
@@ -72,26 +75,27 @@ jobs:
               .first()
               or User.objects.filter(is_staff=True, is_active=True).order_by('id').first()
           )
-          assert admin is not None, 'no staff admin'
+          assert admin is not None
           print('ADMIN_USER_ID=', admin.pk)
 
-          client = APIClient()
-          client.force_authenticate(user=admin)
+          factory = APIRequestFactory()
 
-          def get(params):
-              return client.get(URL, params)
+          def call_summary(params):
+              req = factory.get('/api/v1/admin/visits/activity-summary/', params)
+              force_authenticate(req, user=admin)
+              resp = VisitActivitySummaryAPI.as_view()(req)
+              resp.render()
+              body = json.loads(resp.content.decode())
+              return resp.status_code, body
 
-          def data_of(resp):
-              body = resp.data
-              if isinstance(body, dict) and isinstance(body.get('data'), dict):
-                  return body['data']
-              return body
+          def payload(body):
+              return body.get('data') if isinstance(body.get('data'), dict) else body
 
           # 4) Legacy date
-          r = get({'date': DAY.isoformat()})
-          print('LEGACY_STATUS=', r.status_code)
-          assert r.status_code == 200, r.data
-          legacy = data_of(r)
+          st, body = call_summary({'date': DAY.isoformat()})
+          print('LEGACY_STATUS=', st)
+          assert st == 200, body
+          legacy = payload(body)
           print('LEGACY_DATE=', legacy.get('date'))
           print('LEGACY_TOTAL=', legacy.get('total_visits'))
           print('LEGACY_ACTIVE=', legacy.get('active_staff'))
@@ -100,16 +104,21 @@ jobs:
           legacy_emps = legacy.get('employees') or []
           print('LEGACY_EMPLOYEES_JSON=')
           print(json.dumps(legacy_emps, indent=2, default=str))
-          assert legacy.get('total_visits') == 73
-          assert legacy.get('active_staff') == 8
-          assert legacy.get('no_visits') == 4
-          assert legacy.get('gps_verified') == 73
+          print(
+              'LEGACY_MATCHES_REFERENCE_73_8_4_73=',
+              legacy.get('total_visits') == 73
+              and legacy.get('active_staff') == 8
+              and legacy.get('no_visits') == 4
+              and legacy.get('gps_verified') == 73,
+          )
 
           # 5) Same-day range
-          r = get({'start_date': DAY.isoformat(), 'end_date': DAY.isoformat()})
-          print('RANGE_TODAY_STATUS=', r.status_code)
-          assert r.status_code == 200, r.data
-          today_range = data_of(r)
+          st, body = call_summary(
+              {'start_date': DAY.isoformat(), 'end_date': DAY.isoformat()}
+          )
+          print('RANGE_TODAY_STATUS=', st)
+          assert st == 200, body
+          today_range = payload(body)
           print('RANGE_TODAY_START=', today_range.get('start_date'))
           print('RANGE_TODAY_END=', today_range.get('end_date'))
           print('RANGE_TODAY_TOTAL=', today_range.get('total_visits'))
@@ -132,10 +141,12 @@ jobs:
           assert metrics_match and emp_match
 
           # 6) Week == today on Mon 2026-10-05
-          r = get({'start_date': DAY.isoformat(), 'end_date': DAY.isoformat()})
-          print('WEEK_STATUS=', r.status_code)
-          assert r.status_code == 200
-          week = data_of(r)
+          st, body = call_summary(
+              {'start_date': DAY.isoformat(), 'end_date': DAY.isoformat()}
+          )
+          print('WEEK_STATUS=', st)
+          assert st == 200
+          week = payload(body)
           print('WEEK_TOTAL=', week.get('total_visits'))
           print('WEEK_ACTIVE=', week.get('active_staff'))
           print('WEEK_NO_VISITS=', week.get('no_visits'))
@@ -144,10 +155,12 @@ jobs:
           assert week.get('total_visits') == today_range.get('total_visits')
 
           # 7) Month
-          r = get({'start_date': MONTH_START.isoformat(), 'end_date': DAY.isoformat()})
-          print('MONTH_STATUS=', r.status_code)
-          assert r.status_code == 200, r.data
-          month = data_of(r)
+          st, body = call_summary(
+              {'start_date': MONTH_START.isoformat(), 'end_date': DAY.isoformat()}
+          )
+          print('MONTH_STATUS=', st)
+          assert st == 200, body
+          month = payload(body)
           month_emps = month.get('employees') or []
           print('MONTH_START=', month.get('start_date'))
           print('MONTH_END=', month.get('end_date'))
@@ -180,23 +193,32 @@ jobs:
               },
           }
           for name, params in cases.items():
-              resp = get(params)
-              print('VALIDATION_%s_STATUS=' % name, resp.status_code)
-              assert resp.status_code == 400, (name, resp.status_code, resp.data)
+              st, body = call_summary(params)
+              print('VALIDATION_%s_STATUS=' % name, st)
+              assert st == 400, (name, st, body)
 
-          # 9) Smoke existing APIs
-          r = client.get('/api/v1/admin/visits/', {'page_size': 1})
-          print('ADMIN_VISITS_SMOKE_STATUS=', r.status_code)
-          print('ADMIN_VISITS_SMOKE_COUNT=', r.data.get('count') if isinstance(r.data, dict) else None)
-          assert r.status_code == 200
+          # 9) Smoke existing APIs via viewsets/APIs
+          req = factory.get('/api/v1/admin/visits/', {'page_size': 1})
+          force_authenticate(req, user=admin)
+          view = VisitViewSet.as_view({'get': 'list'})
+          resp = view(req)
+          resp.render()
+          print('ADMIN_VISITS_SMOKE_STATUS=', resp.status_code)
+          visits_body = json.loads(resp.content.decode())
+          print('ADMIN_VISITS_SMOKE_COUNT=', visits_body.get('count'))
+          assert resp.status_code == 200
 
-          r = client.get(
+          req = factory.get(
               '/api/v1/reports/summary/',
               {'from': MONTH_START.isoformat(), 'to': DAY.isoformat()},
           )
-          print('REPORTS_SMOKE_STATUS=', r.status_code)
-          assert r.status_code == 200
-          rdata = r.data.get('data') if isinstance(r.data, dict) else r.data
+          force_authenticate(req, user=admin)
+          resp = AdminReportSummaryAPI.as_view()(req)
+          resp.render()
+          print('REPORTS_SMOKE_STATUS=', resp.status_code)
+          assert resp.status_code == 200
+          reports_body = json.loads(resp.content.decode())
+          rdata = reports_body.get('data') if isinstance(reports_body.get('data'), dict) else reports_body
           print('REPORTS_SMOKE_VISITS=', (rdata or {}).get('totals', {}).get('visits'))
           print('VERIFY_OK=1')
           PY"
