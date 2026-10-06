@@ -305,8 +305,9 @@ class VisitActivitySummaryTests(APITestCase):
         with CaptureQueriesContext(connection) as ctx:
             r = self._get(date=self.today.isoformat())
         self.assertEqual(r.status_code, 200)
-        # Roster + per-employee annotate + totals aggregate (+ optional session)
-        self.assertLessEqual(len(ctx), 8)
+        # Roster + per-employee annotate + totals aggregate + bulk DutySession
+        # for single-day duty enrichment (+ optional session).
+        self.assertLessEqual(len(ctx), 10)
 
     def test_single_day_range_equals_date_metrics(self):
         by_date = self._get(date=self.today.isoformat()).data["data"]

@@ -7,6 +7,12 @@ visit_date semantics and the reports gps_compliant lat/lng rule.
 
 Supports inclusive ranges via start_date/end_date. Single-day callers may
 still pass the same date for both bounds.
+
+DutySession enrichment (Today only):
+  When start_date == end_date, each employee includes a namespaced `duty`
+  object aggregated from tracking.DutySession for that business date.
+  Multi-day Week/Month responses set duty=null so Admin never misreads
+  today's duty as period-wide. Auth login / GPS last-seen are never used.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from django.db.models import Count, Max, Q
 
 from accounts.location_assignments import field_employee_queryset
 from reports.summary import _display_employee_name
+from visits.activity_duty import bulk_duty_by_user
 from visits.date_filters import apply_visit_date_range
 from visits.submitted import submitted_visits_qs
 
@@ -53,6 +60,8 @@ def build_visit_activity_summary(*, start_date: date, end_date: date) -> dict:
       - latest_visit_at: Max(Visit.created_at) for that employee within range
         (no submitted_at on Visit; Admin list also orders by -created_at)
       - user_id: AUTH_USER_MODEL pk (Visit.employee_id), never EmployeeProfile.pk
+      - duty: single-day only (start_date == end_date). Bulk DutySession
+        aggregate for that business date; multi-day → duty=null.
 
     Returns metric keys only (no date / start_date / end_date). Callers attach
     the appropriate date contract for ?date= vs ?start_date=&end_date=.
@@ -90,6 +99,13 @@ def build_visit_activity_summary(*, start_date: date, end_date: date) -> dict:
         ),
     )
 
+    include_duty = start_date == end_date
+    duty_by_user = (
+        bulk_duty_by_user(user_ids, business_date=start_date)
+        if include_duty
+        else {}
+    )
+
     employees = []
     for row in roster:
         stats = per_employee.get(row["user_id"])
@@ -105,6 +121,11 @@ def build_visit_activity_summary(*, start_date: date, end_date: date) -> dict:
                 ),
                 "visit_count": visit_count,
                 "latest_visit_at": stats["latest_visit_at"] if stats else None,
+                "duty": (
+                    duty_by_user.get(row["user_id"])
+                    if include_duty
+                    else None
+                ),
             }
         )
 
