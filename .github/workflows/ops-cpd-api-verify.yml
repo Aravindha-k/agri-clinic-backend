@@ -47,12 +47,12 @@ jobs:
           import os
           from urllib.request import urlopen
 
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
           import django
+          django.setup()
+
           from django.contrib.auth import get_user_model
           from rest_framework.test import APIRequestFactory, force_authenticate
-
-          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-          django.setup()
 
           from api.admin.crop_pest_disease_views import (
               AdminCropAvailableMastersAPI,
