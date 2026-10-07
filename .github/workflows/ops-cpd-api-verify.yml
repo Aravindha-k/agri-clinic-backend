@@ -1,0 +1,231 @@
+name: Ops CPD API Verify
+
+# Manual read-only production verification for Crop→Pest/Disease Admin API.
+# Does not deploy, mutate data, activate Disease, or touch PM142.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify CPD Admin API on EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Read-only CPD verification
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            "set -euo pipefail
+             cd '${DEPLOY_PATH}'
+             source .venv/bin/activate
+             python - <<'PY'
+          import json
+          import os
+          from urllib.request import urlopen
+
+          import django
+          from django.contrib.auth import get_user_model
+          from rest_framework.test import APIRequestFactory, force_authenticate
+
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          django.setup()
+
+          from api.admin.crop_pest_disease_views import (
+              AdminCropAvailableMastersAPI,
+              AdminCropPestDiseaseDetailAPI,
+              AdminCropPestDiseaseListAPI,
+          )
+          from masters.models import ProblemCategory, ProblemMaster
+
+          print('HEAD=', os.popen('git rev-parse HEAD').read().strip())
+
+          with urlopen('http://127.0.0.1:8000/healthz/', timeout=20) as r:
+              print('HEALTH_STATUS=', r.status)
+              print('HEALTH_BODY=', r.read().decode())
+
+          disease = ProblemCategory.objects.filter(pk=17).values(
+              'id', 'code', 'name', 'is_active'
+          ).first()
+          print('DISEASE_CAT=', disease)
+          assert disease and disease['code'] == 'disease'
+          assert disease['is_active'] is False
+          print('DISEASE_STILL_INACTIVE=YES')
+
+          pm142 = ProblemMaster.objects.filter(pk=142).values(
+              'id', 'name', 'category_id', 'crop_id'
+          ).first()
+          print('PM142=', pm142)
+
+          User = get_user_model()
+          admin = (
+              User.objects.filter(is_staff=True, is_active=True, is_superuser=True)
+              .order_by('id')
+              .first()
+              or User.objects.filter(is_staff=True, is_active=True).order_by('id').first()
+          )
+          assert admin is not None
+          print('ADMIN_USER_ID=', admin.pk)
+
+          factory = APIRequestFactory()
+
+          def call(view_cls, path, params=None):
+              req = factory.get(path, params or {})
+              force_authenticate(req, user=admin)
+              resp = view_cls.as_view()(req, **{})
+              # detail/available need crop_id kwarg
+              return resp
+
+          # List
+          req = factory.get('/api/v1/admin/crop-pest-disease/')
+          force_authenticate(req, user=admin)
+          resp = AdminCropPestDiseaseListAPI.as_view()(req)
+          resp.render()
+          body = json.loads(resp.content.decode())
+          print('CPD_LIST_STATUS=', resp.status_code)
+          assert resp.status_code == 200, body
+          data = body.get('data') or {}
+          results = data.get('results') or []
+          print('CPD_COUNT_FIELD=', data.get('count'))
+          print('CPD_RESULTS_LEN=', len(results))
+          print('ACTIVE_CROPS=', sum(1 for r in results if r.get('is_active')))
+          assert results, 'expected crops'
+          print('SAMPLE_KEYS=', sorted(results[0].keys()))
+          print('SAMPLE_ROWS=', json.dumps(results[:2], ensure_ascii=False))
+          for key in ('id', 'name', 'is_active', 'pest_count', 'disease_count'):
+              assert key in results[0], key
+
+          wanted = ['Paddy', 'Tomato', 'Banana', 'Brinjal']
+          picked = {}
+          for r in results:
+              n = (r.get('name') or '').strip()
+              for w in wanted:
+                  if n.lower() == w.lower() and w not in picked:
+                      picked[w] = r
+          print('PICKED=', json.dumps({
+              k: {
+                  'id': v['id'],
+                  'pest_count': v.get('pest_count'),
+                  'disease_count': v.get('disease_count'),
+                  'is_active': v.get('is_active'),
+                  'tamil_name': v.get('tamil_name'),
+              }
+              for k, v in picked.items()
+          }, ensure_ascii=False))
+          assert len(picked) == 4, picked
+
+          details = {}
+          pest_sets = {}
+          disease_sets = {}
+          for name, row in picked.items():
+              cid = row['id']
+              req = factory.get(f'/api/v1/admin/crop-pest-disease/{cid}/')
+              force_authenticate(req, user=admin)
+              resp = AdminCropPestDiseaseDetailAPI.as_view()(req, crop_id=cid)
+              resp.render()
+              body = json.loads(resp.content.decode())
+              assert resp.status_code == 200, body
+              d = body.get('data') or {}
+              pests = d.get('pests') or []
+              diseases = d.get('diseases') or []
+              pest_sets[name] = {p['id'] for p in pests}
+              disease_sets[name] = {x['id'] for x in diseases}
+              details[name] = {
+                  'status': resp.status_code,
+                  'crop_id': (d.get('crop') or {}).get('id'),
+                  'crop_name': (d.get('crop') or {}).get('name'),
+                  'pest_count': d.get('pest_count'),
+                  'disease_count': d.get('disease_count'),
+                  'pests_len': len(pests),
+                  'diseases_len': len(diseases),
+                  'has_disease_mappings': len(diseases) > 0,
+                  'sample_pest': pests[:2],
+                  'sample_disease': diseases[:2],
+              }
+              assert details[name]['crop_id'] == cid
+              assert (details[name]['crop_name'] or '').lower() == name.lower()
+              assert details[name]['pest_count'] == len(pests)
+              assert details[name]['disease_count'] == len(diseases)
+          print('DETAILS=', json.dumps(details, ensure_ascii=False, indent=2))
+          print('DISEASE_MAPPINGS_VISIBLE=', any(v['has_disease_mappings'] for v in details.values()))
+
+          # Isolation: crop detail crop_id matches; Tomato/Paddy pest sets not identical
+          print('ISOLATION_CROP_MATCH=YES')
+          print(
+              'TOMATO_PADDY_PEST_SETS_EQUAL=',
+              pest_sets['Tomato'] == pest_sets['Paddy'] and len(pest_sets['Tomato']) > 0,
+              'tomato_n=', len(pest_sets['Tomato']),
+              'paddy_n=', len(pest_sets['Paddy']),
+              'intersection=', len(pest_sets['Tomato'] & pest_sets['Paddy']),
+          )
+          assert pest_sets['Tomato'] != pest_sets['Paddy'] or (
+              len(pest_sets['Tomato']) == 0 and len(pest_sets['Paddy']) == 0
+          )
+
+          # PM142 not in available pest candidates
+          cid = picked['Tomato']['id']
+          req = factory.get(
+              f'/api/v1/admin/crop-pest-disease/{cid}/available-masters/',
+              {'category': 'pest', 'search': 'Nutrient', 'include_mapped': 'true'},
+          )
+          force_authenticate(req, user=admin)
+          resp = AdminCropAvailableMastersAPI.as_view()(req, crop_id=cid)
+          resp.render()
+          body = json.loads(resp.content.decode())
+          print('PM142_AVAILABLE_STATUS=', resp.status_code)
+          rows = ((body.get('data') or {}).get('results') or [])
+          ids = [r.get('id') for r in rows]
+          print('PM142_FOUND_IN_AVAILABLE=', 142 in ids, 'RESULT_IDS=', ids[:15])
+          assert 142 not in ids
+
+          # Lightweight regressions via localhost HTTP
+          from urllib.error import HTTPError
+          from urllib.request import Request
+
+          def http(path):
+              try:
+                  with urlopen(Request('http://127.0.0.1:8000' + path), timeout=20) as r:
+                      return r.status, r.read()[:200]
+              except HTTPError as e:
+                  return e.code, e.read()[:200]
+
+          st, _ = http('/healthz/')
+          print('REGRESSION_HEALTH=', st)
+          st, _ = http('/api/v1/admin/crop-pest-disease/')
+          print('REGRESSION_CPD_UNAUTH=', st)  # expect 401
+          st, _ = http('/api/v1/mobile/visit-form-options/')
+          print('REGRESSION_MOBILE_VFO=', st)  # expect 401 without session
+          st, _ = http('/api/v1/masters/crops/dropdown/')
+          print('REGRESSION_CROPS_DROPDOWN=', st)
+
+          from masters.problem_item_utils import problem_categories_with_active_items
+          field_codes = {c.code for c in problem_categories_with_active_items()}
+          print('FIELD_CAT_CODES=', sorted(field_codes))
+          print('FIELD_HIDES_DISEASE=', 'disease' not in field_codes)
+          assert 'disease' not in field_codes
+
+          print('VERIFY_OK=1')
+          PY"
