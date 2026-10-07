@@ -30,6 +30,13 @@ from accounts.location_assignment_views import (
     AdminEmployeeLocationAssignmentListAPI,
 )
 from farmers.photo_views import AdminFarmerPhotoAPI
+from api.admin.crop_pest_disease_views import (
+    AdminCropAvailableMastersAPI,
+    AdminCropMapMasterAPI,
+    AdminCropPestDiseaseDetailAPI,
+    AdminCropPestDiseaseListAPI,
+    AdminCropUnmapMasterAPI,
+)
 
 router = DefaultRouter()
 router.register(r"farmers", FarmerViewSet, basename="admin-farmer")
@@ -124,6 +131,32 @@ urlpatterns = [
         "dev/reset-test-data/",
         DevResetTestBusinessDataAPI.as_view(),
         name="admin-dev-reset-test-data",
+    ),
+    # Crop → Pest/Disease mapping (CropProblem source of truth; Disease readable while inactive)
+    path(
+        "crop-pest-disease/",
+        AdminCropPestDiseaseListAPI.as_view(),
+        name="admin-crop-pest-disease-list",
+    ),
+    path(
+        "crop-pest-disease/<int:crop_id>/",
+        AdminCropPestDiseaseDetailAPI.as_view(),
+        name="admin-crop-pest-disease-detail",
+    ),
+    path(
+        "crop-pest-disease/<int:crop_id>/available-masters/",
+        AdminCropAvailableMastersAPI.as_view(),
+        name="admin-crop-available-masters",
+    ),
+    path(
+        "crop-pest-disease/<int:crop_id>/map/",
+        AdminCropMapMasterAPI.as_view(),
+        name="admin-crop-map-master",
+    ),
+    path(
+        "crop-pest-disease/<int:crop_id>/unmap/",
+        AdminCropUnmapMasterAPI.as_view(),
+        name="admin-crop-unmap-master",
     ),
     path("", include(router.urls)),
 ]
