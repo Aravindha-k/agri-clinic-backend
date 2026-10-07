@@ -20,10 +20,13 @@ concurrency:
 
 jobs:
   nginx-spa-cache:
-    name: Nginx SPA cache (${{ inputs.mode }})
+    name: Nginx SPA cache
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Configure SSH
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
@@ -34,7 +37,7 @@ jobs:
           printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Audit / apply Nginx SPA cache
+      - name: Upload and run script on EC2
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
@@ -43,237 +46,14 @@ jobs:
         run: |
           set -euo pipefail
           PORT="${EC2_PORT:-22}"
+          scp -i ~/.ssh/deploy_key -P "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            scripts/ops_nginx_spa_cache.sh \
+            "${EC2_USER}@${EC2_HOST}:/tmp/ops_nginx_spa_cache.sh"
           ssh -i ~/.ssh/deploy_key \
             -p "${PORT}" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=accept-new \
             "${EC2_USER}@${EC2_HOST}" \
-            "MODE='${MODE}' bash -s" <<'REMOTE'
-          set -euo pipefail
-
-          echo "=== MODE=${MODE} ==="
-          echo "=== nginx -T (filtered SPA/admin/root/assets/cache) ==="
-          sudo nginx -T 2>/dev/null | tee /tmp/nginx_full_t.txt | \
-            grep -nE 'server_name|root |index |location |try_files|Cache-Control|expires|add_header|proxy_pass|alias |include |listen ' \
-            | head -n 400
-
-          echo
-          echo "=== Candidate config files mentioning assets/index.html/admin ==="
-          sudo grep -RIlE 'index\.html|/assets|try_files|agri-admin|admin-frontend|dist' \
-            /etc/nginx 2>/dev/null || true
-
-          echo
-          echo "=== Document roots that look like Vite SPA ==="
-          for d in /var/www/* /var/www/*/*; do
-            if [ -f "$d/index.html" ] && [ -d "$d/assets" ]; then
-              echo "SPA_ROOT=$d"
-              ls -la "$d/index.html" | head -n 1
-              ls "$d/assets"/index-*.js 2>/dev/null | head -n 3 || true
-            fi
-          done
-
-          echo
-          echo "=== Current response headers (localhost) ==="
-          for path in / /index.html /masters/crops /healthz/; do
-            echo "--- HEAD $path ---"
-            curl -sI "http://127.0.0.1${path}" | tr -d '\r' | grep -iE 'HTTP/|cache-control|content-type|expires|etag|last-modified|location' || true
-          done
-          JS=$(ls /var/www/*/assets/index-*.js /var/www/*/*/assets/index-*.js 2>/dev/null | head -n 1 || true)
-          CSS=$(ls /var/www/*/assets/index-*.css /var/www/*/*/assets/index-*.css 2>/dev/null | head -n 1 || true)
-          # Prefer path under web root via curl if discoverable from index.html
-          ASSET_JS=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' /var/www/*/index.html /var/www/*/*/index.html 2>/dev/null | head -n 1 | sed 's/.*://' || true)
-          ASSET_CSS=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.css' /var/www/*/index.html /var/www/*/*/index.html 2>/dev/null | head -n 1 | sed 's/.*://' || true)
-          echo "ASSET_JS=${ASSET_JS}"
-          echo "ASSET_CSS=${ASSET_CSS}"
-          if [ -n "${ASSET_JS}" ]; then
-            echo "--- HEAD ${ASSET_JS} ---"
-            curl -sI "http://127.0.0.1${ASSET_JS}" | tr -d '\r' | grep -iE 'HTTP/|cache-control|content-type|expires' || true
-          fi
-          if [ -n "${ASSET_CSS}" ]; then
-            echo "--- HEAD ${ASSET_CSS} ---"
-            curl -sI "http://127.0.0.1${ASSET_CSS}" | tr -d '\r' | grep -iE 'HTTP/|cache-control|content-type|expires' || true
-          fi
-
-          if [ "${MODE}" = "audit" ]; then
-            echo "AUDIT_ONLY_DONE=1"
-            exit 0
-          fi
-
-          echo
-          echo "=== APPLY: locate primary SPA server config ==="
-          # Find site file that contains try_files ... index.html and a root with assets
-          CONF=""
-          for f in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
-            [ -f "$f" ] || continue
-            if sudo grep -q 'try_files' "$f" && sudo grep -qE 'index\.html|/assets' "$f"; then
-              CONF="$f"
-              break
-            fi
-          done
-          # Fallback: any enabled site with root pointing at a Vite dist
-          if [ -z "${CONF}" ]; then
-            for f in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
-              [ -f "$f" ] || continue
-              root=$(sudo awk '/^\s*root /{print $2}' "$f" | tr -d ';' | head -n1)
-              if [ -n "$root" ] && [ -f "${root}/index.html" ] && [ -d "${root}/assets" ]; then
-                CONF="$f"
-                break
-              fi
-            done
-          fi
-          if [ -z "${CONF}" ]; then
-            echo "ERROR: could not identify SPA nginx config" >&2
-            exit 1
-          fi
-          echo "ACTIVE_SPA_CONF=${CONF}"
-          sudo cp -a "${CONF}" "/tmp/nginx_spa_backup_$(date +%Y%m%d%H%M%S).conf"
-          echo "BACKUP_COPIED_TO_/tmp"
-
-          # Write patched config via python for safe surgical edit
-          sudo python3 - <<'PY'
-          import os, re, shutil, time
-          from pathlib import Path
-
-          conf_path = None
-          for base in (Path('/etc/nginx/sites-enabled'), Path('/etc/nginx/conf.d')):
-              if not base.exists():
-                  continue
-              for f in sorted(base.iterdir()):
-                  if not f.is_file():
-                      continue
-                  text = f.read_text(encoding='utf-8', errors='replace')
-                  if 'try_files' in text and ('index.html' in text or '/assets' in text):
-                      conf_path = f
-                      break
-                  m = re.search(r'^\s*root\s+([^;]+);', text, re.M)
-                  if m:
-                      root = m.group(1).strip()
-                      if Path(root, 'index.html').is_file() and Path(root, 'assets').is_dir():
-                          conf_path = f
-                          break
-              if conf_path:
-                  break
-          if conf_path is None:
-              raise SystemExit('SPA conf not found for patch')
-
-          text = conf_path.read_text(encoding='utf-8', errors='replace')
-          print('PATCHING', conf_path)
-
-          # Remove prior AgriClinic SPA cache markers if re-applying
-          text = re.sub(
-              r'\n?\s*# BEGIN AGRICLINIC_SPA_CACHE.*?# END AGRICLINIC_SPA_CACHE\n?',
-              '\n',
-              text,
-              flags=re.S,
-          )
-
-          assets_block = '''
-      # BEGIN AGRICLINIC_SPA_CACHE
-      location ^~ /assets/ {
-          expires 1y;
-          add_header Cache-Control "public, max-age=31536000, immutable";
-          try_files $uri =404;
-      }
-      location = /index.html {
-          add_header Cache-Control "no-cache, must-revalidate";
-      }
-      # END AGRICLINIC_SPA_CACHE
-'''
-
-          # Ensure location / SPA fallback keeps no-cache for HTML
-          # Prefer inserting assets/index.html blocks before the first "location /" that uses try_files
-          m = re.search(r'(^\s*location\s+/[^\n]*\{[^\n]*\n(?:.*?\n)*?\s*try_files[^\n]*index\.html[^\n]*\n)', text, re.M)
-          # Simpler: insert before first `location / {`
-          m2 = re.search(r'^(\s*)location\s+/\s*\{', text, re.M)
-          if not m2:
-              raise SystemExit('Could not find location / block to patch')
-          indent = m2.group(1)
-          insert_at = m2.start()
-          patched = text[:insert_at] + assets_block.replace('      ', indent) + text[insert_at:]
-
-          # Add Cache-Control to location / HTML responses if not already present inside that block
-          def add_nocache_to_root_location(src: str) -> str:
-              # Find location / { ... } at brace depth
-              for match in re.finditer(r'^(\s*)location\s+/(\s|$)', src, re.M):
-                  # only exact location /
-                  line_start = match.start()
-                  # confirm exact
-                  line = src[line_start:src.find('\n', line_start)]
-                  if not re.match(r'^\s*location\s+/\s*\{', line):
-                      continue
-                  brace = src.find('{', line_start)
-                  depth = 0
-                  i = brace
-                  while i < len(src):
-                      if src[i] == '{':
-                          depth += 1
-                      elif src[i] == '}':
-                          depth -= 1
-                          if depth == 0:
-                              end = i
-                              block = src[brace + 1:end]
-                              if 'AGRICLINIC_SPA_HTML_CACHE' in block:
-                                  return src
-                              # inject near top of block
-                              inject = (
-                                  '\n'
-                                  + match.group(1)
-                                  + '    # AGRICLINIC_SPA_HTML_CACHE\n'
-                                  + match.group(1)
-                                  + '    add_header Cache-Control "no-cache, must-revalidate";\n'
-                              )
-                              return src[: brace + 1] + inject + src[brace + 1 :]
-                  break
-              return src
-
-          patched = add_nocache_to_root_location(patched)
-          conf_path.write_text(patched, encoding='utf-8')
-          print('WROTE', conf_path)
-          print('--- PATCHED FILE ---')
-          print(conf_path.read_text(encoding='utf-8', errors='replace'))
-          PY
-
-          echo "=== nginx -t ==="
-          if ! sudo nginx -t; then
-            echo "NGINX_T_FAILED=1"
-            echo "Restoring from latest /tmp backup"
-            LATEST=$(ls -1t /tmp/nginx_spa_backup_*.conf | head -n1)
-            sudo cp -a "$LATEST" "${CONF}"
-            sudo nginx -t
-            exit 1
-          fi
-          echo "NGINX_T_OK=1"
-
-          echo "=== reload nginx ==="
-          sudo systemctl reload nginx
-          echo "NGINX_RELOAD_OK=1"
-          sleep 1
-
-          echo "=== POST headers ==="
-          ASSET_JS=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' /var/www/*/index.html /var/www/*/*/index.html 2>/dev/null | head -n 1 | sed 's/.*://' || true)
-          ASSET_CSS=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.css' /var/www/*/index.html /var/www/*/*/index.html 2>/dev/null | head -n 1 | sed 's/.*://' || true)
-          for path in / /index.html /masters/crops /masters/crops/55/problems /api/v1/ /healthz/; do
-            echo "--- HEAD $path ---"
-            curl -sI "http://127.0.0.1${path}" | tr -d '\r' | grep -iE 'HTTP/|cache-control|content-type|expires' || true
-          done
-          if [ -n "${ASSET_JS}" ]; then
-            echo "--- HEAD ${ASSET_JS} ---"
-            curl -sI "http://127.0.0.1${ASSET_JS}" | tr -d '\r' | grep -iE 'HTTP/|cache-control|content-type|expires' || true
-          fi
-          if [ -n "${ASSET_CSS}" ]; then
-            echo "--- HEAD ${ASSET_CSS} ---"
-            curl -sI "http://127.0.0.1${ASSET_CSS}" | tr -d '\r' | grep -iE 'HTTP/|cache-control|content-type|expires' || true
-          fi
-
-          echo "=== body sniff for Manage Pest ==="
-          # HTML shell only; UI strings live in JS bundle
-          curl -s "http://127.0.0.1/" | head -c 400; echo
-          if [ -n "${ASSET_JS}" ]; then
-            if curl -s "http://127.0.0.1${ASSET_JS}" | grep -q 'Manage Pest'; then
-              echo "JS_HAS_MANAGE_PEST=YES"
-            else
-              echo "JS_HAS_MANAGE_PEST=NO"
-            fi
-          fi
-          echo "APPLY_DONE=1"
-          REMOTE
+            "chmod +x /tmp/ops_nginx_spa_cache.sh && MODE='${MODE}' /tmp/ops_nginx_spa_cache.sh"
