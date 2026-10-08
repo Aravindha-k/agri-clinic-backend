@@ -44,15 +44,13 @@ class MobileAPIAuditTest(TestCase):
         self.crop_b = Crop.objects.create(name_en="Wheat", name_ta="Wheat", is_active=True)
         
         # Create categories
-        self.pest_cat = ProblemCategory.objects.create(
+        self.pest_cat, _ = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
+            defaults={"name": "Pest", "is_active": True},
         )
-        self.disease_cat = ProblemCategory.objects.create(
+        self.disease_cat, _ = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_DISEASE,
-            name="Disease",
-            is_active=True,
+            defaults={"name": "Disease", "is_active": True},
         )
         
         # Create masters

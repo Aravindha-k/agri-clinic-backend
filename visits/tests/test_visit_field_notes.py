@@ -128,11 +128,10 @@ class VisitFieldNotesFlowTest(APITestCase):
     # Tests 24-29: Historical preservation (RULE B)
     def test_old_visit_fk_to_inactive_problem_master_still_displays(self):
         """Test 24: old Visit FK to inactive ProblemMaster still displays."""
-        pest_cat = ProblemCategory.objects.create(
+        pest_cat = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
-        )
+            defaults={"name": "Pest", "is_active": True},
+        )[0]
         pest = ProblemMaster.objects.create(
             category=pest_cat,
             name="Old Pest",
@@ -164,11 +163,10 @@ class VisitFieldNotesFlowTest(APITestCase):
 
     def test_old_visit_m2m_containing_inactive_problem_master_still_displays(self):
         """Test 25: old Visit M2M containing inactive ProblemMaster still displays."""
-        pest_cat = ProblemCategory.objects.create(
+        pest_cat = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
-        )
+            defaults={"name": "Pest", "is_active": True},
+        )[0]
         pest_active = ProblemMaster.objects.create(
             category=pest_cat,
             name="Active Pest",
@@ -204,11 +202,10 @@ class VisitFieldNotesFlowTest(APITestCase):
 
     def test_visit_with_active_and_inactive_problem_items_displays_both(self):
         """Test 26: Visit with active + inactive problem_items displays BOTH."""
-        pest_cat = ProblemCategory.objects.create(
+        pest_cat = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
-        )
+            defaults={"name": "Pest", "is_active": True},
+        )[0]
         pest_active = ProblemMaster.objects.create(
             category=pest_cat,
             name="Active Pest",
@@ -264,11 +261,10 @@ class VisitFieldNotesFlowTest(APITestCase):
 
     def test_historical_read_does_not_reactivate_anything(self):
         """Test 28: historical read does not reactivate anything."""
-        pest_cat = ProblemCategory.objects.create(
+        pest_cat = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
-        )
+            defaults={"name": "Pest", "is_active": True},
+        )[0]
         pest = ProblemMaster.objects.create(
             category=pest_cat,
             name="Inactive Pest",
@@ -296,11 +292,10 @@ class VisitFieldNotesFlowTest(APITestCase):
 
     def test_deactivating_master_does_not_modify_visit_records(self):
         """Test 29: deactivating master does not modify Visit records."""
-        pest_cat = ProblemCategory.objects.create(
+        pest_cat = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
-        )
+            defaults={"name": "Pest", "is_active": True},
+        )[0]
         pest = ProblemMaster.objects.create(
             category=pest_cat,
             name="Active Pest",

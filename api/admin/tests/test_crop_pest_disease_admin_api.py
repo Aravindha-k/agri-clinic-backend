@@ -80,20 +80,20 @@ class CropPestDiseaseAdminAPITests(TestCase):
         self.admin_client = _auth(self.admin)
         self.emp_client = _auth(self.employee)
 
-        self.pest_cat = ProblemCategory.objects.create(
+        self.pest_cat, _ = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_PEST,
-            name="Pest",
-            is_active=True,
+            defaults={"name": "Pest", "is_active": True},
         )
-        self.disease_cat = ProblemCategory.objects.create(
+        self.disease_cat, _ = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_DISEASE,
-            name="Disease",
-            is_active=False,  # intentional field/mobile freeze
+            defaults={"name": "Disease", "is_active": False},
         )
-        self.nutrient_cat = ProblemCategory.objects.create(
+        # intentional field/mobile freeze -- seeded row is is_active=True
+        self.disease_cat.is_active = False
+        self.disease_cat.save(update_fields=["is_active"])
+        self.nutrient_cat, _ = ProblemCategory.objects.get_or_create(
             code=ProblemCategory.CODE_NUTRIENT,
-            name="Nutrient Deficiency",
-            is_active=True,
+            defaults={"name": "Nutrient Deficiency", "is_active": True},
         )
 
         self.crop_a = Crop.objects.create(
