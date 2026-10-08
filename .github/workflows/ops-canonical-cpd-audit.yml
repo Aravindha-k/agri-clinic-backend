@@ -1,0 +1,67 @@
+name: Ops Canonical CPD Production Audit
+
+# Manual read-only production preflight for the canonical Crop -> Pest/Disease
+# dataset.  Runs the canonical_crop_pest_disease management command on EC2 in
+# --production-audit mode: SELECTs only, wrapped in a force-rolled-back
+# transaction.  Does NOT deploy, import, activate categories, deactivate
+# records, remove mappings, or touch historical Visits.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_audit:
+        description: "Type AUDIT-ONLY to proceed (read-only, zero writes)"
+        required: true
+        type: string
+      mode:
+        description: "audit = full production preflight; dryrun = plan only"
+        required: true
+        type: choice
+        options:
+          - audit
+          - dryrun
+        default: audit
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  canonical-cpd-audit:
+    name: Canonical CPD production audit (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: inputs.confirm_audit == 'AUDIT-ONLY'
+    env:
+      MODE_FLAG: ${{ inputs.mode == 'dryrun' && '--dry-run' || '--production-audit' }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Run canonical production audit on EC2 (read-only)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            "set -euo pipefail
+             cd '${DEPLOY_PATH}'
+             echo 'DEPLOYED_SHA=' \$(git rev-parse HEAD)
+             source .venv/bin/activate
+             echo 'HEALTHZ=' \$(curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz/ || echo 'DOWN')
+             PYTHONIOENCODING=utf-8 python manage.py canonical_crop_pest_disease ${MODE_FLAG}"
