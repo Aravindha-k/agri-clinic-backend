@@ -323,8 +323,19 @@ def analyze_variants(data) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Read-only database comparison
+# Identity helpers -- PHASE 2B: exact PDF text, whitespace-trimmed only.
+#
+# Canonical ProblemMaster identity is (category + EXACT APPROVED PDF ENGLISH
+# VALUE).  Case variants ("Fruit Borer" vs "Fruit borer"), spacing variants
+# ("Mealy Bug" vs "Mealybug") and spelling variants ("Bettle" vs "Beetle") are
+# DISTINCT canonical masters until manual business normalization is approved.
+# Pest and Disease are always different categories even for identical text.
 # ---------------------------------------------------------------------------
+
+def _exact(s) -> str:
+    """Exact-identity key: collapse repeated whitespace, trim, keep case."""
+    return re.sub(r"\s+", " ", (s or "").strip())
+
 
 def _db_models():
     from masters.models import Crop, ProblemCategory, ProblemMaster, CropProblem
@@ -335,9 +346,85 @@ def _norm(s):
     return re.sub(r"\s+", " ", (s or "").strip())
 
 
+# Source-data anomalies flagged for business review.  The PDF value is kept
+# verbatim in the canonical JSON; this list only marks it for review -- it is
+# never corrected by code.
+TAMIL_ANOMALIES = [
+    {
+        "crop": "Greens",
+        "kind": "pests",
+        "name_en": "Mites",
+        "name_ta": "முட்டை பூச்சி",
+        "flag": "SOURCE_DATA_REVIEW",
+        "reason": "visually-verified PDF value preserved verbatim; reads like a "
+                  "source typo (expected a mite term), pending business review",
+    },
+]
+
+
+def canonical_master_keys(data) -> dict:
+    """Map (category, EXACT canonical English name) -> set of crop names.
+
+    Exact identity: whitespace-trimmed, case preserved.  Case/spacing/spelling
+    variants produce DISTINCT keys (no merging).
+    """
+    keys = {}
+    for e in data:
+        cn = _exact(e["crop"]["name_en"])
+        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
+            for it in e.get(kind, []):
+                key = (code, _exact(it["name_en"]))
+                keys.setdefault(key, set()).add(cn)
+    return keys
+
+
+def canonical_map_keys(data) -> set:
+    """Set of canonical (crop, category, exact master name) associations.
+
+    A set -- so the in-crop exact duplicate in the source (Groundnut 'Stem rot')
+    collapses to ONE planned CropProblem mapping.
+    """
+    out = set()
+    for e in data:
+        cn = _exact(e["crop"]["name_en"])
+        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
+            for it in e.get(kind, []):
+                out.add((cn, code, _exact(it["name_en"])))
+    return out
+
+
+def source_duplicates(data) -> list:
+    """In-crop exact duplicates present in the PDF source (report only)."""
+    dups = []
+    for e in data:
+        cn = _exact(e["crop"]["name_en"])
+        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
+            seen = set()
+            for it in e.get(kind, []):
+                nm = _exact(it["name_en"])
+                if nm in seen:
+                    dups.append({"crop": cn, "category": code, "name": nm})
+                seen.add(nm)
+    return dups
+
+
+def tamil_anomalies(data) -> list:
+    """Return the TAMIL_ANOMALIES entries that are present in the dataset."""
+    out = []
+    for flag in TAMIL_ANOMALIES:
+        for e in data:
+            if _exact(e["crop"]["name_en"]) != flag["crop"]:
+                continue
+            for it in e.get(flag["kind"], []):
+                if _exact(it["name_en"]) == flag["name_en"]:
+                    out.append({**flag, "canon_ta": it.get("name_ta")})
+    return out
+
+
 def compare_to_db(data=None) -> dict:
     """READ-ONLY comparison of canonical data against current DB rows.
 
+    PHASE 2B identity: EXACT PDF English value (whitespace-trimmed, case kept).
     Returns a classification dict; performs zero writes.
     """
     Crop, ProblemCategory, ProblemMaster, CropProblem = _db_models()
@@ -345,104 +432,95 @@ def compare_to_db(data=None) -> dict:
         data = load_canonical()
 
     db_crops = list(Crop.objects.all())
-    db_crops_by_norm = {}
+    db_crops_exact = {}
+    db_crops_casefold = {}
     for c in db_crops:
-        db_crops_by_norm.setdefault(_norm(c.name_en).lower(), []).append(c)
+        db_crops_exact.setdefault(_exact(c.name_en), []).append(c)
+        db_crops_casefold.setdefault(_exact(c.name_en).lower(), []).append(c)
 
     # --- crops ---
-    canon_crop_norms = set()
-    crop_cmp = {"exact": [], "name_update": [], "missing_db": [],
-                "ambiguous": []}
+    crop_cmp = {"canonical_exact": [], "update_required": [],
+                "canonical_missing": [], "ambiguous": []}
+    canonical_crop_keys = set()
     for entry in data:
-        en = _norm(entry["crop"]["name_en"])
-        ta = _norm(entry["crop"]["name_ta"])
-        canon_crop_norms.add(en.lower())
-        hits = db_crops_by_norm.get(en.lower(), [])
+        en = _exact(entry["crop"]["name_en"])
+        ta = _exact(entry["crop"]["name_ta"])
+        canonical_crop_keys.add(en)
+        hits = db_crops_exact.get(en, [])
         if len(hits) == 1:
             db = hits[0]
-            if _norm(db.name_ta) != ta:
-                crop_cmp["name_update"].append(
+            if _exact(db.name_ta) != ta or not db.is_active:
+                crop_cmp["update_required"].append(
                     {"crop": en, "db_id": db.id, "db_ta": db.name_ta,
-                     "canon_ta": ta})
+                     "canon_ta": ta, "reactivate": not db.is_active})
             else:
-                crop_cmp["exact"].append({"crop": en, "db_id": db.id})
+                crop_cmp["canonical_exact"].append({"crop": en, "db_id": db.id})
         elif len(hits) > 1:
             crop_cmp["ambiguous"].append(
                 {"crop": en, "candidates": [h.id for h in hits]})
         else:
-            crop_cmp["missing_db"].append({"crop": en, "canon_ta": ta})
-    canonical_set = { _norm(e["crop"]["name_en"]).lower() for e in data }
+            # case-only near-match -> ambiguous (requires decision, not reuse)
+            casefold_hits = [c for c in db_crops_casefold.get(en.lower(), [])
+                             if _exact(c.name_en) != en]
+            if casefold_hits:
+                crop_cmp["ambiguous"].append(
+                    {"crop": en, "reason": "case-only near-match",
+                     "candidates": [{"db_id": c.id, "name": c.name_en}
+                                    for c in casefold_hits]})
+            else:
+                crop_cmp["canonical_missing"].append(
+                    {"crop": en, "canon_ta": ta})
     legacy_db_only = [c for c in db_crops
-                      if _norm(c.name_en).lower() not in canonical_set]
-    crop_cmp["legacy_db_only"] = [{"crop": c.name_en, "db_id": c.id,
-                                   "is_active": c.is_active}
-                                  for c in legacy_db_only]
+                      if _exact(c.name_en) not in canonical_crop_keys]
+    crop_cmp["legacy_only"] = [{"crop": c.name_en, "db_id": c.id,
+                                "is_active": c.is_active}
+                               for c in legacy_db_only]
 
     # --- problem masters ---
     cat_by_code = {pc.code: pc for pc in ProblemCategory.objects.all()}
     pest_cat = cat_by_code.get(PEST)
     disease_cat = cat_by_code.get(DISEASE)
     db_masters = list(ProblemMaster.objects.select_related("category", "crop"))
-    masters_by_cat_name = {}
+    masters_exact = {}
     for m in db_masters:
         code = m.category.code if m.category_id else None
-        masters_by_cat_name.setdefault((code, _norm(m.name).lower()), []).append(m)
+        masters_exact.setdefault((code, _exact(m.name)), []).append(m)
 
-    master_cmp = {"reusable_exact": [], "variant": [], "missing_db": [],
-                  "ambiguous": []}
-    canonical_master_keys = set()   # (code, normname)
-    canonical_master_usage = {}     # (code,normname) -> set(crop norms)
-    for entry in data:
-        cen = _norm(entry["crop"]["name_en"]).lower()
-        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
-            for it in entry.get(kind, []):
-                mn = _norm(it["name_en"])
-                key = (code, mn.lower())
-                canonical_master_keys.add(key)
-                canonical_master_usage.setdefault(key, set()).add(cen)
-    for code, mn_lower in sorted(canonical_master_keys):
-        hits = masters_by_cat_name.get((code, mn_lower), [])
-        disp = mn_lower
-        # find display name
-        for e in data:
-            for kind, cc in (("pests", PEST), ("diseases", DISEASE)):
-                if cc == code:
-                    for it in e.get(kind, []):
-                        if _norm(it["name_en"]).lower() == mn_lower:
-                            disp = it["name_en"]
+    ckeys = canonical_master_keys(data)
+    master_cmp = {"exact_reusable": [], "variant_requires_approval": [],
+                  "canonical_missing": [], "ambiguous": []}
+    for (code, mn) in sorted(ckeys):
+        hits = masters_exact.get((code, mn), [])
         if len(hits) == 1:
             m = hits[0]
-            # exact -> check tamil matches; else variant
-            if _norm(m.tamil_name) and _norm(m.tamil_name) != "" and \
-               _norm(m.tamil_name) != _norm(_find_ta(data, code, m.name)):
-                master_cmp["variant"].append(
-                    {"master": disp, "db_id": m.id, "reason": "tamil differs",
-                     "db_ta": m.tamil_name})
-            else:
-                master_cmp["reusable_exact"].append(
-                    {"master": disp, "db_id": m.id})
+            canon_ta = _find_ta(data, code, m.name)
+            entry = {"master": mn, "db_id": m.id}
+            if _exact(m.tamil_name) and canon_ta and \
+               _exact(m.tamil_name) != _exact(canon_ta):
+                entry["tamil_differs"] = m.tamil_name
+            master_cmp["exact_reusable"].append(entry)
         elif len(hits) > 1:
             master_cmp["ambiguous"].append(
-                {"master": disp, "candidates": [h.id for h in hits]})
+                {"master": mn, "code": code,
+                 "candidates": [h.id for h in hits]})
         else:
-            # look for variant (case/spacing/spelling) within same category
-            cand = _find_master_variant(db_masters, code, mn_lower)
+            cand = _find_master_variant(db_masters, code, mn)
             if cand:
-                master_cmp["variant"].append(
-                    {"master": disp, "candidates": [
-                        {"db_id": c.id, "name": c.name} for c in cand],
-                     "reason": "near-name variant"})
+                master_cmp["variant_requires_approval"].append(
+                    {"master": mn, "code": code,
+                     "candidates": [{"db_id": c.id, "name": c.name}
+                                    for c in cand]})
             else:
-                master_cmp["missing_db"].append({"master": disp, "code": code})
+                master_cmp["canonical_missing"].append(
+                    {"master": mn, "code": code})
     legacy_masters = [m for m in db_masters
                       if (m.category.code if m.category_id else None)
                       in CROP_HEALTH_CODES
-                      and (m.category.code, _norm(m.name).lower())
-                      not in canonical_master_keys]
+                      and (m.category.code, _exact(m.name)) not in ckeys]
     non_crop_health = [m for m in db_masters
                        if (m.category.code if m.category_id else None)
                        not in CROP_HEALTH_CODES]
-    master_cmp["legacy_db_only"] = [
+    master_cmp["legacy_only"] = [
         {"master": m.name, "db_id": m.id,
          "code": m.category.code if m.category_id else None,
          "is_active": m.is_active} for m in legacy_masters]
@@ -456,24 +534,19 @@ def compare_to_db(data=None) -> dict:
         "crop", "problem_master", "problem_master__category"))
     db_map_keys = set()
     for cp in db_mappings:
-        cn = _norm(cp.crop.name_en).lower()
-        code = cp.problem_master.category.code if cp.problem_master.category_id else None
-        mn = _norm(cp.problem_master.name).lower()
-        db_map_keys.add((cn, code, mn))
-    mapping_cmp = {"exists": [], "missing": [], "legacy_not_canonical": []}
-    canonical_map_keys = set()
-    for entry in data:
-        cn = _norm(entry["crop"]["name_en"]).lower()
-        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
-            for it in entry.get(kind, []):
-                canonical_map_keys.add((cn, code, _norm(it["name_en"]).lower()))
-    for k in sorted(canonical_map_keys):
+        db_map_keys.add((_exact(cp.crop.name_en),
+                         cp.problem_master.category.code if cp.problem_master.category_id else None,
+                         _exact(cp.problem_master.name)))
+    canon_map = canonical_map_keys(data)
+    mapping_cmp = {"exists": [], "missing": [], "legacy_noncanonical": [],
+                   "ambiguous": []}
+    for k in sorted(canon_map):
         (mapping_cmp["exists"] if k in db_map_keys
          else mapping_cmp["missing"]).append(
             {"crop": k[0], "code": k[1], "master": k[2]})
     for k in db_map_keys:
-        if k not in canonical_map_keys:
-            mapping_cmp["legacy_not_canonical"].append(
+        if k not in canon_map:
+            mapping_cmp["legacy_noncanonical"].append(
                 {"crop": k[0], "code": k[1], "master": k[2]})
 
     return {"crops": crop_cmp, "masters": master_cmp,
@@ -490,24 +563,29 @@ def _find_ta(data, code, name):
             if cc != code:
                 continue
             for it in e.get(kind, []):
-                if _norm(it["name_en"]).lower() == _norm(name).lower():
+                if _exact(it["name_en"]) == _exact(name):
                     return it.get("name_ta") or ""
     return ""
 
 
-def _find_master_variant(db_masters, code, mn_lower):
-    """Near-name candidates in the same category (case/spacing/spelling)."""
+def _find_master_variant(db_masters, code, exact_name):
+    """Near-name candidates in the same category (case/spacing/spelling).
+
+    Used ONLY to surface VARIANT_REQUIRES_APPROVAL candidates -- never to
+    merge or reuse.
+    """
     import difflib
     out = []
+    target = _exact(exact_name)
     for m in db_masters:
         mcode = m.category.code if m.category_id else None
         if mcode != code:
             continue
-        mn = _norm(m.name).lower()
-        if mn == mn_lower:
+        mn = _exact(m.name)
+        if mn == target:
             continue
-        if _squash(mn) == _squash(mn_lower) or \
-           difflib.SequenceMatcher(None, mn, mn_lower).ratio() > 0.8:
+        if _squash(mn) == _squash(target) or \
+           difflib.SequenceMatcher(None, mn.lower(), target.lower()).ratio() > 0.8:
             out.append(m)
     return out
 
@@ -544,157 +622,199 @@ def historical_reference_counts() -> dict:
 # Dry-run plan builder (pure reads + computed plan; ZERO writes)
 # ---------------------------------------------------------------------------
 
+def db_counts() -> dict:
+    """Actual row counts for the production-preflight report.  READ-ONLY."""
+    Crop, ProblemCategory, ProblemMaster, CropProblem = _db_models()
+    from visits.models import Visit
+    return {
+        "crop_total": Crop.objects.count(),
+        "crop_active": Crop.objects.filter(is_active=True).count(),
+        "problem_category_total": ProblemCategory.objects.count(),
+        "problem_master_total": ProblemMaster.objects.count(),
+        "problem_master_active": ProblemMaster.objects.filter(is_active=True).count(),
+        "crop_problem_total": CropProblem.objects.count(),
+        "visit_total": Visit.objects.count(),
+    }
+
+
 def build_dry_run_plan(data=None) -> dict:
     """Compute the migration plan WITHOUT writing anything.
 
-    Returns a structured plan describing would-be creates/updates/keeps/
-    deactivations/removals and historical-preservation notes.  The caller
-    (management command / tests) may wrap invocation in a transaction that is
-    rolled back; this function itself performs no ORM writes at all.
+    PHASE 2B rules:
+    * Crop in canonical PDF -> active; not in PDF -> inactive (never delete).
+    * ProblemMaster used by >=1 canonical crop (exact identity) -> active;
+      else -> inactive.  A shared master is NOT deactivated just because one
+      crop mapping goes away.
+    * Canonical (crop, category, master) mapping -> ensure exists; noncanonical
+      -> remove mapping.
+    * Historical Visits are never touched.
+    * disease category exists-but-inactive -> PLANNED reactivation only
+      (reported; never performed here).
+
+    This function performs zero ORM writes -- SELECTs only.
     """
     Crop, ProblemCategory, ProblemMaster, CropProblem = _db_models()
     if data is None:
         data = load_canonical()
-    cmp_ = compare_to_db(data)
     refs = historical_reference_counts()
+    variants = analyze_variants(data)
 
-    db_crops = {_norm(c.name_en).lower(): c for c in Crop.objects.all()}
+    db_crops_exact = {}
+    for c in Crop.objects.all():
+        db_crops_exact.setdefault(_exact(c.name_en), []).append(c)
     db_masters = {}
     for m in ProblemMaster.objects.select_related("category"):
         code = m.category.code if m.category_id else None
-        db_masters.setdefault((code, _norm(m.name).lower()), []).append(m)
-    db_map = set()
-    for cp in CropProblem.objects.select_related("crop", "problem_master__category"):
-        db_map.add((_norm(cp.crop.name_en).lower(),
-                    cp.problem_master.category.code if cp.problem_master.category_id else None,
-                    _norm(cp.problem_master.name).lower()))
+        db_masters.setdefault((code, _exact(m.name)), []).append(m)
     existing_map_objs = {}
     for cp in CropProblem.objects.select_related("crop", "problem_master__category"):
-        existing_map_objs[(_norm(cp.crop.name_en).lower(),
+        existing_map_objs[(_exact(cp.crop.name_en),
                            cp.problem_master.category.code if cp.problem_master.category_id else None,
-                           _norm(cp.problem_master.name).lower())] = cp.id
+                           _exact(cp.problem_master.name))] = cp.id
+    db_map = set(existing_map_objs.keys())
+
+    ckeys = canonical_master_keys(data)          # {(code, exact_name): {crops}}
+    cmap = canonical_map_keys(data)              # {(crop, code, exact_name)}
 
     plan = {
-        "crops": {"create": [], "update": [], "keep": [], "deactivate": []},
+        "crops": {"create": [], "reuse": [], "update": [], "deactivate": []},
         "pests": {"create": [], "reuse": [], "review": [], "deactivate": []},
         "diseases": {"create": [], "reuse": [], "review": [], "deactivate": []},
+        "categories": {},
         "mappings": {"create": [], "keep": [], "remove": []},
         "history": {"referenced_legacy": []},
+        "review_items": {},
         "ambiguous": [],
     }
 
-    # crops
+    # --- categories (planned only -- never performed) ---
+    for code in CROP_HEALTH_CODES:
+        cat = ProblemCategory.objects.filter(code=code).first()
+        if cat is None:
+            plan["categories"][code] = {"action": "create"}
+        elif not cat.is_active:
+            plan["categories"][code] = {
+                "action": "activate", "db_id": cat.id, "name": cat.name,
+                "note": "reuse existing record; set is_active=True at import"}
+        else:
+            plan["categories"][code] = {
+                "action": "keep", "db_id": cat.id, "name": cat.name}
+
+    # --- crops ---
     canonical_crop_keys = set()
     for e in data:
-        en = _norm(e["crop"]["name_en"])
-        ta = _norm(e["crop"]["name_ta"])
-        canonical_crop_keys.add(en.lower())
-        db = db_crops.get(en.lower())
-        if db is None:
+        en = _exact(e["crop"]["name_en"])
+        ta = _exact(e["crop"]["name_ta"])
+        canonical_crop_keys.add(en)
+        hits = db_crops_exact.get(en, [])
+        if not hits:
             plan["crops"]["create"].append({"crop": en, "name_ta": ta})
-        else:
-            if _norm(db.name_ta) != ta:
+        elif len(hits) == 1:
+            db = hits[0]
+            needs_update = _exact(db.name_ta) != ta
+            if needs_update or not db.is_active:
                 plan["crops"]["update"].append(
-                    {"crop": en, "db_id": db.id, "from_ta": db.name_ta, "to_ta": ta})
+                    {"crop": en, "db_id": db.id,
+                     "from_ta": db.name_ta if needs_update else None,
+                     "to_ta": ta if needs_update else None,
+                     "reactivate": not db.is_active})
             else:
-                plan["crops"]["keep"].append({"crop": en, "db_id": db.id})
-            if not db.is_active:
-                plan["crops"]["update"].append(
-                    {"crop": en, "db_id": db.id, "reactivate": True})
+                plan["crops"]["reuse"].append({"crop": en, "db_id": db.id})
+        else:
+            plan["ambiguous"].append(
+                {"type": "crop", "name": en,
+                 "candidates": [h.id for h in hits]})
     for c in Crop.objects.all():
-        if _norm(c.name_en).lower() not in canonical_crop_keys:
+        if _exact(c.name_en) not in canonical_crop_keys:
             refc = refs["crop_refs"].get(c.id, 0)
             plan["crops"]["deactivate"].append(
-                {"crop": c.name_en, "db_id": c.id, "visit_refs": refc,
+                {"crop": c.name_en, "db_id": c.id, "is_active": c.is_active,
+                 "visit_refs": refc,
                  "preserve": "kept inactive; never hard-deleted"})
             if refc:
                 plan["history"]["referenced_legacy"].append(
                     {"type": "crop", "name": c.name_en, "db_id": c.id,
                      "visit_refs": refc})
 
-    # masters -- canonical usage per (code,name)
-    canonical_master_keys = set()
-    canonical_master_crops = {}
-    for e in data:
-        cn = _norm(e["crop"]["name_en"]).lower()
-        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
-            for it in e.get(kind, []):
-                key = (code, _norm(it["name_en"]).lower())
-                canonical_master_keys.add(key)
-                canonical_master_crops.setdefault(key, set()).add(cn)
-
-    # which canonical masters map to db rows
-    def _master_plan_entry(code, key):
-        hits = db_masters.get(key, [])
-        if len(hits) == 1:
-            return ("reuse", hits[0])
-        if len(hits) > 1:
-            return ("review", hits)
-        cand = _find_master_variant(
-            list(ProblemMaster.objects.select_related("category")), code, key[1])
-        if cand:
-            return ("review", cand)
-        return ("create", None)
-
-    for code, mn in sorted(canonical_master_keys):
+    # --- masters (exact identity; variant hits -> review only) ---
+    all_db_masters = list(ProblemMaster.objects.select_related("category"))
+    for code, mn in sorted(ckeys):
         slot = "pests" if code == PEST else "diseases"
         hits = db_masters.get((code, mn), [])
         if len(hits) == 1:
-            plan[slot]["reuse"].append({"master": hits[0].name, "db_id": hits[0].id})
+            entry = {"master": mn, "db_id": hits[0].id}
+            if not hits[0].is_active:
+                entry["reactivate"] = True
+            plan[slot]["reuse"].append(entry)
         elif len(hits) > 1:
             plan[slot]["review"].append(
-                {"master": mn, "candidates": [h.id for h in hits],
-                 "reason": "multiple db rows match"})
+                {"master": mn, "code": code,
+                 "candidates": [h.id for h in hits],
+                 "reason": "multiple db rows share exact name"})
             plan["ambiguous"].append(
                 {"type": "master", "name": mn, "code": code,
                  "candidates": [h.id for h in hits]})
         else:
-            cand = _find_master_variant(
-                list(ProblemMaster.objects.select_related("category")), code, mn)
+            cand = _find_master_variant(all_db_masters, code, mn)
             if cand:
                 plan[slot]["review"].append(
-                    {"master": mn, "candidates": [
-                        {"db_id": c.id, "name": c.name} for c in cand],
-                     "reason": "near-name variant requires decision"})
+                    {"master": mn, "code": code,
+                     "candidates": [{"db_id": c.id, "name": c.name}
+                                    for c in cand],
+                     "reason": "VARIANT_REQUIRES_APPROVAL -- near-name db row "
+                               "is NOT exact; do not reuse without approval"})
             else:
                 plan[slot]["create"].append({"master": mn, "code": code})
 
-    # legacy masters (pest/disease category not used canonically) -> deactivate
-    for m in ProblemMaster.objects.select_related("category"):
+    # --- legacy masters (pest/disease category, not canonical) -> deactivate
+    for m in all_db_masters:
         code = m.category.code if m.category_id else None
         if code not in CROP_HEALTH_CODES:
             continue
-        key = (code, _norm(m.name).lower())
-        if key in canonical_master_keys:
+        if (code, _exact(m.name)) in ckeys:
             continue
         refc = refs["master_refs"].get(m.id, 0)
-        entry = {"master": m.name, "db_id": m.id, "code": code,
-                 "visit_refs": refc}
-        # shared-master safety: only deactivate if NO canonical crop uses it;
-        # since it isn't a canonical master at all, it is a deactivate cand.
-        plan["pests" if code == PEST else "diseases"]["deactivate"].append(entry)
+        plan["pests" if code == PEST else "diseases"]["deactivate"].append(
+            {"master": m.name, "db_id": m.id, "code": code,
+             "is_active": m.is_active, "visit_refs": refc})
         if refc:
             plan["history"]["referenced_legacy"].append(
                 {"type": "master", "name": m.name, "db_id": m.id,
                  "visit_refs": refc})
 
-    # mappings
-    canonical_map_keys = set()
-    for e in data:
-        cn = _norm(e["crop"]["name_en"]).lower()
-        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
-            for it in e.get(kind, []):
-                canonical_map_keys.add((cn, code, _norm(it["name_en"]).lower()))
-    for cn, code, mn in sorted(canonical_map_keys):
-        # only plan create when BOTH the crop and master resolve (else it is
-        # implied by their create plans)
+    # --- mappings ---
+    for cn, code, mn in sorted(cmap):
         (plan["mappings"]["keep"] if (cn, code, mn) in db_map
          else plan["mappings"]["create"]).append(
             {"crop": cn, "code": code, "master": mn})
     for (cn, code, mn), cpid in existing_map_objs.items():
-        if (cn, code, mn) not in canonical_map_keys:
+        if (cn, code, mn) not in cmap:
             plan["mappings"]["remove"].append(
                 {"crop": cn, "code": code, "master": mn, "mapping_id": cpid})
+
+    # --- review items (report only) ---
+    dups = source_duplicates(data)
+    plan["review_items"] = {
+        "source_duplicates": {
+            "count": len(dups),
+            "items": dups,
+            "planned_db_mappings": 0,
+            "note": "PDF lists the same value twice in one crop; CropProblem "
+                    "uniqueness means exactly ONE mapping is planned."},
+        "case_variants": {
+            "pest": [g["variants"] for g in variants[PEST]["case_only_variants"]],
+            "disease": [g["variants"] for g in variants[DISEASE]["case_only_variants"]],
+            "preserved_separately": True},
+        "spacing_variants": {
+            "pest": variants[PEST]["spacing_variants"],
+            "disease": variants[DISEASE]["spacing_variants"],
+            "preserved_separately": True},
+        "spelling_variants": {
+            "pest": variants[PEST]["spelling_variants"],
+            "disease": variants[DISEASE]["spelling_variants"],
+            "preserved_separately": True},
+        "tamil_source_anomalies": tamil_anomalies(data),
+    }
 
     return plan
 
@@ -704,9 +824,11 @@ def plan_summary(plan: dict) -> dict:
         return len(plan.get(section, {}).get(action, []))
     return {
         "crops_create": n("crops", "create"),
+        "crops_reuse": n("crops", "reuse"),
         "crops_update": n("crops", "update"),
-        "crops_keep": n("crops", "keep"),
         "crops_deactivate": n("crops", "deactivate"),
+        "pest_category_action": plan.get("categories", {}).get(PEST, {}).get("action"),
+        "disease_category_action": plan.get("categories", {}).get(DISEASE, {}).get("action"),
         "pests_create": n("pests", "create"),
         "pests_reuse": n("pests", "reuse"),
         "pests_review": n("pests", "review"),
@@ -719,5 +841,11 @@ def plan_summary(plan: dict) -> dict:
         "mappings_keep": n("mappings", "keep"),
         "mappings_remove": n("mappings", "remove"),
         "history_preserved": len(plan.get("history", {}).get("referenced_legacy", [])),
+        "review_items": {
+            "source_duplicates": plan.get("review_items", {})
+                                     .get("source_duplicates", {}).get("count", 0),
+            "tamil_source_anomalies": len(plan.get("review_items", {})
+                                             .get("tamil_source_anomalies", [])),
+        },
         "ambiguous": len(plan.get("ambiguous", [])),
     }
