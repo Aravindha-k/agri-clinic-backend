@@ -1,0 +1,4174 @@
+[
+  {
+    "seq": 1,
+    "page": 1,
+    "crop": {
+      "name_en": "Amla",
+      "name_ta": "நெல்லிக்காய்"
+    },
+    "pests": [
+      {
+        "name_en": "Leaf roller",
+        "name_ta": "இலை சுருட்டு புழு"
+      },
+      {
+        "name_en": "Fruit Borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Fruit Piercing Moth",
+        "name_ta": "பழம் உறிஞ்சும் அந்துப்பூச்சி"
+      },
+      {
+        "name_en": "Bark Borer",
+        "name_ta": "தண்டு துளைப்பான்"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "புள்ளி நோய்"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேர் அழுகல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 2,
+    "page": 1,
+    "crop": {
+      "name_en": "Ashgourd",
+      "name_ta": "கல்யாண பூசணி"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ்"
+      },
+      {
+        "name_en": "Bud Necrosis virus",
+        "name_ta": "நுனி குருத்து அழுகல்/முடக்கம்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 3,
+    "page": 1,
+    "crop": {
+      "name_en": "Bajra",
+      "name_ta": "கம்பு"
+    },
+    "pests": [
+      {
+        "name_en": "Stem Borer",
+        "name_ta": "தண்டுத் துளைப்பான்"
+      },
+      {
+        "name_en": "Shoot Fly",
+        "name_ta": "குருத்து ஈ"
+      },
+      {
+        "name_en": "Earhead Worm",
+        "name_ta": "கதிர்ப்புழு"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Ergot",
+        "name_ta": "கம்பின் தேன் ஒழுகல் நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Leaf Blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Smut",
+        "name_ta": "கரிப்பூட்டை நோய்"
+      },
+      {
+        "name_en": "Charcoal Rot",
+        "name_ta": "கரி அழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 4,
+    "page": 1,
+    "crop": {
+      "name_en": "Banana",
+      "name_ta": "வாழை"
+    },
+    "pests": [
+      {
+        "name_en": "Rhizome weevil",
+        "name_ta": "கிழங்கு துளைக்கும் கூன்வண்டு"
+      },
+      {
+        "name_en": "Banana aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Pseudostem Borer",
+        "name_ta": "தண்டு துளைக்கும் கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Rugose spiralling whitefly",
+        "name_ta": "ருகோஸ் சுருள் வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Bunchy-top",
+        "name_ta": "முடக்கொத்து நோய்"
+      },
+      {
+        "name_en": "Sigatoka leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "பறைவக் கண் நோய்"
+      },
+      {
+        "name_en": "Panama Wilt",
+        "name_ta": "பனாமா வாடல் நோய்"
+      },
+      {
+        "name_en": "Fruit rot",
+        "name_ta": "பழ அழுகல்"
+      },
+      {
+        "name_en": "Cigar end rot",
+        "name_ta": "வாழை சுருட்டு முனை அழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 5,
+    "page": 2,
+    "crop": {
+      "name_en": "Betelvine",
+      "name_ta": "வெற்றிலை"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Scales",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mealy bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Shoot bug",
+        "name_ta": "குருத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Termite",
+        "name_ta": "கரையான்"
+      },
+      {
+        "name_en": "Snail",
+        "name_ta": "நத்தை"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Root rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bacterial leaf spot",
+        "name_ta": "பாக்டீரியா இலைப்புள்ளி"
+      }
+    ]
+  },
+  {
+    "seq": 6,
+    "page": 2,
+    "crop": {
+      "name_en": "Bhendi",
+      "name_ta": "வெண்டை"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Borer",
+        "name_ta": "காய்ப்புழு"
+      },
+      {
+        "name_en": "Leafhopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Red Spider Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Mealy bug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Yellow Vein Mosaic Disease",
+        "name_ta": "மஞ்சள் நரம்பு மொசைக் நோய்"
+      },
+      {
+        "name_en": "Enation Leaf Curl Disease",
+        "name_ta": "இலைச் சுருட்டு வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "புசேரியம் வாடல் நோய்"
+      },
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "காய் அழுகல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 7,
+    "page": 2,
+    "crop": {
+      "name_en": "Bittergourd",
+      "name_ta": "பாகல்"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ்"
+      },
+      {
+        "name_en": "Bud Necrosis virus",
+        "name_ta": "நுனி குருத்து அழுகல்/முடக்கம்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 8,
+    "page": 2,
+    "crop": {
+      "name_en": "Blackgram",
+      "name_ta": "உளுந்து"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Blue Butterfly",
+        "name_ta": "நீல பட்டாம்பூச்சி"
+      },
+      {
+        "name_en": "Spotted Pod Borer",
+        "name_ta": "புள்ளிக்காய்ப்புழு"
+      },
+      {
+        "name_en": "Gram Pod Borer",
+        "name_ta": "பச்சைக்காய்ப்புழு"
+      },
+      {
+        "name_en": "Leafhopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Flower thrips",
+        "name_ta": "பூப் பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Yellow Mosaic Virus",
+        "name_ta": "மஞ்சள் தேமல் வைரஸ்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "leaf crinkle",
+        "name_ta": "இலை சுருள்வு நோய்"
+      },
+      {
+        "name_en": "Charcoal Rot",
+        "name_ta": "கரியழுகல்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf Blight",
+        "name_ta": "இலை கருகல்"
+      }
+    ]
+  },
+  {
+    "seq": 9,
+    "page": 3,
+    "crop": {
+      "name_en": "Bottlegourd",
+      "name_ta": "சுரைக்காய்"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ்"
+      },
+      {
+        "name_en": "Bud Necrosis virus",
+        "name_ta": "நுனி குருத்து அழுகல்/முடக்கம்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 10,
+    "page": 3,
+    "crop": {
+      "name_en": "Brinjal",
+      "name_ta": "கத்தரி"
+    },
+    "pests": [
+      {
+        "name_en": "Shoot and Fruit Borer",
+        "name_ta": "குருத்து மற்றும் காய்த் துளைப்பான்"
+      },
+      {
+        "name_en": "Epilachna Beetle",
+        "name_ta": "எப்பிலக்னா வண்டு"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Jassid",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Ash weevil",
+        "name_ta": "சாம்பல் வண்டு"
+      },
+      {
+        "name_en": "Mealy bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Spider mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Caterpilar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Alternaria leaf Spot",
+        "name_ta": "இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Bacterial Wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      },
+      {
+        "name_en": "Tobacco mosaic virus",
+        "name_ta": "புகையிலை தேமல் வைரஸ்"
+      },
+      {
+        "name_en": "Little leaf",
+        "name_ta": "சிற்றிலை நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Verticillium wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Fruit rot",
+        "name_ta": "காய் அழுகல்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 11,
+    "page": 3,
+    "crop": {
+      "name_en": "Cashew",
+      "name_ta": "முந்திரி"
+    },
+    "pests": [
+      {
+        "name_en": "Stem and root borer",
+        "name_ta": "தண்டு மற்றும் வேர் துளைப்பான்"
+      },
+      {
+        "name_en": "Tea Mosquito bug",
+        "name_ta": "தேயிலைக் கொசு"
+      },
+      {
+        "name_en": "Leaf miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Shoot and blossom webber",
+        "name_ta": "துளிர் மற்றும் பூ பிணைக்கும் புழு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Gummosis",
+        "name_ta": "பிசினாழுக்கு நோய்"
+      },
+      {
+        "name_en": "Die back",
+        "name_ta": "நுனி கருகல் நோய்"
+      },
+      {
+        "name_en": "Red rust",
+        "name_ta": "செம்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 12,
+    "page": 4,
+    "crop": {
+      "name_en": "Casuarina",
+      "name_ta": "சவுக்கு"
+    },
+    "pests": [
+      {
+        "name_en": "Meally bug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Stem bleeding",
+        "name_ta": "சாறு வடிதல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 13,
+    "page": 4,
+    "crop": {
+      "name_en": "Chilli",
+      "name_ta": "மிளகாய்"
+    },
+    "pests": [
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Yellow Mite",
+        "name_ta": "மஞ்சள் சிலந்திப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit Borer",
+        "name_ta": "காய்ப்புழு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Flower thrips",
+        "name_ta": "பூப் பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Leaf curl",
+        "name_ta": "இலை சுருட்டு வைரஸ்"
+      },
+      {
+        "name_en": "Damping off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Die back",
+        "name_ta": "நுனி கருகல் நோய்"
+      },
+      {
+        "name_en": "Fruit rot",
+        "name_ta": "காய் அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Mosaic virus",
+        "name_ta": "தேமல் வைரஸ்"
+      }
+    ]
+  },
+  {
+    "seq": 14,
+    "page": 4,
+    "crop": {
+      "name_en": "Chrysanthemum",
+      "name_ta": "சாமந்தி"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Red Spider Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Stem Rot",
+        "name_ta": "தண்டழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Viral Disease",
+        "name_ta": "வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      }
+    ]
+  },
+  {
+    "seq": 15,
+    "page": 4,
+    "crop": {
+      "name_en": "Clusterbean",
+      "name_ta": "கொத்தவரை"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Pod Borer",
+        "name_ta": "காய்த்துளைப்பான்"
+      },
+      {
+        "name_en": "Leaf Hopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Thirps",
+        "name_ta": "இலைப்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Fruit spot",
+        "name_ta": "காய் புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 16,
+    "page": 4,
+    "crop": {
+      "name_en": "Cock's comb",
+      "name_ta": "கோழிக்கொண்டை"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Leaf Eating Caterpillar",
+        "name_ta": "இலை தின்னும் புழு"
+      },
+      {
+        "name_en": "Red Spider Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Phyllody",
+        "name_ta": "சிற்றிலை நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 17,
+    "page": 5,
+    "crop": {
+      "name_en": "Coconut",
+      "name_ta": "தென்னை"
+    },
+    "pests": [
+      {
+        "name_en": "Rhinoceros Beetle",
+        "name_ta": "காண்டாமிருக வண்டு"
+      },
+      {
+        "name_en": "Red Palm Weevil",
+        "name_ta": "சிவப்பு கூன்வண்டு"
+      },
+      {
+        "name_en": "Black Headed Caterpillar",
+        "name_ta": "கருந்தலைப்புழு"
+      },
+      {
+        "name_en": "Eriophyid Mite",
+        "name_ta": "தேங்காய் நுண்ணுயிரி சிலந்தி"
+      },
+      {
+        "name_en": "Rugose Spiralling Whitefly",
+        "name_ta": "சுருள் வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Termite",
+        "name_ta": "கரையான்"
+      },
+      {
+        "name_en": "White grub",
+        "name_ta": "வெள்ளை வேர் புழு"
+      },
+      {
+        "name_en": "Scale",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Mealybug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Bud rot",
+        "name_ta": "குருத்தழுகல்நோய்"
+      },
+      {
+        "name_en": "Leaf rot",
+        "name_ta": "இலைஅழுகல் நோய்"
+      },
+      {
+        "name_en": "Stem rot / thanjavur wilt",
+        "name_ta": "தஞ்சாவூர் வாடல் நோய்"
+      },
+      {
+        "name_en": "Stem bleeding",
+        "name_ta": "சாறு வடிதல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 18,
+    "page": 5,
+    "crop": {
+      "name_en": "Cotton",
+      "name_ta": "பருத்தி"
+    },
+    "pests": [
+      {
+        "name_en": "Leaf hopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Cotton aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Red cotton bug",
+        "name_ta": "சிவப்பு பருத்தி வண்டு"
+      },
+      {
+        "name_en": "Dusky cotton bug",
+        "name_ta": "சாம்பல் நிற வண்டு"
+      },
+      {
+        "name_en": "Mealy bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Bollworm",
+        "name_ta": "பருத்தி காய்ப்புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன் வண்டு"
+      },
+      {
+        "name_en": "Caterpilar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Cercospora leaf spot",
+        "name_ta": "செர்கோஸ்போரா இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Grey or Areolate mildew",
+        "name_ta": "சாம்பல் (அ) தயிர்ப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alterneria leaf blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Fusarium wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "புள்ளி நோய்"
+      },
+      {
+        "name_en": "Root rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Boll rot",
+        "name_ta": "காயழுகல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 19,
+    "page": 5,
+    "crop": {
+      "name_en": "Cowpea",
+      "name_ta": "தட்டைப்பயிறு"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Blue Butterfly",
+        "name_ta": "நீல பட்டாம்பூச்சி"
+      },
+      {
+        "name_en": "Spotted Pod Borer",
+        "name_ta": "புள்ளிக்காய்ப்புழு"
+      },
+      {
+        "name_en": "Gram Pod Borer",
+        "name_ta": "பச்சைக்காய்ப்புழு"
+      },
+      {
+        "name_en": "Leaf hopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Fusarium wilt",
+        "name_ta": "ப்யூசேரியம் வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Yellow Mosaic",
+        "name_ta": "மஞ்சள் தேமல் வைரஸ்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Leaf crinkle",
+        "name_ta": "இலை சுருள்வு நோய்"
+      },
+      {
+        "name_en": "Charcoal Rot",
+        "name_ta": "கரியழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 20,
+    "page": 5,
+    "crop": {
+      "name_en": "Crossandra",
+      "name_ta": "கனகாம்பரம்"
+    },
+    "pests": [
+      {
+        "name_en": "Aphids",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Catterpillar",
+        "name_ta": "புழு"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Thirps",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Stem rot",
+        "name_ta": "தண்டு அழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 21,
+    "page": 6,
+    "crop": {
+      "name_en": "Cucumber",
+      "name_ta": "வெள்ளரி"
+    },
+    "pests": [
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ்"
+      },
+      {
+        "name_en": "Bud Necrosis virus",
+        "name_ta": "நுனி குருத்து அழுகல்/முடக்கம்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 22,
+    "page": 6,
+    "crop": {
+      "name_en": "Drumstick",
+      "name_ta": "முருங்கை"
+    },
+    "pests": [
+      {
+        "name_en": "Bud worm",
+        "name_ta": "மொட்டுப்புழு"
+      },
+      {
+        "name_en": "Pod fly",
+        "name_ta": "காய் ஈ"
+      },
+      {
+        "name_en": "Leaf Caterpillar",
+        "name_ta": "இலைப்புழு"
+      },
+      {
+        "name_en": "Hairy Caterpillar",
+        "name_ta": "கம்பளிப்பூச்சி"
+      },
+      {
+        "name_en": "Bark Borer",
+        "name_ta": "பட்டைத் துளைப்பான்"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Beetle",
+        "name_ta": "வண்டு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Stem bleeding",
+        "name_ta": "சாறு வடிதல் நோய்"
+      },
+      {
+        "name_en": "Root rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Die back",
+        "name_ta": "நுனி கருகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 23,
+    "page": 6,
+    "crop": {
+      "name_en": "Foxtail millet",
+      "name_ta": "தினை"
+    },
+    "pests": [
+      {
+        "name_en": "Earhead Bug",
+        "name_ta": "கதிர் நாவாய்ப்பூச்சி"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Stem borer",
+        "name_ta": "தண்டு துளைப்பான்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Aphids",
+        "name_ta": "அசுவினி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Downy mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Blast",
+        "name_ta": "குலை நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 24,
+    "page": 6,
+    "crop": {
+      "name_en": "Gingelly",
+      "name_ta": "எள்"
+    },
+    "pests": [
+      {
+        "name_en": "Leaf Webber",
+        "name_ta": "இலை பின்னும் புழு"
+      },
+      {
+        "name_en": "Pod Borer",
+        "name_ta": "காய்ப்புழு"
+      },
+      {
+        "name_en": "Gall fly/midge",
+        "name_ta": "எள் பூ / காய் ஈ"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leafhopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Pod bug",
+        "name_ta": "காய் நாவாய்ப்பூச்சி"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping off / Root Rot",
+        "name_ta": "நாற்றழுகல் / வேரழுகல்"
+      },
+      {
+        "name_en": "Sesamum phyllody",
+        "name_ta": "சிற்றிலை நோய்"
+      },
+      {
+        "name_en": "powdry mildew",
+        "name_ta": "சாம்பல்நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப் புள்ளி"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      }
+    ]
+  },
+  {
+    "seq": 25,
+    "page": 7,
+    "crop": {
+      "name_en": "Greengram",
+      "name_ta": "பச்சைப்பயிறு"
+    },
+    "pests": [
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Blue Butterfly",
+        "name_ta": "நீல பட்டாம்பூச்சி"
+      },
+      {
+        "name_en": "Spotted Pod Borer",
+        "name_ta": "புள்ளிக்காய்ப்புழு"
+      },
+      {
+        "name_en": "Gram Pod Borer",
+        "name_ta": "பச்சைக்காய்ப்புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Yellow mosaic",
+        "name_ta": "மஞ்சள் தேமல்நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "இலைப் புள்ளி"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      }
+    ]
+  },
+  {
+    "seq": 26,
+    "page": 7,
+    "crop": {
+      "name_en": "Greens",
+      "name_ta": "கீரை"
+    },
+    "pests": [
+      {
+        "name_en": "Leaf Webber",
+        "name_ta": "இலை பின்னும் புழு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Leaf Eating Caterpillar",
+        "name_ta": "இலை தின்னும் புழு"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Mealybug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "முட்டை பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Rot",
+        "name_ta": "அழுகல் நோய்"
+      },
+      {
+        "name_en": "Damping off",
+        "name_ta": "வேரழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 27,
+    "page": 7,
+    "crop": {
+      "name_en": "Groundnut",
+      "name_ta": "மணிலா"
+    },
+    "pests": [
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Red Hairy Caterpillar",
+        "name_ta": "சிவப்பு கம்பளிப்பூச்சி"
+      },
+      {
+        "name_en": "Tobacco Caterpillar",
+        "name_ta": "புகையிலை புழு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "White Grub",
+        "name_ta": "வெள்ளை வேர் புழு"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Termite",
+        "name_ta": "கரையான்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Leaf Webber",
+        "name_ta": "இலைசுருட்டுப் புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Early leaf spot",
+        "name_ta": "முன் பருவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria leaf disease",
+        "name_ta": "இலை கருகல் நோய்"
+      },
+      {
+        "name_en": "Late leaf spot",
+        "name_ta": "பின் பருவ இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Stem rot",
+        "name_ta": "தண்டழுகல் நோய்"
+      },
+      {
+        "name_en": "Bud necrosis",
+        "name_ta": "மொட்டுக் கருகல் நோய்"
+      },
+      {
+        "name_en": "Stem rot",
+        "name_ta": "தண்டழுகல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 28,
+    "page": 7,
+    "crop": {
+      "name_en": "Guava",
+      "name_ta": "கொய்யா"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Bark Eating Caterpillar",
+        "name_ta": "பட்டை தின்னும் புழு"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Scale Insect",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Tea Mosquito bug",
+        "name_ta": "தேயிலைக் கொசு"
+      },
+      {
+        "name_en": "Fruit Borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Spiraling whitefly",
+        "name_ta": "சுருள் வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Aphids",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Red rust",
+        "name_ta": "சொறிநோய்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Sooty mould",
+        "name_ta": "கரும் பூஞ்சாண நோய்"
+      },
+      {
+        "name_en": "Fruit canker/ scab",
+        "name_ta": "பழச் சொறி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 29,
+    "page": 8,
+    "crop": {
+      "name_en": "Gundu malli",
+      "name_ta": "குண்டு மல்லி"
+    },
+    "pests": [
+      {
+        "name_en": "Bud Worm",
+        "name_ta": "மொட்டுப்புழு"
+      },
+      {
+        "name_en": "Blossom Midge",
+        "name_ta": "நச்சு புழு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Red Spider Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Leaf Web Worm",
+        "name_ta": "கூண்டு புழு"
+      },
+      {
+        "name_en": "Flower thrips",
+        "name_ta": "பூப் பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Bud Rot",
+        "name_ta": "மொட்டழுகல் நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Phyllody",
+        "name_ta": "சிற்றிலை நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 30,
+    "page": 8,
+    "crop": {
+      "name_en": "Iruvatchi",
+      "name_ta": "இருவாச்சி"
+    },
+    "pests": [
+      {
+        "name_en": "Bud Worm",
+        "name_ta": "மொட்டுப்புழு"
+      },
+      {
+        "name_en": "Blossom Midge",
+        "name_ta": "நச்சு புழு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Red Spider Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Leaf Web Worm",
+        "name_ta": "கூண்டு புழு"
+      },
+      {
+        "name_en": "Flower Thrips",
+        "name_ta": "பூப் பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Bud Rot",
+        "name_ta": "மொட்டழுகல் நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 31,
+    "page": 8,
+    "crop": {
+      "name_en": "Jackfruit",
+      "name_ta": "பலா"
+    },
+    "pests": [
+      {
+        "name_en": "Shoot and Fruit borer",
+        "name_ta": "தண்டு மற்றும் காய்த்துளைப்பான்"
+      },
+      {
+        "name_en": "Hairy Caterpillar",
+        "name_ta": "கம்பளிப்பூச்சி"
+      },
+      {
+        "name_en": "Mealy bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Aphids",
+        "name_ta": "அசுவினி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Pink disease",
+        "name_ta": "இளஞ்சிவப்பு நோய்"
+      },
+      {
+        "name_en": "Fruit rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 32,
+    "page": 8,
+    "crop": {
+      "name_en": "Kakatan",
+      "name_ta": "காகட்டான்"
+    },
+    "pests": [
+      {
+        "name_en": "Budworm",
+        "name_ta": "மொட்டுப்புழு"
+      },
+      {
+        "name_en": "Red spider mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Leaf web worm",
+        "name_ta": "கூண்டு புழு"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Jasmine eriophyid mite",
+        "name_ta": "வெள்ளை குட்டான்"
+      },
+      {
+        "name_en": "Flower thrips",
+        "name_ta": "பூ பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Stem rot",
+        "name_ta": "தண்டு அழுகல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 33,
+    "page": 8,
+    "crop": {
+      "name_en": "Lemon",
+      "name_ta": "எலுமிச்சை"
+    },
+    "pests": [
+      {
+        "name_en": "Stem Borer",
+        "name_ta": "தண்டு துளைப்பான்"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Citrus Butterfly",
+        "name_ta": "சிட்ரஸ் பட்டாம்பூச்சி"
+      },
+      {
+        "name_en": "Rust Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Scale insects",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Die back",
+        "name_ta": "நுனி கருகல் நோய்"
+      },
+      {
+        "name_en": "Scab",
+        "name_ta": "பழச் சொறி நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Sooty Mould",
+        "name_ta": "கரும் பூஞ்சாண நோய்"
+      },
+      {
+        "name_en": "Canker",
+        "name_ta": "சிட்ரஸ் கேன்கர்"
+      },
+      {
+        "name_en": "Quick decline",
+        "name_ta": "எலுமிச்சை இன விரைவு நலிவு நோய்"
+      },
+      {
+        "name_en": "Gummosis",
+        "name_ta": "பிசினாழுக்கு நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 34,
+    "page": 9,
+    "crop": {
+      "name_en": "Maize",
+      "name_ta": "மக்காச்சோளம்"
+    },
+    "pests": [
+      {
+        "name_en": "Fall Armyworm",
+        "name_ta": "படைப்புழு"
+      },
+      {
+        "name_en": "Stem Borer",
+        "name_ta": "தண்டுத்துளைப்பான்"
+      },
+      {
+        "name_en": "Pink Stem Borer",
+        "name_ta": "இளஞ்சிவப்பு தண்டுத்துளைப்பான்"
+      },
+      {
+        "name_en": "Shoot Fly",
+        "name_ta": "குருத்து ஈ"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புழு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Downy mildew / Crazy top",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Leaf Blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Smut",
+        "name_ta": "கரிப்பூட்டை நோய்"
+      },
+      {
+        "name_en": "Charcoal Rot",
+        "name_ta": "கரி அழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 35,
+    "page": 9,
+    "crop": {
+      "name_en": "Mango",
+      "name_ta": "மா"
+    },
+    "pests": [
+      {
+        "name_en": "Mango Hopper",
+        "name_ta": "மாத் தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Flower Webber",
+        "name_ta": "பூவிணைக்கும் புழு"
+      },
+      {
+        "name_en": "Gall midge/fly",
+        "name_ta": "மா கழலை/ இலை கொப்பளம்"
+      },
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Shoot Webber",
+        "name_ta": "கூண்டு புழு"
+      },
+      {
+        "name_en": "Leaf Caterpillar",
+        "name_ta": "புழு"
+      },
+      {
+        "name_en": "Red tree ant",
+        "name_ta": "ஏறும்பு"
+      },
+      {
+        "name_en": "Stem borer",
+        "name_ta": "தண்டு துளைப்பான்"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Thirps",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Scales",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Mealy bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Tea Mosquito Bug",
+        "name_ta": "தேயிலைக் கொசு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Die back",
+        "name_ta": "நுனி கருகல் நோய்"
+      },
+      {
+        "name_en": "Sooty mould",
+        "name_ta": "கரும் பூஞ்சாண நோய்"
+      },
+      {
+        "name_en": "Grey blight",
+        "name_ta": "சாம்பல் கருகல் நோய்"
+      },
+      {
+        "name_en": "Red rust",
+        "name_ta": "துருநோய்"
+      },
+      {
+        "name_en": "Bacterial Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 36,
+    "page": 9,
+    "crop": {
+      "name_en": "Marigold",
+      "name_ta": "சாமந்தி"
+    },
+    "pests": [
+      {
+        "name_en": "Bud Borer",
+        "name_ta": "மொட்டுத் புழு"
+      },
+      {
+        "name_en": "Tobacco Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Leaf Hopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Red Spider Mite",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Grey mould",
+        "name_ta": "பூ கருகல்"
+      }
+    ]
+  },
+  {
+    "seq": 37,
+    "page": 9,
+    "crop": {
+      "name_en": "Mullai arumbu",
+      "name_ta": "முல்லை அரும்பு"
+    },
+    "pests": [
+      {
+        "name_en": "Budworm",
+        "name_ta": "மொட்டு புழு"
+      },
+      {
+        "name_en": "Red spider mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Leaf web worm",
+        "name_ta": "கூண்டு புழு"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை கொசு"
+      },
+      {
+        "name_en": "Jasmine eriophyid mite",
+        "name_ta": "வெள்ளை குட்டான்"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Stem rot",
+        "name_ta": "தண்டழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 38,
+    "page": 9,
+    "crop": {
+      "name_en": "Muskmelon",
+      "name_ta": "முலாம் பழம்"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Green caterpillar",
+        "name_ta": "காய்ப்புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 39,
+    "page": 10,
+    "crop": {
+      "name_en": "Paddy",
+      "name_ta": "நெல்"
+    },
+    "pests": [
+      {
+        "name_en": "Brown Plant Hopper",
+        "name_ta": "தாள் புணையான்"
+      },
+      {
+        "name_en": "Case Worm",
+        "name_ta": "கூண்டுப்புழு"
+      },
+      {
+        "name_en": "Gall Midge",
+        "name_ta": "ஆனைக்கொம்பன்"
+      },
+      {
+        "name_en": "Green Horned Caterpillar",
+        "name_ta": "கொம்புப்புழு"
+      },
+      {
+        "name_en": "Green Leaf Hopper",
+        "name_ta": "பச்சை தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Leaf Folder",
+        "name_ta": "இலை சுருட்டுப்புழு"
+      },
+      {
+        "name_en": "Rice Earhead Bug",
+        "name_ta": "கதிர் நாவாய்ப்பூச்சி"
+      },
+      {
+        "name_en": "Rice hispa",
+        "name_ta": "முள்ளுவண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Whorl Maggot",
+        "name_ta": "குருத்து ஈ"
+      },
+      {
+        "name_en": "Yellow Stem Borer",
+        "name_ta": "குருத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Meally bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Rice leaf mite",
+        "name_ta": "மஞ்சள் பேன்"
+      },
+      {
+        "name_en": "Moth/butterfly",
+        "name_ta": "பட்டாம்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Brown spot",
+        "name_ta": "இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Sheath rot",
+        "name_ta": "இலையுறை அழுகல் நோய்"
+      },
+      {
+        "name_en": "Sheath blight",
+        "name_ta": "இலையுறை கருகல் நோய்"
+      },
+      {
+        "name_en": "False smut",
+        "name_ta": "மஞ்சள் கரிப்பூட்டை நோய்"
+      },
+      {
+        "name_en": "Leaf streak",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Grain discoloration",
+        "name_ta": "தானியம் நிறமற்ற சிதைவடைதல்"
+      },
+      {
+        "name_en": "Rice Tungro",
+        "name_ta": "துங்ரோ நோய்"
+      },
+      {
+        "name_en": "Blast",
+        "name_ta": "குலைநோய்"
+      },
+      {
+        "name_en": "Bacterial Leaf blight",
+        "name_ta": "பாக்டீரியா இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Grassy Stunt",
+        "name_ta": "புல்தழை குட்டை நோய்"
+      },
+      {
+        "name_en": "Bakanae",
+        "name_ta": "பாக்கனோ நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 40,
+    "page": 10,
+    "crop": {
+      "name_en": "Papaya",
+      "name_ta": "பப்பாளி"
+    },
+    "pests": [
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Aphids",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Fruitfly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Ash weevil",
+        "name_ta": "சாம்பல் வண்டு"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Root rot and wilt",
+        "name_ta": "வேர் அழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "இலைப்புள்ளி"
+      },
+      {
+        "name_en": "Ring spot virus",
+        "name_ta": "ரிங்ஸ்பாட் வைரஸ்"
+      },
+      {
+        "name_en": "Papaya mosaic",
+        "name_ta": "தேமல் நோய்"
+      },
+      {
+        "name_en": "Leaf curl",
+        "name_ta": "இலை சுருட்டு வைரஸ்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fruit rot",
+        "name_ta": "பழ அழுகல்"
+      }
+    ]
+  },
+  {
+    "seq": 41,
+    "page": 11,
+    "crop": {
+      "name_en": "Pumpkin",
+      "name_ta": "பூசணி"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 42,
+    "page": 11,
+    "crop": {
+      "name_en": "Ragi",
+      "name_ta": "கேழ்வரகு"
+    },
+    "pests": [
+      {
+        "name_en": "Earhead Bug",
+        "name_ta": "கதிர் நாவாய்ப்பூச்சி"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Stem borer",
+        "name_ta": "தண்டுத்துளைப்பான்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Aphids",
+        "name_ta": "அசுவினி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Downy mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Blast",
+        "name_ta": "குலை நோய்"
+      },
+      {
+        "name_en": "Leaf blight",
+        "name_ta": "இலைக்கருகல்"
+      },
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 43,
+    "page": 11,
+    "crop": {
+      "name_en": "Redgram",
+      "name_ta": "துவரை"
+    },
+    "pests": [
+      {
+        "name_en": "Pod borer",
+        "name_ta": "காய்ப்புழு"
+      },
+      {
+        "name_en": "Moth/butterfly",
+        "name_ta": "பட்டாம்பூச்சி"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Yellow Mosaic",
+        "name_ta": "மஞ்சள் தேமல் நோய்"
+      },
+      {
+        "name_en": "Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 44,
+    "page": 11,
+    "crop": {
+      "name_en": "Ridgegourd",
+      "name_ta": "பீர்கன்"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 45,
+    "page": 12,
+    "crop": {
+      "name_en": "Rose",
+      "name_ta": "ரோஜா"
+    },
+    "pests": [
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Scales",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Spider mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Bettle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Leaf Folder",
+        "name_ta": "இலைசுருட்டுப் புழு"
+      },
+      {
+        "name_en": "Leaf cutting bee",
+        "name_ta": "இலை வெட்டும் தேனீ"
+      },
+      {
+        "name_en": "Mealybug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Powdery mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Die back",
+        "name_ta": "நுனி கருகல் நோய்"
+      },
+      {
+        "name_en": "Black spot",
+        "name_ta": "கரும்புள்ளி"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Crown gall",
+        "name_ta": "உச்சிக் கரணை"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 46,
+    "page": 12,
+    "crop": {
+      "name_en": "Sambar cucumber",
+      "name_ta": "சாம்பார் வெள்ளரி"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 47,
+    "page": 12,
+    "crop": {
+      "name_en": "Sapota",
+      "name_ta": "சப்போட்டா"
+    },
+    "pests": [
+      {
+        "name_en": "Leaf Webber",
+        "name_ta": "இலைப் பிணைக்கும் புழு"
+      },
+      {
+        "name_en": "Budworm",
+        "name_ta": "மொட்டுப்புழு"
+      },
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Ash Weevil",
+        "name_ta": "சாம்பல் வண்டு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Sooty mould",
+        "name_ta": "கரும் பூஞ்சாண நோய்"
+      },
+      {
+        "name_en": "Leaf spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 48,
+    "page": 13,
+    "crop": {
+      "name_en": "Snakegourd",
+      "name_ta": "புடலை"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 49,
+    "page": 13,
+    "crop": {
+      "name_en": "Sugarcane",
+      "name_ta": "கரும்பு"
+    },
+    "pests": [
+      {
+        "name_en": "Early Shoot Borer",
+        "name_ta": "குருத்துத் துளைப்பான்"
+      },
+      {
+        "name_en": "Internode Borer",
+        "name_ta": "இடைக்கணுத் துளைப்பான்"
+      },
+      {
+        "name_en": "Top Borer",
+        "name_ta": "நுனிக்குருத்துப் புழு"
+      },
+      {
+        "name_en": "Root Borer",
+        "name_ta": "வேர்த் துளைப்பான்"
+      },
+      {
+        "name_en": "Pyrilla",
+        "name_ta": "ஏரோபின் பூச்சி"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Scale Insect",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Woolly Aphid",
+        "name_ta": "கம்பளி அசுவினி"
+      },
+      {
+        "name_en": "Termite",
+        "name_ta": "கரையான்"
+      },
+      {
+        "name_en": "White Grub",
+        "name_ta": "வெள்ளை வேர் புழு"
+      },
+      {
+        "name_en": "Mite",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Root aphid",
+        "name_ta": "வேர் அசுவினி"
+      },
+      {
+        "name_en": "Leaf hopper",
+        "name_ta": "தத்துப்பூச்சி"
+      },
+      {
+        "name_en": "Mealybug",
+        "name_ta": "மாவுப்பூச்சி"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Pokkah boeng",
+        "name_ta": "பொக்கோ போயிங்"
+      },
+      {
+        "name_en": "Red rot",
+        "name_ta": "செவ்வழுகல் நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Gummosis",
+        "name_ta": "பிசினாழுக்கு நோய்"
+      },
+      {
+        "name_en": "Grassy shoot",
+        "name_ta": "புல் தோகை நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 50,
+    "page": 13,
+    "crop": {
+      "name_en": "Tapioca",
+      "name_ta": "மரவள்ளி"
+    },
+    "pests": [
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Mealybug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Scale",
+        "name_ta": "செதில் பூச்சி"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Leaf spot disease",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Tuber rot disease",
+        "name_ta": "வேர் / கிழங்கு அழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic virus",
+        "name_ta": "மரவள்ளி தேமல் வைரஸ்"
+      }
+    ]
+  },
+  {
+    "seq": 51,
+    "page": 14,
+    "crop": {
+      "name_en": "Tinda",
+      "name_ta": "தின்டா"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Bactertial wilt",
+        "name_ta": "பாக்டீரியா வாடல் நோய்"
+      }
+    ]
+  },
+  {
+    "seq": 52,
+    "page": 14,
+    "crop": {
+      "name_en": "Tomato",
+      "name_ta": "தக்காளி"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Borer",
+        "name_ta": "காய்ப்புழு"
+      },
+      {
+        "name_en": "Tobacco Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Whitefly",
+        "name_ta": "வெள்ளை ஈ"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Serpentine Leaf Miner",
+        "name_ta": "சுருள் கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Beetle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Spider mite",
+        "name_ta": "செம்பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Early Blight",
+        "name_ta": "முன்பருவ இலைக்கருகல்"
+      },
+      {
+        "name_en": "Damping off",
+        "name_ta": "நாற்றழுகல்"
+      },
+      {
+        "name_en": "Bacterial wilt",
+        "name_ta": "பாக்டீரியா வாடல்"
+      },
+      {
+        "name_en": "Tomato mosaic virus (TMV)",
+        "name_ta": "தக்காளி தேமல் வைரஸ்"
+      },
+      {
+        "name_en": "Leaf curl",
+        "name_ta": "இலை சுருட்டை வைரஸ்"
+      },
+      {
+        "name_en": "Tomato spotted wilt disease",
+        "name_ta": "தக்காளி புள்ளி வாடல் நோய்"
+      },
+      {
+        "name_en": "Verticillium wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Late blight",
+        "name_ta": "பின் கருகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial canker",
+        "name_ta": "பாக்டீரியா சொறி நோய்"
+      },
+      {
+        "name_en": "Blossom end rot",
+        "name_ta": "ப்ளாசம் எண்ட் ராட்"
+      }
+    ]
+  },
+  {
+    "seq": 53,
+    "page": 14,
+    "crop": {
+      "name_en": "Tuberose",
+      "name_ta": "சம்பங்கி"
+    },
+    "pests": [
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Bud Borer",
+        "name_ta": "மொட்டுத் துளைப்பான்"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Mealy Bug",
+        "name_ta": "மாவுப்பூச்சி"
+      },
+      {
+        "name_en": "Grasshopper",
+        "name_ta": "வெட்டுக்கிளி"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Beetle",
+        "name_ta": "வண்டு"
+      },
+      {
+        "name_en": "Flower thrips",
+        "name_ta": "பூப் பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Stem Rot",
+        "name_ta": "தண்டழுகல் நோய்"
+      },
+      {
+        "name_en": "Basal Rot",
+        "name_ta": "கிழங்கடி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Rust",
+        "name_ta": "துரு நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Flower spot",
+        "name_ta": "மொட்டுக்கருகல்"
+      }
+    ]
+  },
+  {
+    "seq": 54,
+    "page": 15,
+    "crop": {
+      "name_en": "Watermelon",
+      "name_ta": "தர்பூசணி"
+    },
+    "pests": [
+      {
+        "name_en": "Fruit Fly",
+        "name_ta": "பழ ஈ"
+      },
+      {
+        "name_en": "Red Pumpkin Beetle",
+        "name_ta": "சிவப்பு பூசணி வண்டு"
+      },
+      {
+        "name_en": "Aphid",
+        "name_ta": "அசுவினி"
+      },
+      {
+        "name_en": "Caterpillar",
+        "name_ta": "புரோட்டினியா புழு"
+      },
+      {
+        "name_en": "Leaf Miner",
+        "name_ta": "கோலப்பூச்சி"
+      },
+      {
+        "name_en": "Fruit borer",
+        "name_ta": "காய் புழு"
+      },
+      {
+        "name_en": "Stem fly",
+        "name_ta": "தண்டு ஈ / தண்டு புழு"
+      },
+      {
+        "name_en": "Weevil",
+        "name_ta": "கூன்வண்டு"
+      },
+      {
+        "name_en": "Thrips",
+        "name_ta": "இலைப்பேன்"
+      },
+      {
+        "name_en": "Mites",
+        "name_ta": "செம்பேன்"
+      },
+      {
+        "name_en": "Flower thrips",
+        "name_ta": "பூப் பேன்"
+      }
+    ],
+    "diseases": [
+      {
+        "name_en": "Damping Off",
+        "name_ta": "நாற்றழுகல் நோய்"
+      },
+      {
+        "name_en": "Powdery Mildew",
+        "name_ta": "சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Downy Mildew",
+        "name_ta": "அடிச்சாம்பல் நோய்"
+      },
+      {
+        "name_en": "Anthracnose",
+        "name_ta": "கரும்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Alternaria Leaf Blight",
+        "name_ta": "இலைக்கருகல் நோய்"
+      },
+      {
+        "name_en": "Cercospora Leaf Spot",
+        "name_ta": "இலைப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Fusarium Wilt",
+        "name_ta": "வாடல் நோய்"
+      },
+      {
+        "name_en": "Gummy Stem Blight",
+        "name_ta": "தண்டு வெடிப்பு"
+      },
+      {
+        "name_en": "Root Rot",
+        "name_ta": "வேரழுகல் நோய்"
+      },
+      {
+        "name_en": "Collar Rot",
+        "name_ta": "கழுத்தழுகல் நோய்"
+      },
+      {
+        "name_en": "Mosaic Disease",
+        "name_ta": "மொசைக் நோய்"
+      },
+      {
+        "name_en": "Cucumber Mosaic Virus (CMV)",
+        "name_ta": "வெள்ளரி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Watermelon Mosaic Virus (WMV)",
+        "name_ta": "தர்பூசணி மொசைக் வைரஸ் நோய்"
+      },
+      {
+        "name_en": "Bud Necrosis Disease",
+        "name_ta": "குருத்து நசிவு நோய்"
+      },
+      {
+        "name_en": "Fruit Rot",
+        "name_ta": "பழ அழுகல் நோய்"
+      },
+      {
+        "name_en": "Belly Rot",
+        "name_ta": "பழ அடிப்பகுதி அழுகல் நோய்"
+      },
+      {
+        "name_en": "Bacterial Fruit Blotch",
+        "name_ta": "பாக்டீரியா பழப்புள்ளி நோய்"
+      },
+      {
+        "name_en": "Angular Leaf Spot",
+        "name_ta": "கோண வடிவ இலைப்புள்ளி நோய்"
+      }
+    ]
+  }
+]
