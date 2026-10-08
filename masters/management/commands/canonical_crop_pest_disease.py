@@ -1,10 +1,9 @@
 """Management command for the canonical Crop -> Pest/Disease dataset.
 
-PHASE 2B is deliberately read-only:
-
     python manage.py canonical_crop_pest_disease --validate
     python manage.py canonical_crop_pest_disease --dry-run
     python manage.py canonical_crop_pest_disease --production-audit
+    python manage.py canonical_crop_pest_disease --apply
 
 * ``--validate``  validates ``data/crop_pest_disease_canonical.json``
   (structure, Tamil integrity, per-crop duplicates, column independence) and
@@ -17,13 +16,18 @@ PHASE 2B is deliberately read-only:
   classification, the historical-reference audit and the complete plan.
   Identical code path to ``--dry-run`` -- SELECTs only, PLUS an explicit
   force-rolled-back transaction as a safety net.
+* ``--apply``     PHASE 3B real import.  Refuses unless every safety gate
+  passes (canonical validation OK, categories exist, no ambiguous canonical
+  crop, source duplicates collapse).  Everything runs inside a single
+  ``transaction.atomic()`` -- any failure rolls back completely.  Never
+  hard-deletes; never touches Visit rows.  Legacy duplicate masters are
+  inactivated but never reused -- canonical masters carry
+  ``is_canonical=True`` (created fresh or adopted single exact match).
 
 Identity rule (Phase 2B): a canonical ProblemMaster is
 ``category + EXACT PDF English value`` (whitespace-trimmed only).  Case,
 spacing and spelling variants are preserved as DISTINCT candidates and are
 never auto-merged.
-
-Real import mode is intentionally NOT implemented.
 """
 from __future__ import annotations
 
@@ -33,7 +37,10 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 from masters.canonical_dataset import (
+    ApplyGateError,
     analyze_variants,
+    apply_gates,
+    apply_import,
     build_dry_run_plan,
     compare_to_db,
     db_counts,
@@ -57,6 +64,17 @@ class Command(BaseCommand):
             "--production-audit", action="store_true",
             help="Production preflight: actual counts + classification + plan. "
                  "Run on the production server. ZERO writes.")
+        parser.add_argument(
+            "--apply", action="store_true",
+            help="PHASE 3B real import. Refuses unless all safety gates pass. "
+                 "Single transaction; never hard-deletes; never touches "
+                 "Visit rows.  Legacy duplicate masters are inactivated, "
+                 "never reused -- canonical masters are marked "
+                 "is_canonical or created fresh.")
+        parser.add_argument(
+            "--canonical-file", type=str, default=None,
+            help="Override canonical JSON path (default: data/"
+                 "crop_pest_disease_canonical.json).")
 
     def handle(self, *args, **options):
         # The plan/validation output contains Unicode Tamil.  Reconfigure the
@@ -69,12 +87,13 @@ class Command(BaseCommand):
         validate = options["validate"]
         dry_run = options["dry_run"]
         prod_audit = options["production_audit"]
-        if not validate and not dry_run and not prod_audit:
+        apply_mode = options["apply"]
+        if not validate and not dry_run and not prod_audit and not apply_mode:
             self.stderr.write(
-                "Specify --validate, --dry-run or --production-audit.")
+                "Specify --validate, --dry-run, --production-audit or --apply.")
             return
 
-        data = load_canonical()
+        data = load_canonical(options["canonical_file"])
         rep = validate_canonical(data)
         self._print_validation(rep, data)
 
@@ -91,10 +110,46 @@ class Command(BaseCommand):
             self._print_comparison(comparison)
             self._print_plan(plan)
 
+        if apply_mode:
+            self._run_apply(data)
+
         if not rep.ok:
             # Non-zero signal that validation failed (but still printed report).
             self.stderr.write("VALIDATION FAILED -- see errors above.")
             raise SystemExit(1)
+
+    # ------------------------------------------------------------------
+    def _run_apply(self, data):
+        out = self.stdout
+        out.write("=" * 70)
+        out.write("APPLY SAFETY GATES")
+        out.write("=" * 70)
+        errors = apply_gates(data)
+        if errors:
+            for e in errors:
+                out.write(f"  GATE FAIL  {e}")
+            self.stderr.write(
+                f"APPLY REFUSED: {len(errors)} gate failure(s). "
+                "No writes performed.")
+            raise SystemExit(1)
+        out.write("  all gates passed")
+        try:
+            stats = apply_import(data)
+        except ApplyGateError as exc:
+            for e in exc.errors:
+                self.stderr.write(f"  GATE FAIL  {e}")
+            self.stderr.write(
+                "APPLY REFUSED inside transaction -- zero writes persisted.")
+            raise SystemExit(1)
+        out.write("\nAPPLY RESULT")
+        for k, v in stats.items():
+            if k == "tamil_diffs_kept":
+                out.write(f"  {k}: {len(v)}")
+                for it in v[:50]:
+                    out.write(f"      {it}")
+            else:
+                out.write(f"  {k}: {v}")
+        out.write("APPLY COMPLETE -- single transaction committed.")
 
     # ------------------------------------------------------------------
     def _print_validation(self, rep, data):

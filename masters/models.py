@@ -251,12 +251,24 @@ class ProblemMaster(BaseMaster):
         blank=True,
         help_text="Canonical multi-crop mappings for this problem.",
     )
+    is_canonical = models.BooleanField(
+        default=False,
+        help_text=(
+            "Row belongs to the canonical crop-pest-disease dataset "
+            "(created or identified by the canonical import).  Legacy rows "
+            "stay False and are never reused for canonical mappings."
+        ),
+    )
 
     class Meta:
         ordering = ["category__name", "name"]
         indexes = [
             models.Index(fields=["category", "is_active"]),
             models.Index(fields=["crop", "is_active"]),
+            models.Index(
+                fields=["category", "is_canonical"],
+                name="masters_pm_canonical_idx",
+            ),
         ]
 
     def __str__(self):

@@ -1,0 +1,1656 @@
+{
+  "_meta": {
+    "phase": "3A audit record (superseded by Phase 3B design)",
+    "superseded": true,
+    "note": "Phase 3B business decision: legacy ProblemMaster duplicates are historical display data only and are NEVER selected as canonical. The canonical set is identified by ProblemMaster.is_canonical; ambiguous groups get a fresh canonical row.  The ids below were the Phase 3A auto-recommendations and are kept purely as an audit record of the ambiguity analysis.",
+    "identity_rule": "category.code + exact PDF English value (whitespace-trimmed only)"
+  },
+  "resolutions": {
+    "pest:Aphid": {
+      "canonical_problem_master_id": 22,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "exact-name group; only row with canonical CropProblem mappings (24); shared canonical master",
+      "canonical_tamil": [
+        "அசுவினி"
+      ],
+      "candidates": [
+        {
+          "id": 85,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 94,
+          "legacy_crop_name": "Greens (Amaranthus)",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.688908+00:00",
+          "updated_at": "2026-06-11T04:38:36.688908+00:00"
+        },
+        {
+          "id": 31,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 58,
+          "legacy_crop_name": "Greengram",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.017914+00:00",
+          "updated_at": "2026-06-11T04:38:36.017914+00:00"
+        },
+        {
+          "id": 36,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 91,
+          "legacy_crop_name": "Cluster Bean",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.072813+00:00",
+          "updated_at": "2026-06-11T04:38:36.072813+00:00"
+        },
+        {
+          "id": 71,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 69,
+          "legacy_crop_name": "Watermelon",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.497114+00:00",
+          "updated_at": "2026-06-11T04:38:36.497114+00:00"
+        },
+        {
+          "id": 137,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 102,
+          "legacy_crop_name": "Cockscomb",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.277459+00:00",
+          "updated_at": "2026-06-11T04:38:37.277459+00:00"
+        },
+        {
+          "id": 22,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 62,
+          "legacy_crop_name": "Groundnut",
+          "crop_problem_mappings": 32,
+          "canonical_mappings": 24,
+          "visit_fk_refs": 17,
+          "visit_m2m_refs": 21,
+          "created_at": "2026-06-11T04:38:35.934030+00:00",
+          "updated_at": "2026-06-11T04:38:35.934030+00:00"
+        },
+        {
+          "id": 25,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 61,
+          "legacy_crop_name": "Ragi",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:35.965432+00:00",
+          "updated_at": "2026-06-11T04:38:35.965432+00:00"
+        },
+        {
+          "id": 57,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 72,
+          "legacy_crop_name": "Ridge Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.303401+00:00",
+          "updated_at": "2026-06-11T04:38:36.303401+00:00"
+        },
+        {
+          "id": 26,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 57,
+          "legacy_crop_name": "Blackgram",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:35.973857+00:00",
+          "updated_at": "2026-06-11T04:38:35.973857+00:00"
+        },
+        {
+          "id": 126,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 100,
+          "legacy_crop_name": "Chrysanthemum",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 4,
+          "visit_m2m_refs": 4,
+          "created_at": "2026-06-11T04:38:37.149616+00:00",
+          "updated_at": "2026-06-11T04:38:37.149616+00:00"
+        },
+        {
+          "id": 69,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 73,
+          "legacy_crop_name": "Snake Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.463504+00:00",
+          "updated_at": "2026-06-11T04:38:36.463504+00:00"
+        },
+        {
+          "id": 50,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 75,
+          "legacy_crop_name": "Cucumber",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.223399+00:00",
+          "updated_at": "2026-06-11T04:38:36.223399+00:00"
+        },
+        {
+          "id": 60,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 71,
+          "legacy_crop_name": "Bitter Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.337177+00:00",
+          "updated_at": "2026-06-11T04:38:36.337177+00:00"
+        },
+        {
+          "id": 63,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 92,
+          "legacy_crop_name": "Pumpkin",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.383188+00:00",
+          "updated_at": "2026-06-11T04:38:36.383188+00:00"
+        },
+        {
+          "id": 54,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 74,
+          "legacy_crop_name": "Bottle Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.269505+00:00",
+          "updated_at": "2026-06-11T04:38:36.269505+00:00"
+        },
+        {
+          "id": 82,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 68,
+          "legacy_crop_name": "Chilli",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 2,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.655243+00:00",
+          "updated_at": "2026-06-11T04:38:36.655243+00:00"
+        },
+        {
+          "id": 122,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 99,
+          "legacy_crop_name": "Marigold",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 3,
+          "visit_m2m_refs": 3,
+          "created_at": "2026-06-11T04:38:37.111001+00:00",
+          "updated_at": "2026-06-11T04:38:37.111001+00:00"
+        },
+        {
+          "id": 134,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 101,
+          "legacy_crop_name": "Tuberose",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.243810+00:00",
+          "updated_at": "2026-06-11T04:38:37.243810+00:00"
+        },
+        {
+          "id": 66,
+          "tamil_name": "அசுவினி",
+          "is_active": true,
+          "legacy_crop_id": 93,
+          "legacy_crop_name": "Ash Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.426938+00:00",
+          "updated_at": "2026-06-11T04:38:36.426938+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Blossom Midge": {
+      "canonical_problem_master_id": 108,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (1); DB tamil differs from canonical -- review noted",
+      "canonical_tamil": [
+        "நச்சு புழு"
+      ],
+      "candidates": [
+        {
+          "id": 118,
+          "tamil_name": "பூ மொட்டு ஈ",
+          "is_active": true,
+          "legacy_crop_id": 98,
+          "legacy_crop_name": "Mullai arumbu",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 108,
+          "visit_m2m_refs": 133,
+          "created_at": "2026-06-11T04:38:37.062530+00:00",
+          "updated_at": "2026-06-11T04:38:37.062530+00:00"
+        },
+        {
+          "id": 115,
+          "tamil_name": "பூ மொட்டு ஈ",
+          "is_active": true,
+          "legacy_crop_id": 97,
+          "legacy_crop_name": "Gundu malli jasmine",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 68,
+          "visit_m2m_refs": 76,
+          "created_at": "2026-06-11T04:38:37.010740+00:00",
+          "updated_at": "2026-06-11T04:38:37.010740+00:00"
+        },
+        {
+          "id": 108,
+          "tamil_name": "பூ மொட்டு ஈ",
+          "is_active": true,
+          "legacy_crop_id": 96,
+          "legacy_crop_name": "Jasmine (Jasminum spp.)",
+          "crop_problem_mappings": 4,
+          "canonical_mappings": 1,
+          "visit_fk_refs": 21,
+          "visit_m2m_refs": 35,
+          "created_at": "2026-06-11T04:38:36.945922+00:00",
+          "updated_at": "2026-10-05T13:14:12.130150+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Blue Butterfly": {
+      "canonical_problem_master_id": 28,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (3)",
+      "canonical_tamil": [
+        "நீல பட்டாம்பூச்சி"
+      ],
+      "candidates": [
+        {
+          "id": 28,
+          "tamil_name": "நீல பட்டாம்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 57,
+          "legacy_crop_name": "Blackgram",
+          "crop_problem_mappings": 3,
+          "canonical_mappings": 3,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:35.992629+00:00",
+          "updated_at": "2026-06-11T04:38:35.992629+00:00"
+        },
+        {
+          "id": 33,
+          "tamil_name": "நீல பட்டாம்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 58,
+          "legacy_crop_name": "Greengram",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.033063+00:00",
+          "updated_at": "2026-06-11T04:38:36.033063+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Bud Borer": {
+      "canonical_problem_master_id": 120,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (2); DB tamil in canonical set",
+      "canonical_tamil": [
+        "மொட்டுத் துளைப்பான்",
+        "மொட்டுத் புழு"
+      ],
+      "candidates": [
+        {
+          "id": 133,
+          "tamil_name": "மொட்டுத் துளைப்பான்",
+          "is_active": true,
+          "legacy_crop_id": 101,
+          "legacy_crop_name": "Tuberose",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.234324+00:00",
+          "updated_at": "2026-06-11T04:38:37.234324+00:00"
+        },
+        {
+          "id": 120,
+          "tamil_name": "மொட்டுத் துளைப்பான்",
+          "is_active": true,
+          "legacy_crop_id": 99,
+          "legacy_crop_name": "Marigold",
+          "crop_problem_mappings": 2,
+          "canonical_mappings": 2,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 6,
+          "created_at": "2026-06-11T04:38:37.088101+00:00",
+          "updated_at": "2026-06-11T04:38:37.088101+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Bud Worm": {
+      "canonical_problem_master_id": 107,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (1)",
+      "canonical_tamil": [
+        "மொட்டுப்புழு"
+      ],
+      "candidates": [
+        {
+          "id": 114,
+          "tamil_name": "மொட்டுப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 97,
+          "legacy_crop_name": "Gundu malli jasmine",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 64,
+          "visit_m2m_refs": 130,
+          "created_at": "2026-06-11T04:38:37.001437+00:00",
+          "updated_at": "2026-06-11T04:38:37.001437+00:00"
+        },
+        {
+          "id": 107,
+          "tamil_name": "மொட்டுப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 96,
+          "legacy_crop_name": "Jasmine (Jasminum spp.)",
+          "crop_problem_mappings": 7,
+          "canonical_mappings": 1,
+          "visit_fk_refs": 18,
+          "visit_m2m_refs": 48,
+          "created_at": "2026-06-11T04:38:36.934536+00:00",
+          "updated_at": "2026-10-05T13:14:12.121980+00:00"
+        },
+        {
+          "id": 117,
+          "tamil_name": "மொட்டுப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 98,
+          "legacy_crop_name": "Mullai arumbu",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 64,
+          "visit_m2m_refs": 148,
+          "created_at": "2026-06-11T04:38:37.053402+00:00",
+          "updated_at": "2026-06-11T04:38:37.053402+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Epilachna Beetle": {
+      "canonical_problem_master_id": 41,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (1)",
+      "canonical_tamil": [
+        "எப்பிலக்னா வண்டு"
+      ],
+      "candidates": [
+        {
+          "id": 59,
+          "tamil_name": "எப்பிலக்னா வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 71,
+          "legacy_crop_name": "Bitter Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.327326+00:00",
+          "updated_at": "2026-06-11T04:38:36.327326+00:00"
+        },
+        {
+          "id": 41,
+          "tamil_name": "எப்பிலக்னா வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 67,
+          "legacy_crop_name": "Brinjal",
+          "crop_problem_mappings": 2,
+          "canonical_mappings": 1,
+          "visit_fk_refs": 6,
+          "visit_m2m_refs": 8,
+          "created_at": "2026-06-11T04:38:36.122089+00:00",
+          "updated_at": "2026-06-11T04:38:36.122089+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Fruit Borer": {
+      "canonical_problem_master_id": 44,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (5)",
+      "canonical_tamil": [
+        "காய் புழு",
+        "காய்ப்புழு"
+      ],
+      "candidates": [
+        {
+          "id": 44,
+          "tamil_name": "காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 66,
+          "legacy_crop_name": "Bhendi",
+          "crop_problem_mappings": 15,
+          "canonical_mappings": 5,
+          "visit_fk_refs": 62,
+          "visit_m2m_refs": 69,
+          "created_at": "2026-06-11T04:38:36.153027+00:00",
+          "updated_at": "2026-06-11T04:38:36.153027+00:00"
+        },
+        {
+          "id": 81,
+          "tamil_name": "காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 68,
+          "legacy_crop_name": "Chilli",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.646392+00:00",
+          "updated_at": "2026-06-11T04:38:36.646392+00:00"
+        },
+        {
+          "id": 74,
+          "tamil_name": "காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 56,
+          "legacy_crop_name": "Tomato",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.539209+00:00",
+          "updated_at": "2026-06-11T04:38:36.539209+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Fruit Fly": {
+      "canonical_problem_master_id": 48,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (8)",
+      "canonical_tamil": [
+        "பழ ஈ"
+      ],
+      "candidates": [
+        {
+          "id": 67,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 73,
+          "legacy_crop_name": "Snake Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 2,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.440035+00:00",
+          "updated_at": "2026-06-11T04:38:36.441055+00:00"
+        },
+        {
+          "id": 52,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 74,
+          "legacy_crop_name": "Bottle Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 4,
+          "visit_m2m_refs": 4,
+          "created_at": "2026-06-11T04:38:36.246909+00:00",
+          "updated_at": "2026-06-11T04:38:36.246909+00:00"
+        },
+        {
+          "id": 55,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 72,
+          "legacy_crop_name": "Ridge Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 3,
+          "visit_m2m_refs": 4,
+          "created_at": "2026-06-11T04:38:36.281250+00:00",
+          "updated_at": "2026-06-11T04:38:36.281250+00:00"
+        },
+        {
+          "id": 58,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 71,
+          "legacy_crop_name": "Bitter Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.317730+00:00",
+          "updated_at": "2026-06-11T04:38:36.317730+00:00"
+        },
+        {
+          "id": 61,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 92,
+          "legacy_crop_name": "Pumpkin",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.350109+00:00",
+          "updated_at": "2026-06-11T04:38:36.350109+00:00"
+        },
+        {
+          "id": 87,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 82,
+          "legacy_crop_name": "Guava",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.706593+00:00",
+          "updated_at": "2026-06-11T04:38:36.706593+00:00"
+        },
+        {
+          "id": 64,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 93,
+          "legacy_crop_name": "Ash Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 2,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.401754+00:00",
+          "updated_at": "2026-06-11T04:38:36.401754+00:00"
+        },
+        {
+          "id": 70,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 69,
+          "legacy_crop_name": "Watermelon",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.480352+00:00",
+          "updated_at": "2026-06-11T04:38:36.480352+00:00"
+        },
+        {
+          "id": 48,
+          "tamil_name": "பழ ஈ",
+          "is_active": true,
+          "legacy_crop_id": 75,
+          "legacy_crop_name": "Cucumber",
+          "crop_problem_mappings": 15,
+          "canonical_mappings": 8,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 4,
+          "created_at": "2026-06-11T04:38:36.205180+00:00",
+          "updated_at": "2026-06-11T04:38:36.205180+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Gram Pod Borer": {
+      "canonical_problem_master_id": 30,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (3)",
+      "canonical_tamil": [
+        "பச்சைக்காய்ப்புழு"
+      ],
+      "candidates": [
+        {
+          "id": 35,
+          "tamil_name": "பச்சைக்காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 58,
+          "legacy_crop_name": "Greengram",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.049761+00:00",
+          "updated_at": "2026-06-11T04:38:36.049761+00:00"
+        },
+        {
+          "id": 30,
+          "tamil_name": "பச்சைக்காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 57,
+          "legacy_crop_name": "Blackgram",
+          "crop_problem_mappings": 3,
+          "canonical_mappings": 3,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.009385+00:00",
+          "updated_at": "2026-06-11T04:38:36.009385+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Jassid": {
+      "canonical_problem_master_id": 43,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (1)",
+      "canonical_tamil": [
+        "தத்துப்பூச்சி"
+      ],
+      "candidates": [
+        {
+          "id": 43,
+          "tamil_name": "தத்துப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 67,
+          "legacy_crop_name": "Brinjal",
+          "crop_problem_mappings": 2,
+          "canonical_mappings": 1,
+          "visit_fk_refs": 28,
+          "visit_m2m_refs": 41,
+          "created_at": "2026-06-11T04:38:36.142434+00:00",
+          "updated_at": "2026-06-11T04:38:36.142434+00:00"
+        },
+        {
+          "id": 45,
+          "tamil_name": "தத்துப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 66,
+          "legacy_crop_name": "Bhendi",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 5,
+          "visit_m2m_refs": 23,
+          "created_at": "2026-06-11T04:38:36.166504+00:00",
+          "updated_at": "2026-06-11T04:38:36.166504+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Leaf Eating Caterpillar": {
+      "canonical_problem_master_id": 86,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "tie at canonical maps=0; only row referenced by new-flow CropProblem data and visits",
+      "canonical_tamil": [
+        "இலை தின்னும் புழு"
+      ],
+      "candidates": [
+        {
+          "id": 86,
+          "tamil_name": "இலை தின்னும் புழு",
+          "is_active": true,
+          "legacy_crop_id": 94,
+          "legacy_crop_name": "Greens (Amaranthus)",
+          "crop_problem_mappings": 2,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.700053+00:00",
+          "updated_at": "2026-06-11T04:38:36.700053+00:00"
+        },
+        {
+          "id": 140,
+          "tamil_name": "இலை தின்னும் புழு",
+          "is_active": true,
+          "legacy_crop_id": 102,
+          "legacy_crop_name": "Cockscomb",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.313871+00:00",
+          "updated_at": "2026-06-11T04:38:37.313871+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Leaf Hopper": {
+      "canonical_problem_master_id": 39,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (1)",
+      "canonical_tamil": [
+        "தத்துப்பூச்சி"
+      ],
+      "candidates": [
+        {
+          "id": 39,
+          "tamil_name": "தத்துப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 91,
+          "legacy_crop_name": "Cluster Bean",
+          "crop_problem_mappings": 8,
+          "canonical_mappings": 1,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.103873+00:00",
+          "updated_at": "2026-06-11T04:38:36.103873+00:00"
+        },
+        {
+          "id": 124,
+          "tamil_name": "தத்துப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 99,
+          "legacy_crop_name": "Marigold",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:37.129718+00:00",
+          "updated_at": "2026-06-11T04:38:37.129718+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Leaf Miner": {
+      "canonical_problem_master_id": 18,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (10); DB tamil differs from canonical -- review noted",
+      "canonical_tamil": [
+        "கோலப்பூச்சி"
+      ],
+      "candidates": [
+        {
+          "id": 128,
+          "tamil_name": "இலைத் துளைப்பான்",
+          "is_active": true,
+          "legacy_crop_id": 100,
+          "legacy_crop_name": "Chrysanthemum",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.169691+00:00",
+          "updated_at": "2026-06-11T04:38:37.169691+00:00"
+        },
+        {
+          "id": 18,
+          "tamil_name": "இலைத் துளைப்பான்",
+          "is_active": true,
+          "legacy_crop_id": 62,
+          "legacy_crop_name": "Groundnut",
+          "crop_problem_mappings": 16,
+          "canonical_mappings": 10,
+          "visit_fk_refs": 5,
+          "visit_m2m_refs": 7,
+          "created_at": "2026-06-11T04:38:35.901259+00:00",
+          "updated_at": "2026-06-11T04:38:35.901259+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Mealy Bug": {
+      "canonical_problem_master_id": 89,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (7)",
+      "canonical_tamil": [
+        "மாவுப்பூச்சி"
+      ],
+      "candidates": [
+        {
+          "id": 135,
+          "tamil_name": "மாவுப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 101,
+          "legacy_crop_name": "Tuberose",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.252361+00:00",
+          "updated_at": "2026-06-11T04:38:37.252361+00:00"
+        },
+        {
+          "id": 89,
+          "tamil_name": "மாவுப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 82,
+          "legacy_crop_name": "Guava",
+          "crop_problem_mappings": 23,
+          "canonical_mappings": 7,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.733629+00:00",
+          "updated_at": "2026-06-11T04:38:36.733629+00:00"
+        },
+        {
+          "id": 113,
+          "tamil_name": "மாவுப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 96,
+          "legacy_crop_name": "Jasmine (Jasminum spp.)",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.990612+00:00",
+          "updated_at": "2026-06-11T04:38:36.990612+00:00"
+        },
+        {
+          "id": 129,
+          "tamil_name": "மாவுப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 100,
+          "legacy_crop_name": "Chrysanthemum",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.180267+00:00",
+          "updated_at": "2026-06-11T04:38:37.180267+00:00"
+        },
+        {
+          "id": 139,
+          "tamil_name": "மாவுப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 102,
+          "legacy_crop_name": "Cockscomb",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.303538+00:00",
+          "updated_at": "2026-06-11T04:38:37.303538+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Red Pumpkin Beetle": {
+      "canonical_problem_master_id": 49,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (6)",
+      "canonical_tamil": [
+        "சிவப்பு பூசணி வண்டு"
+      ],
+      "candidates": [
+        {
+          "id": 62,
+          "tamil_name": "சிவப்பு பூசணி வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 92,
+          "legacy_crop_name": "Pumpkin",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.365580+00:00",
+          "updated_at": "2026-06-11T04:38:36.365580+00:00"
+        },
+        {
+          "id": 56,
+          "tamil_name": "சிவப்பு பூசணி வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 72,
+          "legacy_crop_name": "Ridge Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.289841+00:00",
+          "updated_at": "2026-06-11T04:38:36.289841+00:00"
+        },
+        {
+          "id": 53,
+          "tamil_name": "சிவப்பு பூசணி வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 74,
+          "legacy_crop_name": "Bottle Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.257491+00:00",
+          "updated_at": "2026-06-11T04:38:36.257491+00:00"
+        },
+        {
+          "id": 49,
+          "tamil_name": "சிவப்பு பூசணி வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 75,
+          "legacy_crop_name": "Cucumber",
+          "crop_problem_mappings": 11,
+          "canonical_mappings": 6,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 3,
+          "created_at": "2026-06-11T04:38:36.215184+00:00",
+          "updated_at": "2026-06-11T04:38:36.215184+00:00"
+        },
+        {
+          "id": 65,
+          "tamil_name": "சிவப்பு பூசணி வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 93,
+          "legacy_crop_name": "Ash Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 3,
+          "created_at": "2026-06-11T04:38:36.413770+00:00",
+          "updated_at": "2026-06-11T04:38:36.413770+00:00"
+        },
+        {
+          "id": 68,
+          "tamil_name": "சிவப்பு பூசணி வண்டு",
+          "is_active": true,
+          "legacy_crop_id": 73,
+          "legacy_crop_name": "Snake Gourd",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.452640+00:00",
+          "updated_at": "2026-06-11T04:38:36.452640+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Red Spider Mite": {
+      "canonical_problem_master_id": 47,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (4); DB tamil differs from canonical -- review noted",
+      "canonical_tamil": [
+        "செம்பேன்"
+      ],
+      "candidates": [
+        {
+          "id": 47,
+          "tamil_name": "சிவப்பு சிலந்திப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 66,
+          "legacy_crop_name": "Bhendi",
+          "crop_problem_mappings": 9,
+          "canonical_mappings": 4,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.187169+00:00",
+          "updated_at": "2026-08-18T08:36:48.096821+00:00"
+        },
+        {
+          "id": 73,
+          "tamil_name": "சிவப்பு சிலந்திப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 69,
+          "legacy_crop_name": "Watermelon",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.528060+00:00",
+          "updated_at": "2026-06-11T04:38:36.528060+00:00"
+        },
+        {
+          "id": 125,
+          "tamil_name": "சிவப்பு சிலந்திப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 99,
+          "legacy_crop_name": "Marigold",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.136519+00:00",
+          "updated_at": "2026-06-11T04:38:37.136519+00:00"
+        },
+        {
+          "id": 141,
+          "tamil_name": "சிவப்பு சிலந்திப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 102,
+          "legacy_crop_name": "Cockscomb",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:37.325965+00:00",
+          "updated_at": "2026-06-11T04:38:37.325965+00:00"
+        },
+        {
+          "id": 111,
+          "tamil_name": "சிவப்பு சிலந்திப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 96,
+          "legacy_crop_name": "Jasmine (Jasminum spp.)",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.970721+00:00",
+          "updated_at": "2026-08-18T08:34:06.288617+00:00"
+        },
+        {
+          "id": 130,
+          "tamil_name": "சிவப்பு சிலந்திப்பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 100,
+          "legacy_crop_name": "Chrysanthemum",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.190287+00:00",
+          "updated_at": "2026-06-11T04:38:37.190287+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Scale Insect": {
+      "canonical_problem_master_id": 90,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (2)",
+      "canonical_tamil": [
+        "செதில் பூச்சி"
+      ],
+      "candidates": [
+        {
+          "id": 103,
+          "tamil_name": "செதில் பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 54,
+          "legacy_crop_name": "Sugarcane",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.890190+00:00",
+          "updated_at": "2026-06-11T04:38:36.890190+00:00"
+        },
+        {
+          "id": 90,
+          "tamil_name": "செதில் பூச்சி",
+          "is_active": true,
+          "legacy_crop_id": 82,
+          "legacy_crop_name": "Guava",
+          "crop_problem_mappings": 2,
+          "canonical_mappings": 2,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.747965+00:00",
+          "updated_at": "2026-06-11T04:38:36.747965+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Shoot Fly": {
+      "canonical_problem_master_id": 14,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (2)",
+      "canonical_tamil": [
+        "குருத்து ஈ"
+      ],
+      "candidates": [
+        {
+          "id": 16,
+          "tamil_name": "குருத்து ஈ",
+          "is_active": true,
+          "legacy_crop_id": 64,
+          "legacy_crop_name": "Bajra",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:35.882393+00:00",
+          "updated_at": "2026-06-11T04:38:35.882393+00:00"
+        },
+        {
+          "id": 14,
+          "tamil_name": "குருத்து ஈ",
+          "is_active": true,
+          "legacy_crop_id": 60,
+          "legacy_crop_name": "Maize",
+          "crop_problem_mappings": 2,
+          "canonical_mappings": 2,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:35.855184+00:00",
+          "updated_at": "2026-06-11T04:38:35.855184+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Spotted Pod Borer": {
+      "canonical_problem_master_id": 29,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (3)",
+      "canonical_tamil": [
+        "புள்ளிக்காய்ப்புழு"
+      ],
+      "candidates": [
+        {
+          "id": 34,
+          "tamil_name": "புள்ளிக்காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 58,
+          "legacy_crop_name": "Greengram",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.040217+00:00",
+          "updated_at": "2026-06-11T04:38:36.040217+00:00"
+        },
+        {
+          "id": 29,
+          "tamil_name": "புள்ளிக்காய்ப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 57,
+          "legacy_crop_name": "Blackgram",
+          "crop_problem_mappings": 3,
+          "canonical_mappings": 3,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.002646+00:00",
+          "updated_at": "2026-06-11T04:38:36.002646+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Stem Borer": {
+      "canonical_problem_master_id": 12,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (3); DB tamil in canonical set",
+      "canonical_tamil": [
+        "தண்டு துளைப்பான்",
+        "தண்டுத் துளைப்பான்",
+        "தண்டுத்துளைப்பான்"
+      ],
+      "candidates": [
+        {
+          "id": 15,
+          "tamil_name": "தண்டுத்துளைப்பான்",
+          "is_active": true,
+          "legacy_crop_id": 64,
+          "legacy_crop_name": "Bajra",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:35.869592+00:00",
+          "updated_at": "2026-06-11T04:38:35.869592+00:00"
+        },
+        {
+          "id": 12,
+          "tamil_name": "தண்டுத்துளைப்பான்",
+          "is_active": true,
+          "legacy_crop_id": 60,
+          "legacy_crop_name": "Maize",
+          "crop_problem_mappings": 6,
+          "canonical_mappings": 3,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:35.823671+00:00",
+          "updated_at": "2026-06-11T04:38:35.823671+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Thrips": {
+      "canonical_problem_master_id": 6,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (23); DB tamil differs from canonical -- review noted",
+      "canonical_tamil": [
+        "இலைப்பேன்"
+      ],
+      "candidates": [
+        {
+          "id": 110,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 96,
+          "legacy_crop_name": "Jasmine (Jasminum spp.)",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.962112+00:00",
+          "updated_at": "2026-06-11T04:38:36.962112+00:00"
+        },
+        {
+          "id": 79,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 68,
+          "legacy_crop_name": "Chilli",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 6,
+          "created_at": "2026-06-11T04:38:36.626493+00:00",
+          "updated_at": "2026-06-11T04:38:36.626493+00:00"
+        },
+        {
+          "id": 138,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 102,
+          "legacy_crop_name": "Cockscomb",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:37.293980+00:00",
+          "updated_at": "2026-06-11T04:38:37.293980+00:00"
+        },
+        {
+          "id": 72,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 69,
+          "legacy_crop_name": "Watermelon",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 2,
+          "visit_m2m_refs": 2,
+          "created_at": "2026-06-11T04:38:36.514554+00:00",
+          "updated_at": "2026-06-11T04:38:36.514554+00:00"
+        },
+        {
+          "id": 21,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 62,
+          "legacy_crop_name": "Groundnut",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:35.924235+00:00",
+          "updated_at": "2026-06-11T04:38:35.924235+00:00"
+        },
+        {
+          "id": 6,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 52,
+          "legacy_crop_name": "Paddy",
+          "crop_problem_mappings": 34,
+          "canonical_mappings": 23,
+          "visit_fk_refs": 4,
+          "visit_m2m_refs": 24,
+          "created_at": "2026-06-11T04:38:35.760427+00:00",
+          "updated_at": "2026-10-08T08:20:57.842869+00:00"
+        },
+        {
+          "id": 144,
+          "tamil_name": "",
+          "is_active": true,
+          "legacy_crop_id": 97,
+          "legacy_crop_name": "Gundu malli jasmine",
+          "crop_problem_mappings": 1,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 83,
+          "created_at": "2026-08-18T08:32:08.897546+00:00",
+          "updated_at": "2026-08-18T08:32:08.897558+00:00"
+        },
+        {
+          "id": 132,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 101,
+          "legacy_crop_name": "Tuberose",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:37.218433+00:00",
+          "updated_at": "2026-06-11T04:38:37.218433+00:00"
+        },
+        {
+          "id": 123,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 99,
+          "legacy_crop_name": "Marigold",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 4,
+          "created_at": "2026-06-11T04:38:37.120697+00:00",
+          "updated_at": "2026-06-11T04:38:37.120697+00:00"
+        },
+        {
+          "id": 77,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 56,
+          "legacy_crop_name": "Tomato",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.597626+00:00",
+          "updated_at": "2026-06-11T04:38:36.597626+00:00"
+        },
+        {
+          "id": 127,
+          "tamil_name": "திரிப்ஸ்",
+          "is_active": true,
+          "legacy_crop_id": 100,
+          "legacy_crop_name": "Chrysanthemum",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:37.158939+00:00",
+          "updated_at": "2026-06-11T04:38:37.158939+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Tobacco Caterpillar": {
+      "canonical_problem_master_id": 20,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (3); DB tamil differs from canonical -- review noted",
+      "canonical_tamil": [
+        "புகையிலை புழு",
+        "புரோட்டினியா புழு"
+      ],
+      "candidates": [
+        {
+          "id": 75,
+          "tamil_name": "புகையிலை கம்பளிப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 56,
+          "legacy_crop_name": "Tomato",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.555945+00:00",
+          "updated_at": "2026-06-11T04:38:36.556997+00:00"
+        },
+        {
+          "id": 20,
+          "tamil_name": "புகையிலை கம்பளிப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 62,
+          "legacy_crop_name": "Groundnut",
+          "crop_problem_mappings": 3,
+          "canonical_mappings": 3,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:35.915966+00:00",
+          "updated_at": "2026-06-11T04:38:35.915966+00:00"
+        },
+        {
+          "id": 121,
+          "tamil_name": "புகையிலை கம்பளிப்புழு",
+          "is_active": true,
+          "legacy_crop_id": 99,
+          "legacy_crop_name": "Marigold",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:37.101210+00:00",
+          "updated_at": "2026-06-11T04:38:37.101210+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:White Grub": {
+      "canonical_problem_master_id": 23,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (2); DB tamil differs from canonical -- review noted",
+      "canonical_tamil": [
+        "வெள்ளை வேர் புழு"
+      ],
+      "candidates": [
+        {
+          "id": 23,
+          "tamil_name": "வெள்ளை வண்டு புழு",
+          "is_active": true,
+          "legacy_crop_id": 62,
+          "legacy_crop_name": "Groundnut",
+          "crop_problem_mappings": 3,
+          "canonical_mappings": 2,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:35.946948+00:00",
+          "updated_at": "2026-06-11T04:38:35.946948+00:00"
+        },
+        {
+          "id": 106,
+          "tamil_name": "வெள்ளை வண்டு புழு",
+          "is_active": true,
+          "legacy_crop_id": 54,
+          "legacy_crop_name": "Sugarcane",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.922795+00:00",
+          "updated_at": "2026-06-11T04:38:36.922795+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    },
+    "pest:Whitefly": {
+      "canonical_problem_master_id": 27,
+      "status": "superseded_legacy_duplicate",
+      "recommendation": "AUTO_RECOMMENDED",
+      "reason": "only row with canonical mappings (20)",
+      "canonical_tamil": [
+        "வெள்ளை ஈ",
+        "வெள்ளை கொசு"
+      ],
+      "candidates": [
+        {
+          "id": 42,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 67,
+          "legacy_crop_name": "Brinjal",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 1,
+          "visit_m2m_refs": 77,
+          "created_at": "2026-06-11T04:38:36.132723+00:00",
+          "updated_at": "2026-06-11T04:38:36.132723+00:00"
+        },
+        {
+          "id": 83,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 68,
+          "legacy_crop_name": "Chilli",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.665899+00:00",
+          "updated_at": "2026-06-11T04:38:36.665899+00:00"
+        },
+        {
+          "id": 76,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 56,
+          "legacy_crop_name": "Tomato",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 1,
+          "created_at": "2026-06-11T04:38:36.570545+00:00",
+          "updated_at": "2026-06-11T04:38:36.570545+00:00"
+        },
+        {
+          "id": 112,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 96,
+          "legacy_crop_name": "Jasmine (Jasminum spp.)",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.982778+00:00",
+          "updated_at": "2026-06-11T04:38:36.982778+00:00"
+        },
+        {
+          "id": 51,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 75,
+          "legacy_crop_name": "Cucumber",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.235336+00:00",
+          "updated_at": "2026-06-11T04:38:36.235336+00:00"
+        },
+        {
+          "id": 46,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 66,
+          "legacy_crop_name": "Bhendi",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 5,
+          "visit_m2m_refs": 46,
+          "created_at": "2026-06-11T04:38:36.178135+00:00",
+          "updated_at": "2026-06-11T04:38:36.178135+00:00"
+        },
+        {
+          "id": 102,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 54,
+          "legacy_crop_name": "Sugarcane",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.882225+00:00",
+          "updated_at": "2026-06-11T04:38:36.882225+00:00"
+        },
+        {
+          "id": 37,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 91,
+          "legacy_crop_name": "Cluster Bean",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.085327+00:00",
+          "updated_at": "2026-06-11T04:38:36.085327+00:00"
+        },
+        {
+          "id": 32,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 58,
+          "legacy_crop_name": "Greengram",
+          "crop_problem_mappings": 0,
+          "canonical_mappings": 0,
+          "visit_fk_refs": 0,
+          "visit_m2m_refs": 0,
+          "created_at": "2026-06-11T04:38:36.023930+00:00",
+          "updated_at": "2026-06-11T04:38:36.023930+00:00"
+        },
+        {
+          "id": 27,
+          "tamil_name": "வெள்ளை ஈ",
+          "is_active": true,
+          "legacy_crop_id": 57,
+          "legacy_crop_name": "Blackgram",
+          "crop_problem_mappings": 24,
+          "canonical_mappings": 20,
+          "visit_fk_refs": 4,
+          "visit_m2m_refs": 34,
+          "created_at": "2026-06-11T04:38:35.985345+00:00",
+          "updated_at": "2026-06-11T04:38:35.985345+00:00"
+        }
+      ],
+      "phase3b_outcome": "fresh canonical master created at --apply; this legacy row stays inactive"
+    }
+  }
+}

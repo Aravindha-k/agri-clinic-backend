@@ -129,15 +129,25 @@ class CropPestDiseaseAdminAPITests(TestCase):
         )
 
         # PM142 legacy anomaly under pest
-        self.pm142 = ProblemMaster(
+        self.pm142, _ = ProblemMaster.objects.update_or_create(
             id=142,
-            category=self.pest_cat,
-            name="Nutrient Deficiency",
-            tamil_name="",
-            is_active=True,
-            crop=None,
+            defaults={
+                "category": self.pest_cat,
+                "name": "Nutrient Deficiency",
+                "tamil_name": "",
+                "is_active": True,
+                "crop": None,
+            },
         )
-        self.pm142.save()
+        # keep the pk sequence ahead of the explicit fixture id so later
+        # auto-pk inserts in this (or a combined) test run cannot hit 142
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT setval(pg_get_serial_sequence(%s, 'id'), "
+                "GREATEST((SELECT MAX(id) FROM masters_problemmaster), 1) + 1, "
+                "false)",
+                [ProblemMaster._meta.db_table],
+            )
 
         CropProblem.objects.create(crop=self.crop_a, problem_master=self.pest_a1)
         CropProblem.objects.create(crop=self.crop_a, problem_master=self.pest_a2)

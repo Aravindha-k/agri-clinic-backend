@@ -93,6 +93,21 @@ def load_canonical(path: Optional[Path] = None):
         return json.load(fh)
 
 
+# ---------------------------------------------------------------------------
+# Phase 3A: exact-duplicate resolution manifest
+# ---------------------------------------------------------------------------
+
+def canonical_tamil_map(data) -> dict:
+    """``{(code, exact_name): set-of-canonical-Tamil-values}`` per master key."""
+    out = {}
+    for e in data:
+        for kind, code in (("pests", PEST), ("diseases", DISEASE)):
+            for it in e.get(kind, []):
+                key = (code, _exact(it["name_en"]))
+                out.setdefault(key, set()).add(_exact(it.get("name_ta") or ""))
+    return out
+
+
 def iter_items(crop_entry: dict, kind: str) -> Iterable[dict]:
     """Yield pest/disease item dicts for a crop entry."""
     yield from crop_entry.get(kind, [])
@@ -637,6 +652,18 @@ def db_counts() -> dict:
     }
 
 
+def _pick_canonical_hit(hits, canonical_mapped_ids):
+    """Deterministically choose the canonical row among exact-name hits that
+    already carry ``is_canonical=True``.  Prefer the row already referenced by
+    canonical mappings; tie-break on highest id (never silently merges)."""
+    best, best_key = None, None
+    for h in hits:
+        key = (h.id in canonical_mapped_ids, h.id)
+        if best_key is None or key > best_key:
+            best, best_key = h, key
+    return best
+
+
 def build_dry_run_plan(data=None) -> dict:
     """Compute the migration plan WITHOUT writing anything.
 
@@ -650,6 +677,16 @@ def build_dry_run_plan(data=None) -> dict:
     * Historical Visits are never touched.
     * disease category exists-but-inactive -> PLANNED reactivation only
       (reported; never performed here).
+
+    PHASE 3B design (supersedes the Phase 3A duplicate-resolution manifest):
+    * Legacy master rows are display data for historical Visits ONLY.  The
+      canonical set is identified by ``ProblemMaster.is_canonical`` -- a row
+      marked by a previous canonical run is reused; a single unambiguous
+      exact-name legacy hit is adopted (marked canonical); multiple
+      exact-name legacy duplicates are NEVER selected -- a fresh canonical
+      row is created and all legacy duplicates are deactivated.
+    * Near-name (case/spacing/spelling) variants are NEVER reused: a canonical
+      name with no exact DB match is always planned as ``create``.
 
     This function performs zero ORM writes -- SELECTs only.
     """
@@ -667,10 +704,13 @@ def build_dry_run_plan(data=None) -> dict:
         code = m.category.code if m.category_id else None
         db_masters.setdefault((code, _exact(m.name)), []).append(m)
     existing_map_objs = {}
+    existing_map_master = {}
     for cp in CropProblem.objects.select_related("crop", "problem_master__category"):
-        existing_map_objs[(_exact(cp.crop.name_en),
-                           cp.problem_master.category.code if cp.problem_master.category_id else None,
-                           _exact(cp.problem_master.name))] = cp.id
+        key = (_exact(cp.crop.name_en),
+               cp.problem_master.category.code if cp.problem_master.category_id else None,
+               _exact(cp.problem_master.name))
+        existing_map_objs[key] = cp.id
+        existing_map_master[key] = cp.problem_master_id
     db_map = set(existing_map_objs.keys())
 
     ckeys = canonical_master_keys(data)          # {(code, exact_name): {crops}}
@@ -736,47 +776,65 @@ def build_dry_run_plan(data=None) -> dict:
                     {"type": "crop", "name": c.name_en, "db_id": c.id,
                      "visit_refs": refc})
 
-    # --- masters (exact identity; variant hits -> review only) ---
+    # --- masters (Phase 3B): canonical identity = (category, exact name) +
+    #     is_canonical marker.  Legacy duplicates are never selected; a fresh
+    #     canonical row is planned when no canonical-marked/single-unambiguous
+    #     row exists.  Near variants are never reused.
     all_db_masters = list(ProblemMaster.objects.select_related("category"))
+    canonical_mapped_ids = {
+        existing_map_master[k] for k in cmap if k in existing_map_master
+    }
+    selected_master_ids = set()
     for code, mn in sorted(ckeys):
         slot = "pests" if code == PEST else "diseases"
         hits = db_masters.get((code, mn), [])
-        if len(hits) == 1:
-            entry = {"master": mn, "db_id": hits[0].id}
+        canon_hits = [h for h in hits if h.is_canonical]
+        if canon_hits:
+            chosen = _pick_canonical_hit(canon_hits, canonical_mapped_ids)
+            entry = {"master": mn, "db_id": chosen.id,
+                     "resolved_via": "canonical_marker"}
+            if len(canon_hits) > 1:
+                entry["note"] = (
+                    f"multiple canonical rows exist; selected {chosen.id}")
+            if not chosen.is_active:
+                entry["reactivate"] = True
+            plan[slot]["reuse"].append(entry)
+            selected_master_ids.add(chosen.id)
+        elif len(hits) == 1:
+            # single unambiguous legacy row -> adopted as canonical
+            entry = {"master": mn, "db_id": hits[0].id, "adopted": True}
             if not hits[0].is_active:
                 entry["reactivate"] = True
             plan[slot]["reuse"].append(entry)
-        elif len(hits) > 1:
-            plan[slot]["review"].append(
-                {"master": mn, "code": code,
-                 "candidates": [h.id for h in hits],
-                 "reason": "multiple db rows share exact name"})
-            plan["ambiguous"].append(
-                {"type": "master", "name": mn, "code": code,
-                 "candidates": [h.id for h in hits]})
+            selected_master_ids.add(hits[0].id)
         else:
-            cand = _find_master_variant(all_db_masters, code, mn)
-            if cand:
-                plan[slot]["review"].append(
-                    {"master": mn, "code": code,
-                     "candidates": [{"db_id": c.id, "name": c.name}
-                                    for c in cand],
-                     "reason": "VARIANT_REQUIRES_APPROVAL -- near-name db row "
-                               "is NOT exact; do not reuse without approval"})
+            # 0 hits, or only ambiguous legacy duplicates -> fresh canonical
+            entry = {"master": mn, "code": code}
+            if len(hits) > 1:
+                entry["legacy_duplicates"] = [h.id for h in hits]
+                entry["note"] = ("legacy duplicate rows exist; creating fresh "
+                                 "canonical master, legacy rows inactivated")
             else:
-                plan[slot]["create"].append({"master": mn, "code": code})
+                cand = _find_master_variant(all_db_masters, code, mn)
+                if cand:
+                    entry["near_variants"] = [
+                        {"db_id": c.id, "name": c.name} for c in cand]
+            plan[slot]["create"].append(entry)
 
     # --- legacy masters (pest/disease category, not canonical) -> deactivate
     for m in all_db_masters:
         code = m.category.code if m.category_id else None
         if code not in CROP_HEALTH_CODES:
             continue
-        if (code, _exact(m.name)) in ckeys:
-            continue
+        key = (code, _exact(m.name))
+        if key in ckeys and m.id in selected_master_ids:
+            continue  # selected canonical master stays active
         refc = refs["master_refs"].get(m.id, 0)
         plan["pests" if code == PEST else "diseases"]["deactivate"].append(
             {"master": m.name, "db_id": m.id, "code": code,
-             "is_active": m.is_active, "visit_refs": refc})
+             "is_active": m.is_active, "visit_refs": refc,
+             "reason": ("non-selected exact duplicate"
+                        if key in ckeys else "noncanonical")})
         if refc:
             plan["history"]["referenced_legacy"].append(
                 {"type": "master", "name": m.name, "db_id": m.id,
@@ -822,6 +880,11 @@ def build_dry_run_plan(data=None) -> dict:
 def plan_summary(plan: dict) -> dict:
     def n(section, action):
         return len(plan.get(section, {}).get(action, []))
+
+    def resolved(section):
+        return sum(1 for r in plan.get(section, {}).get("reuse", [])
+                   if r.get("resolved_via"))
+
     return {
         "crops_create": n("crops", "create"),
         "crops_reuse": n("crops", "reuse"),
@@ -831,10 +894,12 @@ def plan_summary(plan: dict) -> dict:
         "disease_category_action": plan.get("categories", {}).get(DISEASE, {}).get("action"),
         "pests_create": n("pests", "create"),
         "pests_reuse": n("pests", "reuse"),
+        "pests_resolved_via_manifest": resolved("pests"),
         "pests_review": n("pests", "review"),
         "pests_deactivate": n("pests", "deactivate"),
         "diseases_create": n("diseases", "create"),
         "diseases_reuse": n("diseases", "reuse"),
+        "diseases_resolved_via_manifest": resolved("diseases"),
         "diseases_review": n("diseases", "review"),
         "diseases_deactivate": n("diseases", "deactivate"),
         "mappings_create": n("mappings", "create"),
@@ -849,3 +914,252 @@ def plan_summary(plan: dict) -> dict:
         },
         "ambiguous": len(plan.get("ambiguous", [])),
     }
+
+
+# ---------------------------------------------------------------------------
+# PHASE 3A: real apply mode (--apply)
+# ---------------------------------------------------------------------------
+
+class ApplyGateError(Exception):
+    """Raised when an --apply safety gate fails.  Carries all failures."""
+
+    def __init__(self, errors):
+        self.errors = list(errors)
+        super().__init__("; ".join(self.errors))
+
+
+def apply_gates(data) -> list:
+    """Validate every --apply precondition.  READ-ONLY.  Returns error list.
+
+    Gates (all must pass before any persistent write):
+      1. canonical dataset validates
+      2. pest/disease problem categories exist (never create duplicates)
+      3. no ambiguous canonical CROP (a canonical crop name matching multiple
+         DB rows cannot be resolved safely without human input)
+      4. in-crop source duplicates collapse to exactly one mapping key
+
+    Master duplicates are NOT a gate: legacy duplicate rows are historical
+    display data and are never selected -- the canonical set is identified by
+    ``is_canonical`` or created fresh.
+    """
+    errors = []
+    rep = validate_canonical(data)
+    if not rep.ok:
+        errors.extend(f"canonical validation: {e}" for e in rep.errors)
+
+    Crop, ProblemCategory, ProblemMaster, CropProblem = _db_models()
+
+    # pest/disease categories must exist (never create duplicates)
+    for code in CROP_HEALTH_CODES:
+        if not ProblemCategory.objects.filter(code=code).exists():
+            errors.append(f"problem category {code!r} missing")
+
+    # canonical crop name matching multiple DB rows -> unsafe to decide
+    db_crops_exact = {}
+    for c in Crop.objects.all():
+        db_crops_exact.setdefault(_exact(c.name_en), []).append(c)
+    for e in data:
+        en = _exact(e["crop"]["name_en"])
+        if len(db_crops_exact.get(en, [])) > 1:
+            errors.append(
+                f"ambiguous canonical crop {en!r} "
+                f"candidates={[c.id for c in db_crops_exact[en]]}")
+
+    # in-crop source duplicates must collapse to one mapping key
+    cmap = canonical_map_keys(data)
+    for d in source_duplicates(data):
+        hits = [k for k in cmap
+                if k == (d["crop"], d["category"], d["name"])]
+        if len(hits) != 1:
+            errors.append(
+                f"source duplicate {d['crop']}:{d['category']}:{d['name']} "
+                f"did not collapse to one mapping")
+    return errors
+
+
+def apply_import(data=None) -> dict:
+    """Execute the canonical import inside ONE transaction.
+
+    Gate failures raise :class:`ApplyGateError` before any persistent write.
+    Any exception rolls back the whole import.
+
+    Actions:
+    * canonical crops -> create/update/reactivate; legacy crops -> inactive
+      (never deleted)
+    * pest/disease categories -> reuse existing rows; set is_active=True
+      (never create a second pest/disease category)
+    * masters: reuse the ``is_canonical`` row when present; adopt a single
+      unambiguous exact-name legacy row (mark ``is_canonical=True``);
+      otherwise create a fresh canonical row.  Legacy duplicates are NEVER
+      selected.  All pest/disease masters not in the canonical set are
+      soft-inactivated (never deleted; historical Visits keep working).
+    * canonical CropProblem -> ensure exactly one; noncanonical CropProblem
+      -> removed (mapping rows only)
+    """
+    from django.db import transaction
+
+    Crop, ProblemCategory, ProblemMaster, CropProblem = _db_models()
+    if data is None:
+        data = load_canonical()
+
+    stats = {
+        "categories_activated": 0, "categories_created": 0,
+        "crops_created": 0, "crops_updated": 0, "crops_reactivated": 0,
+        "crops_deactivated": 0, "crops_reused": 0,
+        "masters_created": 0, "masters_reused": 0, "masters_adopted": 0,
+        "masters_reactivated": 0, "masters_tamil_filled": 0,
+        "masters_deactivated": 0,
+        "mappings_created": 0, "mappings_kept": 0, "mappings_removed": 0,
+        "tamil_diffs_kept": [],
+    }
+
+    with transaction.atomic():
+        # run all gates inside the live transaction so a gate failure leaves
+        # zero persistent writes.
+        errors = apply_gates(data)
+        if errors:
+            raise ApplyGateError(errors)
+
+        ckeys = canonical_master_keys(data)
+        cmap = canonical_map_keys(data)
+        ta_sets = canonical_tamil_map(data)
+
+        # --- categories: reuse existing; activate if inactive ---
+        cats = {}
+        for code in CROP_HEALTH_CODES:
+            c = ProblemCategory.objects.get(code=code)  # gate-checked
+            if not c.is_active:
+                c.is_active = True
+                c.save(update_fields=["is_active"])
+                stats["categories_activated"] += 1
+            cats[code] = c
+
+        # --- crops ---
+        db_crops_exact = {}
+        for c in Crop.objects.all():
+            db_crops_exact.setdefault(_exact(c.name_en), []).append(c)
+        crop_ids = {}
+        for e in data:
+            en = _exact(e["crop"]["name_en"])
+            ta = _exact(e["crop"]["name_ta"])
+            hits = db_crops_exact.get(en, [])
+            if hits:
+                c = hits[0]
+                changed = False
+                if _exact(c.name_ta) != ta:
+                    c.name_ta = ta
+                    changed = True
+                    stats["crops_updated"] += 1
+                if not c.is_active:
+                    c.is_active = True
+                    changed = True
+                    stats["crops_reactivated"] += 1
+                if changed:
+                    c.save()
+                else:
+                    stats["crops_reused"] += 1
+            else:
+                c = Crop.objects.create(
+                    name_en=en, name_ta=ta, is_active=True)
+                stats["crops_created"] += 1
+            crop_ids[en] = c.id
+        for c in Crop.objects.all():
+            if _exact(c.name_en) not in crop_ids and c.is_active:
+                c.is_active = False
+                c.save(update_fields=["is_active"])
+                stats["crops_deactivated"] += 1
+
+        # --- masters ---
+        db_masters_exact = {}
+        for m in ProblemMaster.objects.select_related("category"):
+            code = m.category.code if m.category_id else None
+            db_masters_exact.setdefault((code, _exact(m.name)), []).append(m)
+
+        # ids of masters already carrying canonical-triple mappings (for
+        # stable re-run selection when multiple is_canonical rows exist)
+        canonical_mapped_ids = {
+            cp.problem_master_id
+            for cp in CropProblem.objects.select_related(
+                "crop", "problem_master__category")
+            if (_exact(cp.crop.name_en),
+                cp.problem_master.category.code
+                if cp.problem_master.category_id else None,
+                _exact(cp.problem_master.name)) in cmap
+        }
+
+        master_ids = {}
+        for (code, mn) in sorted(ckeys):
+            hits = db_masters_exact.get((code, mn), [])
+            canon_hits = [h for h in hits if h.is_canonical]
+            if canon_hits:
+                m = _pick_canonical_hit(canon_hits, canonical_mapped_ids)
+                stats["masters_reused"] += 1
+            elif len(hits) == 1:
+                # single unambiguous legacy row -> adopt as canonical
+                m = hits[0]
+                stats["masters_adopted"] += 1
+            else:
+                canon_ta = sorted(ta_sets.get((code, mn), set()) - {""})
+                m = ProblemMaster.objects.create(
+                    category=cats[code], name=mn,
+                    tamil_name=canon_ta[0] if canon_ta else "",
+                    is_active=True, is_canonical=True)
+                stats["masters_created"] += 1
+            changed = False
+            if not m.is_canonical:
+                m.is_canonical = True
+                changed = True
+            if not m.is_active:
+                m.is_active = True
+                changed = True
+                stats["masters_reactivated"] += 1
+            # Tamil: fill only when DB value is blank; a non-blank differing
+            # value is kept and reported (never silently overwritten).
+            canon_tas = ta_sets.get((code, mn), set()) - {""}
+            db_ta = _exact(m.tamil_name)
+            if not db_ta and canon_tas:
+                m.tamil_name = sorted(canon_tas)[0]
+                changed = True
+                stats["masters_tamil_filled"] += 1
+            elif db_ta and canon_tas and db_ta not in canon_tas:
+                stats["tamil_diffs_kept"].append(
+                    {"db_id": m.id, "master": mn,
+                     "db_ta": m.tamil_name,
+                     "canonical_ta": sorted(canon_tas)})
+            if changed:
+                m.save()
+            master_ids[(code, mn)] = m.id
+
+        # --- mappings: keep exact canonical pair, remove everything else ---
+        for cp in CropProblem.objects.select_related(
+                "crop", "problem_master", "problem_master__category"):
+            code = (cp.problem_master.category.code
+                    if cp.problem_master.category_id else None)
+            key = (_exact(cp.crop.name_en), code,
+                   _exact(cp.problem_master.name))
+            if key in cmap and \
+                    cp.problem_master_id == master_ids.get((code, key[2])) and \
+                    cp.crop_id == crop_ids.get(key[0]):
+                stats["mappings_kept"] += 1
+            else:
+                cp.delete()
+                stats["mappings_removed"] += 1
+        existing = set(CropProblem.objects.values_list(
+            "crop_id", "problem_master_id"))
+        for cn, code, mn in sorted(cmap):
+            pair = (crop_ids[cn], master_ids[(code, mn)])
+            if pair not in existing:
+                CropProblem.objects.create(
+                    crop_id=pair[0], problem_master_id=pair[1])
+                stats["mappings_created"] += 1
+
+        # --- deactivate non-selected pest/disease masters (never delete) ---
+        selected = set(master_ids.values())
+        for m in ProblemMaster.objects.filter(
+                category__code__in=CROP_HEALTH_CODES):
+            if m.id not in selected and m.is_active:
+                m.is_active = False
+                m.save(update_fields=["is_active"])
+                stats["masters_deactivated"] += 1
+
+    return stats
