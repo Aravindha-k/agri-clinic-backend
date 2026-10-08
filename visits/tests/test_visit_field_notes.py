@@ -4,7 +4,15 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import EmployeeProfile
-from masters.models import Crop, District, Farmer, Village
+from masters.models import (
+    Crop,
+    CropProblem,
+    District,
+    Farmer,
+    ProblemCategory,
+    ProblemMaster,
+    Village,
+)
 from mobile_api.test_helpers import assign_operational_territory, login_mobile_client
 from visits.field_notes import NOT_ADDED_BY_EMPLOYEE
 from visits.models import Visit
@@ -116,3 +124,212 @@ class VisitFieldNotesFlowTest(APITestCase):
         )
         r = self.admin_client.get(f"/api/v1/admin/visits/{visit.id}/")
         self.assertIn("NPK", r.data["field_notes"])
+
+    # Tests 24-29: Historical preservation (RULE B)
+    def test_old_visit_fk_to_inactive_problem_master_still_displays(self):
+        """Test 24: old Visit FK to inactive ProblemMaster still displays."""
+        pest_cat = ProblemCategory.objects.create(
+            code=ProblemCategory.CODE_PEST,
+            name="Pest",
+            is_active=True,
+        )
+        pest = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Old Pest",
+            is_active=True,
+        )
+        
+        visit = Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+            visit_date=timezone.now().date(),
+            problem_category=pest_cat,
+            problem_master=pest,
+        )
+        
+        # Deactivate the master
+        pest.is_active = False
+        pest.save(update_fields=["is_active"])
+        
+        # Visit detail should still show the inactive master
+        r = self.admin_client.get(f"/api/v1/admin/visits/{visit.id}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        # Check that problem is displayed
+        problems = r.data.get("problems", r.data.get("field_visit", {}).get("problems", []))
+        problem_ids = {p.get("id") for p in problems}
+        self.assertIn(pest.id, problem_ids)
+
+    def test_old_visit_m2m_containing_inactive_problem_master_still_displays(self):
+        """Test 25: old Visit M2M containing inactive ProblemMaster still displays."""
+        pest_cat = ProblemCategory.objects.create(
+            code=ProblemCategory.CODE_PEST,
+            name="Pest",
+            is_active=True,
+        )
+        pest_active = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Active Pest",
+            is_active=True,
+        )
+        pest_inactive = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Inactive Pest",
+            is_active=True,
+        )
+        
+        visit = Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+            visit_date=timezone.now().date(),
+        )
+        visit.problem_items.set([pest_active, pest_inactive])
+        
+        # Deactivate one master
+        pest_inactive.is_active = False
+        pest_inactive.save(update_fields=["is_active"])
+        
+        # Visit detail should show BOTH problems
+        r = self.admin_client.get(f"/api/v1/admin/visits/{visit.id}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        problems = r.data.get("problems", r.data.get("field_visit", {}).get("problems", []))
+        problem_ids = {p.get("id") for p in problems}
+        self.assertIn(pest_active.id, problem_ids)
+        self.assertIn(pest_inactive.id, problem_ids)
+
+    def test_visit_with_active_and_inactive_problem_items_displays_both(self):
+        """Test 26: Visit with active + inactive problem_items displays BOTH."""
+        pest_cat = ProblemCategory.objects.create(
+            code=ProblemCategory.CODE_PEST,
+            name="Pest",
+            is_active=True,
+        )
+        pest_active = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Active Pest",
+            is_active=True,
+        )
+        pest_inactive = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Inactive Pest",
+            is_active=True,
+        )
+        
+        visit = Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+            visit_date=timezone.now().date(),
+        )
+        visit.problem_items.set([pest_active, pest_inactive])
+        
+        # Deactivate one
+        pest_inactive.is_active = False
+        pest_inactive.save(update_fields=["is_active"])
+        
+        # Should display both
+        r = self.admin_client.get(f"/api/v1/admin/visits/{visit.id}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        problems = r.data.get("problems", r.data.get("field_visit", {}).get("problems", []))
+        self.assertEqual(len(problems), 2)
+
+    def test_old_visit_referencing_inactive_crop_still_displays_crop(self):
+        """Test 27: old Visit referencing inactive Crop still displays Crop."""
+        visit = Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+            visit_date=timezone.now().date(),
+        )
+        
+        # Deactivate crop
+        self.crop.is_active = False
+        self.crop.save(update_fields=["is_active"])
+        
+        # Visit detail should still show the crop
+        r = self.admin_client.get(f"/api/v1/admin/visits/{visit.id}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        crop_info = r.data.get("crop_info") or r.data.get("crop")
+        self.assertIsNotNone(crop_info)
+        self.assertEqual(crop_info.get("id"), self.crop.id)
+
+    def test_historical_read_does_not_reactivate_anything(self):
+        """Test 28: historical read does not reactivate anything."""
+        pest_cat = ProblemCategory.objects.create(
+            code=ProblemCategory.CODE_PEST,
+            name="Pest",
+            is_active=True,
+        )
+        pest = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Inactive Pest",
+            is_active=False,
+        )
+        
+        visit = Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+            visit_date=timezone.now().date(),
+            problem_category=pest_cat,
+            problem_master=pest,
+        )
+        
+        # Read visit
+        r = self.admin_client.get(f"/api/v1/admin/visits/{visit.id}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        
+        # Master should still be inactive
+        pest.refresh_from_db()
+        self.assertFalse(pest.is_active)
+
+    def test_deactivating_master_does_not_modify_visit_records(self):
+        """Test 29: deactivating master does not modify Visit records."""
+        pest_cat = ProblemCategory.objects.create(
+            code=ProblemCategory.CODE_PEST,
+            name="Pest",
+            is_active=True,
+        )
+        pest = ProblemMaster.objects.create(
+            category=pest_cat,
+            name="Active Pest",
+            is_active=True,
+        )
+        
+        visit = Visit.objects.create(
+            employee=self.employee,
+            farmer=self.farmer,
+            crop=self.crop,
+            latitude=12.97,
+            longitude=77.59,
+            visit_date=timezone.now().date(),
+            problem_category=pest_cat,
+            problem_master=pest,
+        )
+        visit.problem_items.set([pest])
+        
+        # Record initial state
+        initial_problem_master_id = visit.problem_master_id
+        initial_problem_items_count = visit.problem_items.count()
+        
+        # Deactivate master
+        pest.is_active = False
+        pest.save(update_fields=["is_active"])
+        
+        # Refresh visit
+        visit.refresh_from_db()
+        
+        # Visit records should be unchanged
+        self.assertEqual(visit.problem_master_id, initial_problem_master_id)
+        self.assertEqual(visit.problem_items.count(), initial_problem_items_count)

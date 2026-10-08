@@ -28,18 +28,20 @@ ALLOWED_CODES = frozenset(
 
 
 def _crop_list_queryset():
-    return Crop.objects.annotate(
+    return Crop.objects.filter(is_active=True).annotate(
         pest_count=Count(
             "crop_problems",
             filter=Q(
-                crop_problems__problem_master__category__code=ProblemCategory.CODE_PEST
+                crop_problems__problem_master__category__code=ProblemCategory.CODE_PEST,
+                crop_problems__problem_master__is_active=True,
             ),
             distinct=True,
         ),
         disease_count=Count(
             "crop_problems",
             filter=Q(
-                crop_problems__problem_master__category__code=ProblemCategory.CODE_DISEASE
+                crop_problems__problem_master__category__code=ProblemCategory.CODE_DISEASE,
+                crop_problems__problem_master__is_active=True,
             ),
             distinct=True,
         ),
@@ -71,11 +73,12 @@ def _serialize_master(pm: ProblemMaster) -> dict:
 
 
 def _mapped_masters_for_crop(crop_id: int, category_code: str):
-    """Strict CropProblem-only listing — no global fallback."""
+    """Strict CropProblem-only listing — no global fallback. Returns only active masters."""
     return (
         ProblemMaster.objects.filter(
             crop_problems__crop_id=crop_id,
             category__code=category_code,
+            is_active=True,
         )
         .select_related("category")
         .order_by("name", "id")
@@ -182,7 +185,7 @@ class AdminCropAvailableMastersAPI(APIView):
             ).values_list("problem_master_id", flat=True)
         )
 
-        qs = ProblemMaster.objects.filter(category=cat).select_related("category")
+        qs = ProblemMaster.objects.filter(category=cat, is_active=True).select_related("category")
         # Exclude PM142 from pest candidates always
         if cat.code == ProblemCategory.CODE_PEST:
             qs = qs.exclude(pk=PM142_NUTRIENT_MISFILE_ID)
@@ -257,6 +260,12 @@ class AdminCropMapMasterAPI(APIView):
                 message="ProblemMaster not found",
                 errors={"problem_master_id": ["Not found"]},
                 status_code=status.HTTP_404_NOT_FOUND,
+            )
+        if not master.is_active:
+            return error_response(
+                message="Cannot map inactive ProblemMaster",
+                errors={"problem_master_id": ["ProblemMaster must be active"]},
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         if not master.category_id or master.category.code not in ALLOWED_CODES:
             return error_response(

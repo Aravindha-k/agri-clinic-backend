@@ -210,6 +210,217 @@ class CropPestDiseaseAdminAPITests(TestCase):
             ).exists()
         )
 
+    def test_inactive_crop_excluded_from_list(self):
+        """Test 1: inactive Crop excluded from normal Crop/Pest/Disease list."""
+        self.crop_a.is_active = False
+        self.crop_a.save(update_fields=["is_active"])
+        
+        r = self.admin_client.get(LIST_URL)
+        self.assertEqual(r.status_code, 200, r.data)
+        by_id = {row["id"]: row for row in r.data["data"]["results"]}
+        self.assertNotIn(self.crop_a.id, by_id)
+        # Only crop_b should be present
+        self.assertIn(self.crop_b.id, by_id)
+
+    def test_active_crop_included(self):
+        """Test 2: active Crop included."""
+        r = self.admin_client.get(LIST_URL)
+        self.assertEqual(r.status_code, 200, r.data)
+        by_id = {row["id"]: row for row in r.data["data"]["results"]}
+        self.assertIn(self.crop_a.id, by_id)
+        self.assertTrue(by_id[self.crop_a.id]["is_active"])
+
+    def test_pest_count_ignores_inactive_problem_masters(self):
+        """Test 3: Pest count ignores inactive ProblemMasters."""
+        # Create inactive pest mapping
+        inactive_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="Inactive Pest",
+            tamil_name="",
+            is_active=False,
+        )
+        CropProblem.objects.create(crop=self.crop_a, problem_master=inactive_pest)
+        
+        r = self.admin_client.get(LIST_URL)
+        by_id = {row["id"]: row for row in r.data["data"]["results"]}
+        # Count should still be 2 (only active pests)
+        self.assertEqual(by_id[self.crop_a.id]["pest_count"], 2)
+
+    def test_disease_count_ignores_inactive_problem_masters(self):
+        """Test 4: Disease count ignores inactive ProblemMasters."""
+        # Create inactive disease mapping
+        inactive_disease = ProblemMaster.objects.create(
+            category=self.disease_cat,
+            name="Inactive Disease",
+            tamil_name="",
+            is_active=False,
+        )
+        CropProblem.objects.create(crop=self.crop_a, problem_master=inactive_disease)
+        
+        r = self.admin_client.get(LIST_URL)
+        by_id = {row["id"]: row for row in r.data["data"]["results"]}
+        # Count should still be 1 (only active disease)
+        self.assertEqual(by_id[self.crop_a.id]["disease_count"], 1)
+
+    def test_crop_detail_hides_inactive_pest(self):
+        """Test 5: crop detail hides inactive Pest."""
+        # Create inactive pest mapping
+        inactive_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="Inactive Pest",
+            tamil_name="",
+            is_active=False,
+        )
+        CropProblem.objects.create(crop=self.crop_a, problem_master=inactive_pest)
+        
+        r = self.admin_client.get(f"{LIST_URL}{self.crop_a.id}/")
+        self.assertEqual(r.status_code, 200, r.data)
+        pest_ids = {p["id"] for p in r.data["data"]["pests"]}
+        self.assertNotIn(inactive_pest.id, pest_ids)
+        # Should only have the 2 active pests
+        self.assertEqual(len(pest_ids), 2)
+
+    def test_crop_detail_hides_inactive_disease(self):
+        """Test 6: crop detail hides inactive Disease."""
+        # Create inactive disease mapping
+        inactive_disease = ProblemMaster.objects.create(
+            category=self.disease_cat,
+            name="Inactive Disease",
+            tamil_name="",
+            is_active=False,
+        )
+        CropProblem.objects.create(crop=self.crop_a, problem_master=inactive_disease)
+        
+        r = self.admin_client.get(f"{LIST_URL}{self.crop_a.id}/")
+        self.assertEqual(r.status_code, 200, r.data)
+        disease_ids = {d["id"] for d in r.data["data"]["diseases"]}
+        self.assertNotIn(inactive_disease.id, disease_ids)
+        # Should only have the 1 active disease
+        self.assertEqual(len(disease_ids), 1)
+
+    def test_available_masters_hides_inactive_records(self):
+        """Test 7: available-masters hides inactive records."""
+        # Create inactive pest
+        inactive_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="Inactive Pest",
+            tamil_name="",
+            is_active=False,
+        )
+        
+        r = self.admin_client.get(
+            f"{LIST_URL}{self.crop_a.id}/available-masters/",
+            {"category": "pest"},
+        )
+        self.assertEqual(r.status_code, 200, r.data)
+        ids = {row["id"] for row in r.data["data"]["results"]}
+        self.assertNotIn(inactive_pest.id, ids)
+
+    def test_mapping_inactive_problem_master_rejected(self):
+        """Test 8: mapping inactive ProblemMaster is rejected."""
+        inactive_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="Inactive Pest",
+            tamil_name="",
+            is_active=False,
+        )
+        
+        r = self.admin_client.post(
+            f"{LIST_URL}{self.crop_a.id}/map/",
+            {"problem_master_id": inactive_pest.id},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("must be active", r.data["errors"]["problem_master_id"][0])
+
+    def test_active_problem_master_maps_normally(self):
+        """Test 9: active ProblemMaster maps normally."""
+        new_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="New Active Pest",
+            tamil_name="",
+            is_active=True,
+        )
+        
+        r = self.admin_client.post(
+            f"{LIST_URL}{self.crop_a.id}/map/",
+            {"problem_master_id": new_pest.id},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(r.data["data"]["created"])
+        self.assertEqual(r.data["data"]["problem_master_id"], new_pest.id)
+
+    def test_unmap_removes_only_current_crop_mapping(self):
+        """Test 10: unmap removes only current crop mapping."""
+        # Create shared master mapped to both crops
+        shared_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="Shared Pest",
+            tamil_name="",
+            is_active=True,
+        )
+        CropProblem.objects.create(crop=self.crop_a, problem_master=shared_pest)
+        CropProblem.objects.create(crop=self.crop_b, problem_master=shared_pest)
+        
+        # Unmap from crop_a only
+        r = self.admin_client.post(
+            f"{LIST_URL}{self.crop_a.id}/unmap/",
+            {"problem_master_id": shared_pest.id},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertTrue(r.data["data"]["unmapped"])
+        self.assertTrue(r.data["data"]["problem_master_still_exists"])
+        
+        # Verify mapping removed from crop_a
+        self.assertFalse(
+            CropProblem.objects.filter(
+                crop=self.crop_a, problem_master=shared_pest
+            ).exists()
+        )
+        # Verify mapping still exists for crop_b
+        self.assertTrue(
+            CropProblem.objects.filter(
+                crop=self.crop_b, problem_master=shared_pest
+            ).exists()
+        )
+        # Verify master still active
+        shared_pest.refresh_from_db()
+        self.assertTrue(shared_pest.is_active)
+
+    def test_shared_master_remains_active_for_another_crop_after_unmap(self):
+        """Test 11: shared master remains active for another crop after unmap."""
+        # This is covered by test_unmap_removes_only_current_crop_mapping
+        # but explicitly verify the behavior here
+        shared_pest = ProblemMaster.objects.create(
+            category=self.pest_cat,
+            name="Another Shared Pest",
+            tamil_name="",
+            is_active=True,
+        )
+        CropProblem.objects.create(crop=self.crop_a, problem_master=shared_pest)
+        CropProblem.objects.create(crop=self.crop_b, problem_master=shared_pest)
+        
+        # Unmap from crop_a
+        self.admin_client.post(
+            f"{LIST_URL}{self.crop_a.id}/unmap/",
+            {"problem_master_id": shared_pest.id},
+            format="json",
+        )
+        
+        # Master should still be active and available for crop_b
+        shared_pest.refresh_from_db()
+        self.assertTrue(shared_pest.is_active)
+        
+        # Should be in crop_b's available masters (include_mapped=true to see already-mapped)
+        r = self.admin_client.get(
+            f"{LIST_URL}{self.crop_b.id}/available-masters/",
+            {"category": "pest", "include_mapped": "true"},
+        )
+        ids = {row["id"] for row in r.data["data"]["results"]}
+        self.assertIn(shared_pest.id, ids)
+
     def test_d_e_n_detail_separates_and_isolates_crops(self):
         r = self.admin_client.get(f"{LIST_URL}{self.crop_a.id}/")
         self.assertEqual(r.status_code, 200, r.data)

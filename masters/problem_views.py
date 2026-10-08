@@ -16,12 +16,37 @@ from masters.problem_serializers import (
 from utils.response import success_response, error_response
 
 
-def _problem_master_dropdown_qs(category_id=None, crop_id=None):
+def _problem_master_dropdown_qs(category_id=None, crop_id=None, category_code=None):
+    """
+    Return active ProblemMasters for dropdown.
+    
+    RULE A (NEW SELECTION): When both crop_id and category_code are provided,
+    use strict CropProblem-only filtering (no global fallback, no legacy crop FK).
+    
+    BACKWARD COMPATIBLE: When parameters are missing, use legacy behavior.
+    """
     qs = ProblemMaster.objects.filter(is_active=True).select_related("category", "crop")
-    if category_id:
-        qs = qs.filter(category_id=category_id)
-    if crop_id:
-        qs = qs.filter(models_Q_crop_filter(crop_id))
+    
+    # Strict new flow: crop_id + category_code → CropProblem only
+    if crop_id is not None and category_code is not None:
+        # Validate category_code is allowed
+        allowed_codes = {ProblemCategory.CODE_PEST, ProblemCategory.CODE_DISEASE}
+        if category_code not in allowed_codes:
+            # Return empty queryset for invalid category
+            return qs.none()
+        
+        # Strict CropProblem-only mapping
+        qs = qs.filter(
+            crop_problems__crop_id=crop_id,
+            category__code=category_code,
+        ).distinct()
+    else:
+        # Legacy behavior: use category_id if provided
+        if category_id:
+            qs = qs.filter(category_id=category_id)
+        if crop_id:
+            qs = qs.filter(models_Q_crop_filter(crop_id))
+    
     return qs.order_by("category__name", "name")
 
 
@@ -68,6 +93,7 @@ class VisitFormOptionsAPI(APIView):
     def get(self, request):
         category_id = request.query_params.get("category_id")
         crop_id = request.query_params.get("crop_id")
+        category_code = request.query_params.get("category")
 
         villages = Village.objects.filter(is_active=True)
         from accounts.territory import filter_villages_for_user
@@ -75,7 +101,9 @@ class VisitFormOptionsAPI(APIView):
         villages = filter_villages_for_user(villages, request.user)
         crops = Crop.objects.filter(is_active=True).order_by("name_en")
         categories = problem_categories_with_active_items()
-        masters = _problem_master_dropdown_qs(category_id=category_id, crop_id=crop_id)
+        masters = _problem_master_dropdown_qs(
+            category_id=category_id, crop_id=crop_id, category_code=category_code
+        )
 
         village_rows = [
             {

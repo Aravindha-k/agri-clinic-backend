@@ -109,10 +109,12 @@ def apply_problem_items_to_visit(visit, problems: list[ProblemMaster]) -> None:
 
 
 def serialize_visit_problems(visit) -> list[dict]:
+    """
+    RULE B (HISTORICAL STORED DATA): Return stored problem items without
+    filtering by current is_active. Master active status controls NEW selections only.
+    """
     items = list(
-        visit.problem_items.filter(is_active=True)
-        .select_related("category")
-        .order_by("category__name", "name")
+        visit.problem_items.select_related("category").order_by("category__name", "name")
     )
     if not items and visit.problem_master_id:
         master = visit.problem_master
