@@ -195,6 +195,17 @@ class VisitEvidenceContractTests(APITestCase):
         self.assertEqual(media_row["source_id"], 3)
         self.assertEqual(att_row["source_id"], 3)
 
+    def _capture_meta(self):
+        from django.utils import timezone
+
+        return {
+            "capture_source": "camera",
+            "capture_latitude": 12.97,
+            "capture_longitude": 77.59,
+            "capture_accuracy_m": 20,
+            "captured_at": timezone.now().isoformat(),
+        }
+
     def test_f_attachment_write_flow_unchanged(self):
         url = f"/api/v1/mobile/visits/{self.visit.id}/attachments/"
         r = self.mobile.post(
@@ -204,6 +215,7 @@ class VisitEvidenceContractTests(APITestCase):
                 "file": SimpleUploadedFile(
                     "new-att.jpg", b"y" * 128, content_type="image/jpeg"
                 ),
+                **self._capture_meta(),
             },
             format="multipart",
         )
@@ -216,7 +228,7 @@ class VisitEvidenceContractTests(APITestCase):
         png = SimpleUploadedFile("a.png", _png_bytes(), content_type="image/png")
         r = self.mobile.post(
             f"/api/v1/mobile/visits/{self.visit.id}/media/",
-            {"file": png, "media_type": "image", "client_upload_id": "ev-up-1"},
+            {"file": png, "media_type": "image", "client_upload_id": "ev-up-1", **self._capture_meta()},
             format="multipart",
         )
         self.assertIn(r.status_code, (200, 201), r.content)

@@ -8,13 +8,17 @@ from utils.response import error_response
 from visits.services.media_service import VisitMediaServiceError, attach_request_media_files
 
 
-def attach_visit_media_files(request, visit) -> error_response | None:
+def attach_visit_media_files(
+    request, visit, *, enforce_live_evidence: bool = False
+) -> error_response | None:
     """
     Process multipart media lists on request.
     Returns an error_response on validation failure, else None.
     """
     try:
-        attach_request_media_files(request, visit)
+        attach_request_media_files(
+            request, visit, enforce_live_evidence=enforce_live_evidence
+        )
     except VisitMediaServiceError as exc:
         return error_response(
             message=exc.message,

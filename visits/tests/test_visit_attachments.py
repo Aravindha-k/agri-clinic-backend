@@ -68,11 +68,26 @@ class VisitAttachmentAPITest(APITestCase):
             content_type="image/jpeg",
         )
 
+    def _capture_meta(self):
+        from django.utils import timezone
+
+        return {
+            "capture_source": "camera",
+            "capture_latitude": 10.79,
+            "capture_longitude": 78.70,
+            "capture_accuracy_m": 20,
+            "captured_at": timezone.now().isoformat(),
+        }
+
     def test_employee_upload_image(self):
         url = f"/api/v1/mobile/visits/{self.visit_id}/attachments/"
         r = self.client_a.post(
             url,
-            {"attachment_type": "image", "file": self._image_file()},
+            {
+                "attachment_type": "image",
+                "file": self._image_file(),
+                **self._capture_meta(),
+            },
             format="multipart",
         )
         self.assertEqual(r.status_code, 201)
@@ -110,7 +125,11 @@ class VisitAttachmentAPITest(APITestCase):
     def test_admin_can_view_attachments(self):
         create = self.client_a.post(
             f"/api/v1/mobile/visits/{self.visit_id}/attachments/",
-            {"attachment_type": "image", "file": self._image_file()},
+            {
+                "attachment_type": "image",
+                "file": self._image_file(),
+                **self._capture_meta(),
+            },
             format="multipart",
         )
         self.assertEqual(create.status_code, 201)
@@ -152,7 +171,11 @@ class VisitAttachmentAPITest(APITestCase):
     def test_delete_own_attachment(self):
         r = self.client_a.post(
             f"/api/v1/mobile/visits/{self.visit_id}/attachments/",
-            {"attachment_type": "image", "file": self._image_file()},
+            {
+                "attachment_type": "image",
+                "file": self._image_file(),
+                **self._capture_meta(),
+            },
             format="multipart",
         )
         att_id = r.data["data"]["id"]

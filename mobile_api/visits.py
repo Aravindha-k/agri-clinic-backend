@@ -106,7 +106,9 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
             if existing:
                 # Offline replay: still accept newly attached media for this visit.
                 # Do not recreate the visit; media attach is idempotent via client_upload_id.
-                media_error = attach_visit_media_files(request, existing)
+                media_error = attach_visit_media_files(
+                    request, existing, enforce_live_evidence=True
+                )
                 if media_error:
                     return media_error
                 visit = reload_visit(existing.pk)
@@ -130,10 +132,20 @@ class MobileVisitListCreateAPI(MobileEmployeeAPIView):
                 errors=visit_serializer.errors,
                 message=SUBMIT_VISIT_REQUIRED_MESSAGE,
             )
-        visit = visit_serializer.save()
-        media_error = attach_visit_media_files(request, visit)
-        if media_error:
-            return media_error
+        from django.db import transaction
+
+        with transaction.atomic():
+            visit = visit_serializer.save()
+            # Employee-submitted visits stay evidence-pending until at least
+            # one validated live-camera photo attaches.
+            visit.evidence_status = "pending"
+            visit.save(update_fields=["evidence_status", "updated_at"])
+            media_error = attach_visit_media_files(
+                request, visit, enforce_live_evidence=True
+            )
+            if media_error:
+                transaction.set_rollback(True)
+                return media_error
         visit = reload_visit(visit.pk)
 
         logger.info(
@@ -249,6 +261,7 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
                     code="INVALID_MEDIA",
                     status_code=400,
                 )
+        from visits.evidence_validation import parse_capture_meta
         from visits.services.media_service import VisitMediaServiceError, upload_visit_media
 
         try:
@@ -260,6 +273,8 @@ class MobileVisitMediaUploadAPI(MobileEmployeeAPIView):
                 client_upload_id=client_upload_id or None,
                 uploaded_by=request.user,
                 duration_seconds=duration_seconds,
+                capture_meta=parse_capture_meta(request.data),
+                enforce_live_evidence=True,
             )
         except VisitMediaServiceError as exc:
             return error_response(

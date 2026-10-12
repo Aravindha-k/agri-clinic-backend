@@ -112,7 +112,7 @@ class AggregateEmployeeDutyUnitTests(TestCase):
         self.assertEqual(payload["end_time"], end.isoformat())
 
     def test_auto_ended_duty(self):
-        start = self.now - timedelta(hours=9)
+        start = self.now - timedelta(seconds=DURATION_LIMIT_SECONDS)
         end = start + timedelta(seconds=DURATION_LIMIT_SECONDS)
         duty = _duty(
             self.user,
@@ -274,7 +274,7 @@ class VisitActivitySummaryDutyAPITests(APITestCase):
             is_active=False,
             completion_reason=COMPLETION_MANUAL,
         )
-        start_b = self.now - timedelta(hours=9)
+        start_b = self.now - timedelta(seconds=DURATION_LIMIT_SECONDS)
         end_b = start_b + timedelta(seconds=DURATION_LIMIT_SECONDS)
         _duty(
             self.emp_b,

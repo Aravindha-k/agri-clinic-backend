@@ -515,8 +515,10 @@ class VisitPhotoUploadAPI(DeviceSessionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from visits.evidence_validation import parse_capture_meta
         from visits.services.media_service import VisitMediaServiceError, upload_visit_media
 
+        enforce = not is_privileged_user(request.user)
         try:
             result = upload_visit_media(
                 visit=visit,
@@ -526,6 +528,8 @@ class VisitPhotoUploadAPI(DeviceSessionRequiredMixin, APIView):
                 client_upload_id=(request.data.get("client_upload_id") or "").strip()
                 or None,
                 uploaded_by=request.user,
+                capture_meta=parse_capture_meta(request.data),
+                enforce_live_evidence=enforce,
             )
         except VisitMediaServiceError as exc:
             return error_response(

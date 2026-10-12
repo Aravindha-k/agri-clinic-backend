@@ -135,6 +135,17 @@ class Visit(models.Model):
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="completed", null=True, blank=True
     )
+    EVIDENCE_STATUS_CHOICES = [
+        ("verified", "Verified"),
+        ("pending", "Pending"),
+    ]
+    evidence_status = models.CharField(
+        max_length=20,
+        choices=EVIDENCE_STATUS_CHOICES,
+        default="verified",
+        help_text="Live-camera evidence verification state. "
+        "'pending' until a compliant camera photo with valid GPS attaches.",
+    )
     duty_session = models.ForeignKey(
         "tracking.DutySession",
         on_delete=models.SET_NULL,
@@ -226,6 +237,19 @@ class VisitMedia(models.Model):
         choices=PROCESSING_STATUS_CHOICES,
         default=STATUS_READY,
     )
+    # Live-evidence capture metadata (recorded by the mobile app at capture time
+    # and validated server-side; never trusted from EXIF alone).
+    capture_source = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Evidence origin declared at upload: 'camera' for live capture.",
+    )
+    capture_latitude = models.FloatField(null=True, blank=True)
+    capture_longitude = models.FloatField(null=True, blank=True)
+    capture_accuracy_m = models.FloatField(null=True, blank=True)
+    captured_at_client = models.DateTimeField(null=True, blank=True)
+    file_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
@@ -280,6 +304,13 @@ class VisitAttachment(models.Model):
         blank=True,
         related_name="uploaded_visit_attachments",
     )
+    # Live-evidence capture metadata (validated server-side for employee images).
+    capture_source = models.CharField(max_length=16, blank=True, default="")
+    capture_latitude = models.FloatField(null=True, blank=True)
+    capture_longitude = models.FloatField(null=True, blank=True)
+    capture_accuracy_m = models.FloatField(null=True, blank=True)
+    captured_at_client = models.DateTimeField(null=True, blank=True)
+    file_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
 
     class Meta:
         ordering = ["-uploaded_at", "-id"]
