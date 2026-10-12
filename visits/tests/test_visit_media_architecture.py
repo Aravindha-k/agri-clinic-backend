@@ -40,6 +40,18 @@ def _box(box_type: bytes, payload: bytes) -> bytes:
     return struct.pack(">I", size) + box_type + payload
 
 
+def _capture_meta():
+    from django.utils import timezone
+
+    return {
+        "capture_source": "camera",
+        "capture_latitude": 12.97,
+        "capture_longitude": 77.59,
+        "capture_accuracy_m": 20,
+        "captured_at": timezone.now().isoformat(),
+    }
+
+
 def _mp4_with_duration(seconds: float, timescale: int = 1000) -> bytes:
     """Minimal ISO BMFF with moov/trak/mdia/mdhd duration for tests."""
     duration = int(seconds * timescale)
@@ -124,7 +136,7 @@ class VisitMediaArchitectureTests(TestCase):
         png = SimpleUploadedFile("shot.png", _png_bytes(), content_type="image/png")
         r = self.client.post(
             "/api/v1/mobile/visits/",
-            {**self._payload(local_sync_id="img-1"), "media": png},
+            {**self._payload(local_sync_id="img-1"), "media": png, **_capture_meta()},
             format="multipart",
         )
         self.assertEqual(r.status_code, 200, r.content)
@@ -150,7 +162,7 @@ class VisitMediaArchitectureTests(TestCase):
         png = SimpleUploadedFile("a.png", _png_bytes(), content_type="image/png")
         r = self.client.post(
             "/api/v1/mobile/visits/",
-            {**self._payload(local_sync_id="img-file"), "file": png},
+            {**self._payload(local_sync_id="img-file"), "file": png, **_capture_meta()},
             format="multipart",
         )
         self.assertEqual(r.status_code, 200, r.content)
@@ -174,6 +186,7 @@ class VisitMediaArchitectureTests(TestCase):
                 **self._payload(local_sync_id="replay-media"),
                 "media": png,
                 "client_upload_ids": "late-1",
+                **_capture_meta(),
             },
             format="multipart",
         )
@@ -278,12 +291,12 @@ class VisitMediaArchitectureTests(TestCase):
         png2 = SimpleUploadedFile("b.png", _png_bytes(), content_type="image/png")
         r1 = self.client.post(
             f"/api/v1/mobile/visits/{visit.id}/media/",
-            {"file": png1, "media_type": "image", "client_upload_id": "same"},
+            {"file": png1, "media_type": "image", "client_upload_id": "same", **_capture_meta()},
             format="multipart",
         )
         r2 = self.client.post(
             f"/api/v1/mobile/visits/{visit.id}/media/",
-            {"file": png2, "media_type": "image", "client_upload_id": "same"},
+            {"file": png2, "media_type": "image", "client_upload_id": "same", **_capture_meta()},
             format="multipart",
         )
         self.assertEqual(r1.status_code, 201)

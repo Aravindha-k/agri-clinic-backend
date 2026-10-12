@@ -76,7 +76,49 @@ class MobileVisitAttachmentListCreateAPI(DeviceSessionRequiredMixin, APIView):
                 status_code=400,
             )
 
+        # Employee image evidence must be a validated live-camera capture.
+        attachment_type = (serializer.validated_data.get("attachment_type") or "").lower()
+        file_obj = serializer.validated_data.get("file")
+        evidence_fields = {}
+        if attachment_type == "image" and file_obj and not is_privileged_user(request.user):
+            from visits.evidence_validation import (
+                parse_capture_meta,
+                validate_live_capture,
+            )
+            from visits.services.media_service import VisitMediaServiceError
+
+            try:
+                evidence_fields = validate_live_capture(
+                    visit=visit,
+                    file=file_obj,
+                    meta=parse_capture_meta(request.data),
+                    employee=request.user,
+                    error_cls=VisitMediaServiceError,
+                )
+            except VisitMediaServiceError as exc:
+                return error_response(
+                    message=exc.message,
+                    errors=exc.errors or None,
+                    code=exc.code or "MEDIA_ERROR",
+                    status_code=400,
+                )
+        elif file_obj:
+            from visits.evidence_validation import sha256_file
+
+            evidence_fields = {"file_hash": sha256_file(file_obj)}
+
         attachment = serializer.save()
+        if evidence_fields:
+            for key, value in evidence_fields.items():
+                setattr(attachment, key, value)
+            attachment.save(update_fields=list(evidence_fields))
+        if (
+            attachment_type == "image"
+            and evidence_fields.get("capture_source") == "camera"
+            and visit.evidence_status == "pending"
+        ):
+            visit.evidence_status = "verified"
+            visit.save(update_fields=["evidence_status", "updated_at"])
         _invalidate_visit_caches()
         return created_response(
             data=VisitAttachmentSerializer(
