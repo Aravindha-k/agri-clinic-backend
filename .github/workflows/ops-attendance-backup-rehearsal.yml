@@ -68,7 +68,10 @@ jobs:
           print('DUMP_FILE=' + out + ' size=' + str(os.path.getsize(out)))
           "
 
-          DUMPFILE=$(ls -t backups/deploy/rehearsal_*.dump | head -1)
+          # Timestamped names sort lexically — glob avoids an ls|head SIGPIPE.
+          dumps=(backups/deploy/rehearsal_*.dump)
+          [ ${#dumps[@]} -gt 0 ] && [ -f "${dumps[0]}" ] || { echo "ERROR: no rehearsal dump found"; exit 1; }
+          DUMPFILE="${dumps[-1]}"
           echo "dump: $DUMPFILE"
           pg_restore -l "$DUMPFILE" > /tmp/rehearsal_toc.txt && head -5 /tmp/rehearsal_toc.txt
 
