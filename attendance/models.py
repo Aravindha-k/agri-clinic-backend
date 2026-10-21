@@ -17,6 +17,7 @@ class Shop(models.Model):
     code = models.CharField(max_length=32, unique=True, db_index=True)
     name = models.CharField(max_length=160)
     address = models.TextField(blank=True, default="")
+    area = models.CharField(max_length=160, blank=True, default="")
     latitude = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True
     )

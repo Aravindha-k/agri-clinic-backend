@@ -9,6 +9,7 @@ from attendance.devices import issue_device
 from attendance.models import (
     AttendanceEmployee,
     EmployeeShopAssignment,
+    Shift,
     Shop,
 )
 
@@ -48,8 +49,21 @@ def make_field_user(employee_id="KAC-0001", username=None):
     return user, profile
 
 
-def make_shop(code="SHOP-01", name="Main Shop") -> Shop:
-    return Shop.objects.create(code=code, name=name)
+def make_shop(code="SHOP-01", name="Main Shop", **kwargs) -> Shop:
+    return Shop.objects.create(code=code, name=name, **kwargs)
+
+
+def make_shift(shop, name="Morning", start_time="09:00", end_time="18:00", **kwargs) -> Shift:
+    return Shift.objects.create(
+        shop=shop, name=name, start_time=start_time, end_time=end_time, **kwargs
+    )
+
+
+def admin_headers(testcase, username="att_admin"):
+    """Authenticate an APITestCase client as a staff admin. Returns {} so
+    callers can write client.post(url, data, format="json", **headers)."""
+    testcase.client.force_authenticate(user=make_admin(username))
+    return {}
 
 
 def make_device(shop, device_uid="dev-001", name="Kiosk 1", registered_by=None):
