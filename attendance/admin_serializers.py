@@ -17,12 +17,15 @@ from attendance.models import (
 
 
 class ShopSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(required=False, allow_blank=True, max_length=32)
+
     class Meta:
         model = Shop
         fields = [
             "id",
             "code",
             "name",
+            "area",
             "address",
             "latitude",
             "longitude",
@@ -32,6 +35,11 @@ class ShopSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+    def create(self, validated_data):
+        from attendance.services import create_shop
+
+        return create_shop(**validated_data)
 
 
 class AttendanceDeviceSerializer(serializers.ModelSerializer):
@@ -70,8 +78,24 @@ class DeviceRegisterResponseSerializer(serializers.Serializer):
 
 
 class AttendanceEmployeeSerializer(serializers.ModelSerializer):
-    """Admin CRUD for attendance-only employees (no login credentials)."""
+    """Admin CRUD for attendance-only employees (no login credentials).
 
+    Create accepts `shop` (pk) and atomically creates the employee plus the
+    EmployeeShopAssignment that records where they work (handled in the view).
+    Transfers use the `transfer` action. employee_code is auto-generated.
+    """
+
+    employee_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=32
+    )
+    # Optional initial shop assignment — write-only on input.
+    shop = serializers.PrimaryKeyRelatedField(
+        queryset=Shop.objects.all(), write_only=True, required=False,
+        allow_null=True,
+    )
+    shop_id = serializers.SerializerMethodField()
+    shop_code = serializers.SerializerMethodField()
+    shop_name = serializers.SerializerMethodField()
     linked_employee_id = serializers.CharField(
         source="linked_profile.employee_id", read_only=True, default=None
     )
@@ -89,6 +113,10 @@ class AttendanceEmployeeSerializer(serializers.ModelSerializer):
             "employee_code",
             "full_name",
             "phone",
+            "shop",
+            "shop_id",
+            "shop_code",
+            "shop_name",
             "is_active",
             "linked_profile",
             "linked_employee_id",
@@ -105,11 +133,33 @@ class AttendanceEmployeeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def _active_shop(self, obj: AttendanceEmployee) -> Shop | None:
+        assignment = (
+            obj.shop_assignments.filter(is_active=True)
+            .select_related("shop")
+            .first()
+        )
+        return assignment.shop if assignment else None
+
+    def get_shop_id(self, obj):
+        shop = self._active_shop(obj)
+        return shop.id if shop else None
+
+    def get_shop_code(self, obj):
+        shop = self._active_shop(obj)
+        return shop.code if shop else None
+
+    def get_shop_name(self, obj):
+        shop = self._active_shop(obj)
+        return shop.name if shop else None
+
     def validate_employee_code(self, value: str) -> str:
-        value = (value or "").strip()
-        if not value:
-            raise serializers.ValidationError("employee_code is required.")
-        return value
+        return (value or "").strip()
+
+    def update(self, instance, validated_data):
+        # `shop` is write-only context for create; a PATCH must not setattr it.
+        validated_data.pop("shop", None)
+        return super().update(instance, validated_data)
 
 
 class EmployeeShopAssignmentSerializer(serializers.ModelSerializer):

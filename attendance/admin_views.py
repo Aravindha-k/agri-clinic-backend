@@ -31,7 +31,12 @@ from attendance.models import (
     Shift,
     Shop,
 )
-from attendance.services import _audit
+from attendance.services import (
+    AttendanceError,
+    _audit,
+    create_employee,
+    transfer_employee,
+)
 from utils.permissions import IsStaffAdmin
 from utils.response import created_response, error_response, success_response
 
@@ -133,10 +138,70 @@ class AttendanceEmployeeViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
     filterset_fields = ["is_active"]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
-    def perform_create(self, serializer):
-        obj = serializer.save(created_by=self.request.user)
-        _audit(action="EMPLOYEE_SAVED", actor=self.request.user, entity=obj,
-               request=self.request)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vd = serializer.validated_data
+        try:
+            employee = create_employee(
+                full_name=vd["full_name"],
+                phone=vd.get("phone", ""),
+                shop=vd.get("shop"),
+                employee_code=vd.get("employee_code") or None,
+                linked_profile=vd.get("linked_profile"),
+                created_by=request.user,
+            )
+        except AttendanceError as exc:
+            return error_response(message=str(exc), code=exc.code)
+        _audit(action="EMPLOYEE_SAVED", actor=request.user, entity=employee,
+               request=request)
+        assignment = employee.shop_assignments.filter(is_active=True).first()
+        if assignment is not None:
+            _audit(action="ASSIGNMENT_SAVED", actor=request.user,
+                   entity=assignment, request=request)
+        return created_response(
+            data=AttendanceEmployeeSerializer(employee).data,
+            message="Employee created.",
+        )
+
+    @action(detail=True, methods=["post"])
+    def transfer(self, request, pk=None):
+        employee = self.get_object()
+        shop_id = request.data.get("shop_id") or request.data.get("shop")
+        if not shop_id:
+            return error_response(
+                message="shop_id is required.", code="SHOP_REQUIRED"
+            )
+        shop = Shop.objects.filter(pk=shop_id).first()
+        if shop is None:
+            return error_response(
+                message="Shop not found.", code="SHOP_NOT_FOUND",
+                status_code=404,
+            )
+        try:
+            assignment, previous_ids = transfer_employee(
+                employee, shop, actor=request.user
+            )
+        except AttendanceError as exc:
+            return error_response(message=str(exc), code=exc.code)
+        _audit(
+            action="EMPLOYEE_TRANSFERRED",
+            actor=request.user,
+            entity=assignment,
+            metadata={
+                "employee_code": employee.employee_code,
+                "from_shop_ids": previous_ids,
+                "to_shop_id": shop.id,
+            },
+            request=request,
+        )
+        return success_response(
+            data={
+                "employee": AttendanceEmployeeSerializer(employee).data,
+                "assignment": EmployeeShopAssignmentSerializer(assignment).data,
+            },
+            message="Employee transferred.",
+        )
 
     def perform_update(self, serializer):
         obj = serializer.save(updated_by=self.request.user)

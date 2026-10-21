@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -317,3 +317,109 @@ def open_session(employee: AttendanceEmployee, shop: Shop) -> AttendanceEvent | 
     if latest is not None and latest.event_type == AttendanceEvent.EVENT_CHECK_IN:
         return latest
     return None
+
+
+# --------------------------------------------------------------------------
+# Admin helpers: auto codes, employee creation with assignment, transfer
+# --------------------------------------------------------------------------
+
+
+def _next_numeric_code(model, field: str, prefix: str, width: int = 4) -> str:
+    """Next ``PREFIX-000N`` code. Race-safe only inside a retry loop on the
+    unique constraint — callers must catch IntegrityError and retry."""
+    startswith = f"{field}__startswith"
+    existing = model.objects.filter(**{startswith: f"{prefix}-"}).values_list(
+        field, flat=True
+    )
+    highest = 0
+    for value in existing:
+        suffix = str(value).rsplit("-", 1)[-1]
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return f"{prefix}-{highest + 1:0{width}d}"
+
+
+def create_shop(*, name: str, area: str = "", code: str | None = None,
+                **fields) -> Shop:
+    """Create a shop, auto-generating ``code`` when not supplied."""
+    explicit = bool(code)
+    for _attempt in range(10):
+        candidate = code or _next_numeric_code(Shop, "code", "SHOP")
+        try:
+            with transaction.atomic():
+                return Shop.objects.create(
+                    code=candidate, name=name, area=area, **fields
+                )
+        except IntegrityError:
+            if explicit:
+                raise
+    raise AttendanceError("Could not allocate a unique shop code.",
+                          code="SHOP_CODE_EXHAUSTED")
+
+
+def create_employee(*, full_name: str, phone: str = "", shop: Shop | None = None,
+                    employee_code: str | None = None,
+                    linked_profile=None, created_by=None) -> AttendanceEmployee:
+    """Create an AttendanceEmployee (+ optional initial shop assignment)
+    atomically. Never creates a Django user or Field Officer credentials."""
+    if shop is not None and not shop.is_active:
+        raise AttendanceError("Selected shop is not active.",
+                              code="SHOP_INACTIVE")
+    explicit = bool(employee_code)
+    for _attempt in range(10):
+        candidate = employee_code or _next_numeric_code(
+            AttendanceEmployee, "employee_code", "EMP"
+        )
+        try:
+            with transaction.atomic():
+                emp = AttendanceEmployee.objects.create(
+                    employee_code=candidate,
+                    full_name=full_name,
+                    phone=phone,
+                    linked_profile=linked_profile,
+                    created_by=created_by,
+                    updated_by=created_by,
+                )
+                if shop is not None:
+                    EmployeeShopAssignment.objects.create(
+                        employee=emp, shop=shop, is_active=True,
+                        created_by=created_by,
+                    )
+                return emp
+        except IntegrityError:
+            if explicit:
+                raise
+    raise AttendanceError("Could not allocate a unique employee code.",
+                          code="EMPLOYEE_CODE_EXHAUSTED")
+
+
+def transfer_employee(employee: AttendanceEmployee, to_shop: Shop,
+                      actor=None) -> tuple[EmployeeShopAssignment, list[int]]:
+    """Atomically end all active assignments and activate one for ``to_shop``.
+
+    Historical assignments/events/summaries are preserved — only is_active /
+    valid_to change. Returns (assignment, previous_active_shop_ids).
+    """
+    if not to_shop.is_active:
+        raise AttendanceError("Destination shop is not active.",
+                              code="SHOP_INACTIVE")
+    if not employee.is_active:
+        raise AttendanceError("Employee is not active.",
+                              code="EMPLOYEE_INACTIVE")
+    with transaction.atomic():
+        active_qs = EmployeeShopAssignment.objects.select_for_update().filter(
+            employee=employee, is_active=True
+        )
+        previous_shop_ids = list(active_qs.values_list("shop_id", flat=True))
+        today = timezone.localdate()
+        active_qs.update(is_active=False, valid_to=today)
+        assignment, created = EmployeeShopAssignment.objects.get_or_create(
+            employee=employee,
+            shop=to_shop,
+            defaults={"is_active": True, "created_by": actor},
+        )
+        if not created:
+            assignment.is_active = True
+            assignment.valid_to = None
+            assignment.save(update_fields=["is_active", "valid_to", "updated_at"])
+    return assignment, previous_shop_ids
