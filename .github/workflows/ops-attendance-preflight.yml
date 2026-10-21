@@ -1,0 +1,75 @@
+name: Ops Attendance Preflight
+
+# Manual/one-shot READ-ONLY production verification for the attendance release.
+# Runs on the server; does not deploy, mutate data, or restart services.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Attendance preflight (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Read-only preflight checks on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /var/www/agri-backend/agri-clinic-backend
+          echo '=== GIT ==='
+          git rev-parse HEAD
+          git status --porcelain | grep -v '__pycache__\|\.env\|media/\|staticfiles/\|backups/\|\.log' || true
+          echo '=== SERVICE ==='
+          systemctl is-active agri-backend.service || true
+          curl -fsS --max-time 15 http://127.0.0.1:8000/healthz/ || true
+          echo
+          echo '=== DISK ==='
+          df -h /var/www | tail -2
+          echo '=== PG TOOLS ==='
+          pg_dump --version || true
+          pg_restore --version || true
+          echo '=== DJANGO ==='
+          source .venv/bin/activate
+          python manage.py showmigrations attendance || true
+          echo '--- pending plan ---'
+          python manage.py migrate --plan || true
+          python -c "
+          import os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          import django; django.setup()
+          from django.db import connection
+          cur = connection.cursor()
+          cur.execute(\"SELECT app, name, applied FROM django_migrations WHERE app='attendance' ORDER BY applied\")
+          print('ATTENDANCE_MIGRATIONS_APPLIED=', cur.fetchall())
+          cur.execute(\"SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'attendance_%' ORDER BY table_name\")
+          print('ATTENDANCE_TABLES=', [r[0] for r in cur.fetchall()])
+          for t in ('accounts_employeeprofile','masters_farmer','visits_visit','tracking_dutysession'):
+              cur.execute('SELECT COUNT(*) FROM ' + t)
+              print('COUNT', t, '=', cur.fetchone()[0])
+          "
+          REMOTE

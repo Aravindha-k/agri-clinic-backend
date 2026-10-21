@@ -1,0 +1,90 @@
+name: Ops Attendance Backup Rehearsal
+
+# Manual one-shot: creates a pg_dump on EC2 and RESTORES IT INTO A SCRATCH
+# DATABASE ONLY (agri_restore_test). Never touches agri_clinic_db contents.
+# Proves the pre-deploy backup is actually recoverable before the release.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  rehearsal:
+    name: Backup + scratch-restore rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Backup and scratch-restore on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          DEPLOY_PATH="/var/www/agri-backend/agri-clinic-backend"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /var/www/agri-backend/agri-clinic-backend
+          mkdir -p backups/deploy
+          source .venv/bin/activate
+
+          echo '=== CREATE DUMP ==='
+          python -c "
+          import datetime, os, subprocess, sys
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          import django; django.setup()
+          from django.conf import settings
+          db = settings.DATABASES['default']
+          env = dict(os.environ)
+          if db.get('PASSWORD'):
+              env['PGPASSWORD'] = db['PASSWORD']
+          stamp = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+          out = 'backups/deploy/rehearsal_' + stamp + '.dump'
+          cmd = ['pg_dump','-Fc','-h',db.get('HOST') or '127.0.0.1',
+                 '-p',str(db.get('PORT') or 5432),'-U',db.get('USER') or 'postgres',
+                 '-d',db.get('NAME'),'-f',out]
+          r = subprocess.run(cmd, env=env, capture_output=True, text=True)
+          print('pg_dump exit', r.returncode)
+          if r.returncode:
+              print(r.stderr[:500]); sys.exit(1)
+          print('DUMP_FILE=' + out + ' size=' + str(os.path.getsize(out)))
+          "
+
+          DUMPFILE=$(ls -t backups/deploy/rehearsal_*.dump | head -1)
+          echo "dump: $DUMPFILE"
+          pg_restore -l "$DUMPFILE" | head -5
+
+          echo '=== SCRATCH RESTORE ==='
+          sudo -u postgres psql -c 'DROP DATABASE IF EXISTS agri_restore_test'
+          sudo -u postgres createdb agri_restore_test
+          sudo -u postgres pg_restore -d agri_restore_test \
+            --no-owner --no-privileges "$DUMPFILE" || true
+
+          echo '=== VERIFY COUNTS ==='
+          sudo -u postgres psql -d agri_restore_test -c "SELECT count(*) AS users FROM auth_user;"
+          sudo -u postgres psql -d agri_restore_test -c "SELECT count(*) AS farmers FROM masters_farmer;"
+          sudo -u postgres psql -d agri_restore_test -c "SELECT count(*) AS visits FROM visits_visit;"
+
+          echo '=== CLEANUP SCRATCH ==='
+          sudo -u postgres dropdb agri_restore_test
+          echo '=== DONE — dump retained on server; copy off-server before release ==='
+          ls -la backups/deploy/ | tail -5
+          REMOTE
