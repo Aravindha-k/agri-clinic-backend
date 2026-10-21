@@ -45,6 +45,16 @@ log "Deploy path: ${DEPLOY_PATH}"
 log "Service: ${SERVICE_NAME}"
 log "Branch: ${DEPLOY_BRANCH}"
 
+# Prevent overlapping deploys — the GitHub workflow serializes runs via its
+# concurrency group, but a manual run could still collide with a workflow run
+# or another operator's session on the server itself.
+exec 9>"${DEPLOY_LOCK_FILE:-/var/lock/agri-backend-deploy.lock}" \
+  || fail "Cannot open deploy lock file"
+if ! flock -n 9; then
+  fail "Another deployment is in progress (lock: ${DEPLOY_LOCK_FILE:-/var/lock/agri-backend-deploy.lock}). Wait for it to finish."
+fi
+log "Deploy lock acquired"
+
 [ -d "$DEPLOY_PATH" ] || fail "Deploy path does not exist: $DEPLOY_PATH"
 cd "$DEPLOY_PATH"
 
@@ -208,6 +218,46 @@ log "Checking migration consistency (no new migrations allowed in production)"
 
 log "Migration plan"
 "$PYTHON" manage.py migrate --plan
+
+# Optional gate: when EXPECTED_PENDING_MIGRATIONS is set (space/comma-separated
+# "app.name" entries), the deploy aborts if the pending set differs. This makes
+# "which migrations will run" an explicit release decision, not a surprise.
+if [ -n "${EXPECTED_PENDING_MIGRATIONS:-}" ]; then
+  log "Verifying pending migrations match EXPECTED_PENDING_MIGRATIONS"
+  EXPECTED_PENDING_MIGRATIONS="${EXPECTED_PENDING_MIGRATIONS}" "$PYTHON" <<'PY'
+import os
+import re
+import subprocess
+import sys
+
+expected = {
+    m.strip()
+    for m in re.split(r"[,\s]+", os.environ["EXPECTED_PENDING_MIGRATIONS"])
+    if m.strip()
+}
+out = subprocess.run(
+    ["./.venv/bin/python", "manage.py", "migrate", "--plan"],
+    capture_output=True, text=True,
+)
+if out.returncode != 0:
+    print("[deploy] ERROR: migrate --plan failed", file=sys.stderr)
+    print(out.stderr[-1000:], file=sys.stderr)
+    raise SystemExit(1)
+pending = set()
+current_app = None
+for line in (out.stdout or "").splitlines():
+    line = line.strip()
+    if re.fullmatch(r"[a-z_]+\.\d{4}_.*", line):
+        pending.add(line)
+
+if pending != expected:
+    print("[deploy] ERROR: pending migrations do not match release plan", file=sys.stderr)
+    print(f"[deploy]   expected: {sorted(expected)}", file=sys.stderr)
+    print(f"[deploy]   pending:  {sorted(pending)}", file=sys.stderr)
+    raise SystemExit(1)
+print(f"[deploy] pending migrations verified: {sorted(pending)}")
+PY
+fi
 
 log "Applying migrations"
 "$PYTHON" manage.py migrate --noinput

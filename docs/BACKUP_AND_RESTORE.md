@@ -99,3 +99,13 @@ Pass criteria: `pg_restore` exit 0, core table row counts > 0,
 2. Take a fresh `pg_dump` of the broken DB (post-incident backup).
 3. `pg_restore -d agri_clinic_db --clean --if-exists --no-owner --no-privileges <dump>`
 4. `systemctl start agri-backend.service`, curl `/healthz/`, spot-check admin login.
+
+## Deploy serialization and migration gating
+
+- `scripts/deploy_production.sh` takes a non-blocking `flock` on
+  `/var/lock/agri-backend-deploy.lock` (override via `DEPLOY_LOCK_FILE`), so a
+  manual deploy can never overlap a workflow deploy or another operator.
+- The GitHub workflow additionally serializes runs via
+  `concurrency: backend-deploy-production` (queued, not cancelled).
+- Set `EXPECTED_PENDING_MIGRATIONS="attendance.0001_initial attendance.0002_attendance_employee attendance.0003_alter_attendanceauditlog_action"`
+  before deploy to make the release abort if any other migration is pending.
