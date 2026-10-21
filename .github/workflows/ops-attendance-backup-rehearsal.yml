@@ -70,7 +70,7 @@ jobs:
 
           DUMPFILE=$(ls -t backups/deploy/rehearsal_*.dump | head -1)
           echo "dump: $DUMPFILE"
-          pg_restore -l "$DUMPFILE" | head -5
+          pg_restore -l "$DUMPFILE" > /tmp/rehearsal_toc.txt && head -5 /tmp/rehearsal_toc.txt
 
           echo '=== SCRATCH RESTORE ==='
           sudo -u postgres psql -c 'DROP DATABASE IF EXISTS agri_restore_test'
