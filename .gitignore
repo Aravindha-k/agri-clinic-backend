@@ -20,6 +20,9 @@ build/
 .coverage
 htmlcov/
 backups/
+*.dump
+*.sql
+!db_seed*.sql
 agri_local_data.json
 agri_local_data_*.json
 *.log

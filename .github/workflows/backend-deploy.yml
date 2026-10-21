@@ -67,6 +67,12 @@ jobs:
              fi
              source .venv/bin/activate
              pip install -r requirements.txt
+             echo '[deploy] MANDATORY pre-migration DB backup (fails deploy on error)'
+             bash scripts/pre_deploy_backup.sh
+             echo '[deploy] verifying no unapplied model changes'
+             python manage.py makemigrations --check --dry-run
+             echo '[deploy] migration plan'
+             python manage.py migrate --plan
              python manage.py migrate --noinput
              python manage.py import_crop_pests
              python manage.py collectstatic --noinput

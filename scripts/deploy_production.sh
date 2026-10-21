@@ -120,54 +120,15 @@ log "Upgrading pip and installing requirements"
 "$PYTHON" -m pip install --upgrade pip
 "$PYTHON" -m pip install -r requirements.txt
 
-optional_db_backup() {
+mandatory_db_backup() {
   if [ "$RUN_DB_BACKUP" != "true" ]; then
-    log "Skipping database backup (RUN_DB_BACKUP=${RUN_DB_BACKUP})"
-    return 0
+    fail "RUN_DB_BACKUP=${RUN_DB_BACKUP} — pre-migration backup is mandatory. To override deliberately, export SKIP_DB_BACKUP=YES and ALLOW_UNSAFE_DEPLOY=YES (documented in docs/BACKUP_AND_RESTORE.md)."
   fi
-  log "Creating optional pre-migration database backup"
-  "$PYTHON" <<'PY' || log "WARNING: backup step failed - continuing (set RUN_DB_BACKUP=false to skip)"
-import datetime
-import os
-import subprocess
-from pathlib import Path
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-import django
-
-django.setup()
-from django.conf import settings
-
-db = settings.DATABASES["default"]
-engine = db.get("ENGINE", "")
-if "postgresql" not in engine:
-    print("[deploy] skip backup: non-PostgreSQL engine")
-    raise SystemExit(0)
-
-backup_dir = Path(settings.BASE_DIR) / "backups" / "deploy"
-backup_dir.mkdir(parents=True, exist_ok=True)
-stamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-outfile = backup_dir / f"pre_deploy_{stamp}.sql"
-
-env = os.environ.copy()
-password = db.get("PASSWORD") or ""
-if password:
-    env["PGPASSWORD"] = password
-
-cmd = [
-    "pg_dump",
-    "-h", str(db.get("HOST") or "127.0.0.1"),
-    "-p", str(db.get("PORT") or "5432"),
-    "-U", str(db.get("USER") or "postgres"),
-    "-d", str(db.get("NAME") or "postgres"),
-    "-f", str(outfile),
-]
-subprocess.run(cmd, env=env, check=True, stdout=subprocess.DEVNULL)
-print(f"[deploy] backup saved: {outfile}")
-PY
+  log "Running mandatory pre-migration database backup"
+  bash scripts/pre_deploy_backup.sh \
+    || fail "Pre-migration backup failed or was not verified. Deployment aborted before any database change."
 }
-
-optional_db_backup
+mandatory_db_backup
 
 log "Verifying AWS PostgreSQL configuration (no credentials printed)"
 "$PYTHON" <<'PY'
