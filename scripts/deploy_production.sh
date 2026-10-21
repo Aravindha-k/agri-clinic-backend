@@ -45,6 +45,16 @@ log "Deploy path: ${DEPLOY_PATH}"
 log "Service: ${SERVICE_NAME}"
 log "Branch: ${DEPLOY_BRANCH}"
 
+# Prevent overlapping deploys — the GitHub workflow serializes runs via its
+# concurrency group, but a manual run could still collide with a workflow run
+# or another operator's session on the server itself.
+exec 9>"${DEPLOY_LOCK_FILE:-/var/lock/agri-backend-deploy.lock}" \
+  || fail "Cannot open deploy lock file"
+if ! flock -n 9; then
+  fail "Another deployment is in progress (lock: ${DEPLOY_LOCK_FILE:-/var/lock/agri-backend-deploy.lock}). Wait for it to finish."
+fi
+log "Deploy lock acquired"
+
 [ -d "$DEPLOY_PATH" ] || fail "Deploy path does not exist: $DEPLOY_PATH"
 cd "$DEPLOY_PATH"
 
@@ -120,54 +130,15 @@ log "Upgrading pip and installing requirements"
 "$PYTHON" -m pip install --upgrade pip
 "$PYTHON" -m pip install -r requirements.txt
 
-optional_db_backup() {
+mandatory_db_backup() {
   if [ "$RUN_DB_BACKUP" != "true" ]; then
-    log "Skipping database backup (RUN_DB_BACKUP=${RUN_DB_BACKUP})"
-    return 0
+    fail "RUN_DB_BACKUP=${RUN_DB_BACKUP} — pre-migration backup is mandatory. To override deliberately, export SKIP_DB_BACKUP=YES and ALLOW_UNSAFE_DEPLOY=YES (documented in docs/BACKUP_AND_RESTORE.md)."
   fi
-  log "Creating optional pre-migration database backup"
-  "$PYTHON" <<'PY' || log "WARNING: backup step failed - continuing (set RUN_DB_BACKUP=false to skip)"
-import datetime
-import os
-import subprocess
-from pathlib import Path
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-import django
-
-django.setup()
-from django.conf import settings
-
-db = settings.DATABASES["default"]
-engine = db.get("ENGINE", "")
-if "postgresql" not in engine:
-    print("[deploy] skip backup: non-PostgreSQL engine")
-    raise SystemExit(0)
-
-backup_dir = Path(settings.BASE_DIR) / "backups" / "deploy"
-backup_dir.mkdir(parents=True, exist_ok=True)
-stamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-outfile = backup_dir / f"pre_deploy_{stamp}.sql"
-
-env = os.environ.copy()
-password = db.get("PASSWORD") or ""
-if password:
-    env["PGPASSWORD"] = password
-
-cmd = [
-    "pg_dump",
-    "-h", str(db.get("HOST") or "127.0.0.1"),
-    "-p", str(db.get("PORT") or "5432"),
-    "-U", str(db.get("USER") or "postgres"),
-    "-d", str(db.get("NAME") or "postgres"),
-    "-f", str(outfile),
-]
-subprocess.run(cmd, env=env, check=True, stdout=subprocess.DEVNULL)
-print(f"[deploy] backup saved: {outfile}")
-PY
+  log "Running mandatory pre-migration database backup"
+  bash scripts/pre_deploy_backup.sh \
+    || fail "Pre-migration backup failed or was not verified. Deployment aborted before any database change."
 }
-
-optional_db_backup
+mandatory_db_backup
 
 log "Verifying AWS PostgreSQL configuration (no credentials printed)"
 "$PYTHON" <<'PY'
@@ -247,6 +218,48 @@ log "Checking migration consistency (no new migrations allowed in production)"
 
 log "Migration plan"
 "$PYTHON" manage.py migrate --plan
+
+# Optional gate: when EXPECTED_PENDING_MIGRATIONS is set (space/comma-separated
+# "app.name" entries), the deploy aborts if the pending set differs. This makes
+# "which migrations will run" an explicit release decision, not a surprise.
+if [ -n "${EXPECTED_PENDING_MIGRATIONS:-}" ]; then
+  log "Verifying pending migrations match EXPECTED_PENDING_MIGRATIONS"
+  EXPECTED_PENDING_MIGRATIONS="${EXPECTED_PENDING_MIGRATIONS}" "$PYTHON" <<'PY'
+import os
+import re
+import subprocess
+import sys
+
+raw = os.environ["EXPECTED_PENDING_MIGRATIONS"].strip()
+if raw.upper() in {"NONE", "NO_MIGRATIONS", "-"}:
+    expected = set()
+else:
+    expected = {
+        m.strip() for m in re.split(r"[,\s]+", raw) if m.strip()
+    }
+out = subprocess.run(
+    ["./.venv/bin/python", "manage.py", "migrate", "--plan"],
+    capture_output=True, text=True,
+)
+if out.returncode != 0:
+    print("[deploy] ERROR: migrate --plan failed", file=sys.stderr)
+    print(out.stderr[-1000:], file=sys.stderr)
+    raise SystemExit(1)
+pending = set()
+current_app = None
+for line in (out.stdout or "").splitlines():
+    line = line.strip()
+    if re.fullmatch(r"[a-z_]+\.\d{4}_.*", line):
+        pending.add(line)
+
+if pending != expected:
+    print("[deploy] ERROR: pending migrations do not match release plan", file=sys.stderr)
+    print(f"[deploy]   expected: {sorted(expected)}", file=sys.stderr)
+    print(f"[deploy]   pending:  {sorted(pending)}", file=sys.stderr)
+    raise SystemExit(1)
+print(f"[deploy] pending migrations verified: {sorted(pending)}")
+PY
+fi
 
 log "Applying migrations"
 "$PYTHON" manage.py migrate --noinput
