@@ -230,11 +230,13 @@ import re
 import subprocess
 import sys
 
-expected = {
-    m.strip()
-    for m in re.split(r"[,\s]+", os.environ["EXPECTED_PENDING_MIGRATIONS"])
-    if m.strip()
-}
+raw = os.environ["EXPECTED_PENDING_MIGRATIONS"].strip()
+if raw.upper() in {"NONE", "NO_MIGRATIONS", "-"}:
+    expected = set()
+else:
+    expected = {
+        m.strip() for m in re.split(r"[,\s]+", raw) if m.strip()
+    }
 out = subprocess.run(
     ["./.venv/bin/python", "manage.py", "migrate", "--plan"],
     capture_output=True, text=True,
