@@ -168,6 +168,9 @@ urlpatterns = [
     path("api/v1/", include("api.admin.urls")),
     path("api/v1/admin/", include("api.admin.urls")),
     path("api/v1/mobile/", include("mobile_api.urls")),
+    # Shop attendance (device-facing + staff admin)
+    path("api/v1/attendance/", include("attendance.urls")),
+    path("api/v1/admin/attendance/", include("attendance.admin_urls")),
 ]
 
 # Serve uploaded media from Django only in DEBUG. Production must use Nginx
