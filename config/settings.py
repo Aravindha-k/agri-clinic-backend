@@ -272,7 +272,23 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "django_extensions",
     "mobile_api",
+    "attendance.apps.AttendanceConfig",
 ]
+
+# --------------------------------------------------
+# ATTENDANCE MODULE (shop biometric / kiosk check-in)
+# --------------------------------------------------
+# Temporary employee-selection test mode. Disabled in production unless
+# explicitly enabled for an authorized pilot.
+ATTENDANCE_TEST_MODE_ENABLED = env_bool(
+    "ATTENDANCE_TEST_MODE_ENABLED", not IS_PRODUCTION
+)
+# Dotted path to a BiometricVerifier implementation. Default = manual test
+# verifier; replace when a fingerprint scanner SDK is integrated.
+ATTENDANCE_BIOMETRIC_BACKEND = os.getenv(
+    "ATTENDANCE_BIOMETRIC_BACKEND",
+    "attendance.biometrics.ManualTestVerifier",
+)
 
 # --------------------------------------------------
 # INTERNATIONALIZATION / TIMEZONE
@@ -413,6 +429,7 @@ REST_FRAMEWORK = {
         "login": "10/minute",
         "refresh": "30/minute",
         "password_change": "5/hour",
+        "attendance_device": "120/minute",
     },
 }
 
@@ -423,6 +440,7 @@ if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user"] = "1000/minute"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["refresh"] = "1000/minute"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["password_change"] = "1000/minute"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["attendance_device"] = "1000/minute"
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
