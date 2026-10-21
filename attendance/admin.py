@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from attendance.models import (
     AttendanceAuditLog,
+    AttendanceEmployee,
     AttendanceDailySummary,
     AttendanceDevice,
     AttendanceEvent,
@@ -33,11 +34,18 @@ class AttendanceDeviceAdmin(admin.ModelAdmin):
     readonly_fields = ("token_hash", "token_prefix", "last_seen_at", "revoked_at")
 
 
+@admin.register(AttendanceEmployee)
+class AttendanceEmployeeAdmin(admin.ModelAdmin):
+    list_display = ("employee_code", "full_name", "phone", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("employee_code", "full_name", "phone")
+
+
 @admin.register(EmployeeShopAssignment)
 class EmployeeShopAssignmentAdmin(admin.ModelAdmin):
     list_display = ("employee", "shop", "is_active", "valid_from", "valid_to")
     list_filter = ("is_active", "shop")
-    search_fields = ("employee__employee_id", "shop__code")
+    search_fields = ("employee__employee_code", "shop__code")
 
 
 @admin.register(Shift)
@@ -57,7 +65,7 @@ class AttendanceEventAdmin(admin.ModelAdmin):
         "is_test_mode",
     )
     list_filter = ("event_type", "verification_method", "is_test_mode", "shop")
-    search_fields = ("employee__employee_id", "client_event_id")
+    search_fields = ("employee__employee_code", "client_event_id")
     readonly_fields = ("created_at",)
 
 

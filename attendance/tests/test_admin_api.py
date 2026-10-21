@@ -15,6 +15,7 @@ from attendance.tests.helpers import (
     make_assignment,
     make_device,
     make_employee,
+    make_field_user,
     make_shop,
 )
 
@@ -32,9 +33,9 @@ class AdminCrudTests(TestCase):
         self.shop = make_shop()
 
     def test_non_admin_forbidden(self):
-        emp = make_employee()
+        field_user, _profile = make_field_user()
         c = APIClient()
-        c.force_authenticate(user=emp.user)
+        c.force_authenticate(user=field_user)
         self.assertEqual(c.get(f"{BASE}/shops/").status_code, 403)
 
     def test_anonymous_forbidden(self):

@@ -11,11 +11,11 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from accounts.models import EmployeeProfile
 from attendance.models import (
     AttendanceAuditLog,
     AttendanceDailySummary,
     AttendanceDevice,
+    AttendanceEmployee,
     AttendanceEvent,
     EmployeeShopAssignment,
     Shift,
@@ -33,6 +33,14 @@ class AttendanceError(Exception):
     def __init__(self, message: str, code: str = "ATTENDANCE_ERROR"):
         super().__init__(message)
         self.code = code
+
+
+class EmployeeInactive(AttendanceError):
+    def __init__(self):
+        super().__init__(
+            "Employee is deactivated and cannot record attendance.",
+            code="EMPLOYEE_INACTIVE",
+        )
 
 
 class NotAssigned(AttendanceError):
@@ -90,7 +98,7 @@ def find_shift_for(shop: Shop, at: datetime) -> Shift | None:
     return None
 
 
-def _get_locked_assignment(employee: EmployeeProfile, shop: Shop):
+def _get_locked_assignment(employee: AttendanceEmployee, shop: Shop):
     """Lock the (employee, shop) assignment row — serializes all attendance
     writes for this pair within the transaction."""
     return (
@@ -107,7 +115,7 @@ def _validate_assignment_window(assignment, today) -> None:
         raise NotAssigned()
 
 
-def _latest_event(employee: EmployeeProfile, shop: Shop):
+def _latest_event(employee: AttendanceEmployee, shop: Shop):
     return (
         AttendanceEvent.objects.filter(employee=employee, shop=shop)
         .order_by("-occurred_at", "-id")
@@ -144,7 +152,7 @@ def _audit(*, action, device=None, actor=None, entity=None, metadata=None, reque
 @transaction.atomic
 def perform_event(
     *,
-    employee: EmployeeProfile,
+    employee: AttendanceEmployee,
     shop: Shop,
     device: AttendanceDevice | None,
     event_type: str,
@@ -170,6 +178,9 @@ def perform_event(
                 code="IDEMPOTENCY_CONFLICT",
             )
         return EventResult(event=existing, idempotent_replay=True)
+
+    if not employee.is_active:
+        raise EmployeeInactive()
 
     assignment = _get_locked_assignment(employee, shop)
     if assignment is None:
@@ -209,7 +220,7 @@ def perform_event(
         actor=recorded_by,
         entity=event,
         metadata={
-            "employee_id": employee.employee_id,
+            "employee_code": employee.employee_code,
             "verification_method": verification.method,
             "is_test_mode": verification.is_test_mode,
         },
@@ -219,13 +230,13 @@ def perform_event(
     return EventResult(event=event)
 
 
-def _events_for_pair(employee: EmployeeProfile, shop: Shop) -> Iterable[AttendanceEvent]:
+def _events_for_pair(employee: AttendanceEmployee, shop: Shop) -> Iterable[AttendanceEvent]:
     return AttendanceEvent.objects.filter(employee=employee, shop=shop).order_by(
         "occurred_at", "id"
     )
 
 
-def rebuild_summaries(*, employee: EmployeeProfile, shop: Shop) -> None:
+def rebuild_summaries(*, employee: AttendanceEmployee, shop: Shop) -> None:
     """Rebuild all AttendanceDailySummary rows for an (employee, shop) pair.
 
     Pairs consecutive CHECK_IN -> CHECK_OUT events. Worked time and status are
@@ -301,7 +312,7 @@ def rebuild_summaries(*, employee: EmployeeProfile, shop: Shop) -> None:
         )
 
 
-def open_session(employee: EmployeeProfile, shop: Shop) -> AttendanceEvent | None:
+def open_session(employee: AttendanceEmployee, shop: Shop) -> AttendanceEvent | None:
     latest = _latest_event(employee, shop)
     if latest is not None and latest.event_type == AttendanceEvent.EVENT_CHECK_IN:
         return latest

@@ -4,29 +4,26 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from accounts.models import EmployeeProfile
-from attendance.models import AttendanceEvent
+from attendance.models import AttendanceEmployee, AttendanceEvent
 
 
 class SelectableEmployeeSerializer(serializers.ModelSerializer):
-    """Employee rows for the test-mode selection screen."""
+    """Attendance employees for the test-mode selection screen."""
 
-    name = serializers.SerializerMethodField()
+    name = serializers.CharField(source="full_name", read_only=True)
+    employee_id = serializers.CharField(source="employee_code", read_only=True)
 
     class Meta:
-        model = EmployeeProfile
-        fields = ["id", "employee_id", "name", "role"]
-
-    def get_name(self, obj) -> str:
-        full = obj.user.get_full_name()
-        return full or obj.user.username
+        model = AttendanceEmployee
+        fields = ["id", "employee_id", "name", "phone"]
 
 
 class EventWriteSerializer(serializers.Serializer):
     """Check-in / check-out payload.
 
     Shop is derived from the authenticated device; verification_method is
-    never accepted from the client.
+    never accepted from the client. `employee_id` is the AttendanceEmployee
+    primary key (not a code and not a Field Officer user id).
     """
 
     employee_id = serializers.IntegerField(min_value=1)
@@ -42,7 +39,8 @@ class EventWriteSerializer(serializers.Serializer):
 
 
 class AttendanceEventSerializer(serializers.ModelSerializer):
-    employee_id = serializers.CharField(source="employee.employee_id", read_only=True)
+    employee_id = serializers.CharField(source="employee.employee_code", read_only=True)
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
     shop_code = serializers.CharField(source="shop.code", read_only=True)
 
     class Meta:
@@ -50,6 +48,7 @@ class AttendanceEventSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "employee_id",
+            "employee_name",
             "shop_code",
             "event_type",
             "occurred_at",

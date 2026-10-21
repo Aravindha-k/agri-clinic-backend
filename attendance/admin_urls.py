@@ -5,6 +5,7 @@ from attendance.admin_views import (
     AttendanceAuditLogListAPI,
     AttendanceDailyReportAPI,
     AttendanceDeviceViewSet,
+    AttendanceEmployeeViewSet,
     AttendanceEventReportAPI,
     EmployeeShopAssignmentViewSet,
     ShiftViewSet,
@@ -15,6 +16,9 @@ app_name = "attendance_admin"
 
 router = DefaultRouter()
 router.register(r"shops", ShopViewSet, basename="attendance-shop")
+router.register(
+    r"employees", AttendanceEmployeeViewSet, basename="attendance-employee"
+)
 router.register(r"devices", AttendanceDeviceViewSet, basename="attendance-device")
 router.register(
     r"assignments",

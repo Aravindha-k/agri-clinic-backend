@@ -6,7 +6,11 @@ from django.contrib.auth.models import User
 
 from accounts.models import EmployeeProfile
 from attendance.devices import issue_device
-from attendance.models import EmployeeShopAssignment, Shop
+from attendance.models import (
+    AttendanceEmployee,
+    EmployeeShopAssignment,
+    Shop,
+)
 
 STRONG = "SecurePass1!"
 
@@ -17,18 +21,31 @@ def make_admin(username="att_admin") -> User:
     )
 
 
-def make_employee(employee_id="KAC-0001", username=None) -> EmployeeProfile:
+def make_employee(
+    employee_code="ATT-0001", full_name=None, is_active=True, **kwargs
+) -> AttendanceEmployee:
+    return AttendanceEmployee.objects.create(
+        employee_code=employee_code,
+        full_name=full_name or f"Test {employee_code}",
+        is_active=is_active,
+        **kwargs,
+    )
+
+
+def make_field_user(employee_id="KAC-0001", username=None):
+    """A real Field Officer (Django user + EmployeeProfile)."""
     user = User.objects.create_user(
         username=username or employee_id.lower(),
         password=STRONG,
         is_staff=False,
         is_active=True,
-        first_name="Test",
+        first_name="Field",
         last_name=employee_id,
     )
-    return EmployeeProfile.objects.create(
+    profile = EmployeeProfile.objects.create(
         user=user, employee_id=employee_id, phone="9000000002", role="FieldAgent"
     )
+    return user, profile
 
 
 def make_shop(code="SHOP-01", name="Main Shop") -> Shop:

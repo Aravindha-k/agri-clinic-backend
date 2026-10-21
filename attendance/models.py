@@ -92,13 +92,72 @@ class AttendanceDevice(models.Model):
         return f"{self.device_uid} @ {self.shop.code}"
 
 
+class AttendanceEmployee(models.Model):
+    """Attendance-only employee identity.
+
+    Shop employees who check in/out at attendance kiosks. They have NO Django
+    user account, NO login credentials and NO Field Officer access. An
+    optional `linked_profile` may reference an existing EmployeeProfile for
+    reporting correlation only — it does not grant any authentication.
+    """
+
+    employee_code = models.CharField(
+        max_length=32, unique=True, db_index=True,
+        help_text="Unique human code shown on the selection screen/reports.",
+    )
+    full_name = models.CharField(max_length=160)
+    phone = models.CharField(max_length=20, blank=True, default="")
+    is_active = models.BooleanField(default=True, db_index=True)
+    linked_profile = models.ForeignKey(
+        "accounts.EmployeeProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_identities",
+        help_text=(
+            "Optional informational link to a Field Officer profile. "
+            "Does NOT grant login or mobile access."
+        ),
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_attendance_employees",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_attendance_employees",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["employee_code"]
+
+    def __str__(self):
+        return f"{self.employee_code} | {self.full_name}"
+
+
 class EmployeeShopAssignment(models.Model):
-    """Which employees may record attendance at which shop."""
+    """Which attendance employees may record attendance at which shop."""
 
     employee = models.ForeignKey(
-        "accounts.EmployeeProfile",
+        AttendanceEmployee,
         on_delete=models.CASCADE,
-        related_name="shop_attendance_assignments",
+        related_name="shop_assignments",
+    )
+    shift = models.ForeignKey(
+        "Shift",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assignments",
+        help_text="Optional default shift for this employee at this shop.",
     )
     shop = models.ForeignKey(
         Shop,
@@ -132,7 +191,7 @@ class EmployeeShopAssignment(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.employee.employee_id} -> {self.shop.code}"
+        return f"{self.employee.employee_code} -> {self.shop.code}"
 
 
 class Shift(models.Model):
@@ -190,7 +249,7 @@ class AttendanceEvent(models.Model):
     )
 
     employee = models.ForeignKey(
-        "accounts.EmployeeProfile",
+        AttendanceEmployee,
         on_delete=models.PROTECT,
         related_name="attendance_events",
         db_index=True,
@@ -281,7 +340,7 @@ class AttendanceEvent(models.Model):
 
     def __str__(self):
         return (
-            f"{self.event_type} {self.employee.employee_id} "
+            f"{self.event_type} {self.employee.employee_code} "
             f"@ {self.shop.code} {self.occurred_at}"
         )
 
@@ -303,7 +362,7 @@ class AttendanceDailySummary(models.Model):
     )
 
     employee = models.ForeignKey(
-        "accounts.EmployeeProfile",
+        AttendanceEmployee,
         on_delete=models.CASCADE,
         related_name="attendance_daily_summaries",
     )
@@ -344,7 +403,7 @@ class AttendanceDailySummary(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.employee.employee_id} | {self.shop.code} | {self.date}"
+        return f"{self.employee.employee_code} | {self.shop.code} | {self.date}"
 
 
 class AttendanceAuditLog(models.Model):
@@ -357,6 +416,10 @@ class AttendanceAuditLog(models.Model):
         ("SHOP_SAVED", "Shop created/updated"),
         ("ASSIGNMENT_SAVED", "Assignment created/updated"),
         ("SHIFT_SAVED", "Shift created/updated"),
+        ("EMPLOYEE_SAVED", "Employee created/updated"),
+        ("EMPLOYEE_DEACTIVATED", "Employee deactivated"),
+        ("EMPLOYEE_ACTIVATED", "Employee activated"),
+        ("EMPLOYEE_TRANSFERRED", "Employee transferred between shops"),
         ("CHECK_IN", "Check-in recorded"),
         ("CHECK_OUT", "Check-out recorded"),
         ("SUMMARY_REBUILT", "Summary rebuilt"),

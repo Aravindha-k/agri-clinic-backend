@@ -16,10 +16,9 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
-from accounts.models import EmployeeProfile
 from attendance import services
 from attendance.biometrics import BiometricUnavailable, get_verifier
-from attendance.models import AttendanceEvent, EmployeeShopAssignment
+from attendance.models import AttendanceEmployee, AttendanceEvent
 from attendance.permissions import HasActiveAttendanceDevice, TestModeEnabled
 from attendance.serializers import (
     AttendanceEventSerializer,
@@ -76,14 +75,18 @@ class _EventAPIBase(DeviceAPIView):
         data = serializer.validated_data
 
         try:
-            employee = EmployeeProfile.objects.select_related("user").get(
-                pk=data["employee_id"], is_active_employee=True
-            )
-        except EmployeeProfile.DoesNotExist:
+            employee = AttendanceEmployee.objects.get(pk=data["employee_id"])
+        except AttendanceEmployee.DoesNotExist:
             return error_response(
-                message="Employee not found or inactive.",
+                message="Employee not found.",
                 code="EMPLOYEE_NOT_FOUND",
                 status_code=drf_status.HTTP_404_NOT_FOUND,
+            )
+        if not employee.is_active:
+            return error_response(
+                message="Employee is deactivated and cannot record attendance.",
+                code="EMPLOYEE_INACTIVE",
+                status_code=drf_status.HTTP_403_FORBIDDEN,
             )
 
         verification, err = _verification_or_403(request, employee)
@@ -145,19 +148,15 @@ class AttendanceEmployeeListAPI(DeviceAPIView):
         device = request.attendance_device
         today = timezone.localdate()
         qs = (
-            EmployeeProfile.objects.filter(
-                shop_attendance_assignments__shop=device.shop,
-                shop_attendance_assignments__is_active=True,
-                is_active_employee=True,
-                can_login=True,
+            AttendanceEmployee.objects.filter(
+                shop_assignments__shop=device.shop,
+                shop_assignments__is_active=True,
+                is_active=True,
             )
-            .exclude(shop_attendance_assignments__valid_from__gt=today)
-            .exclude(
-                shop_attendance_assignments__valid_to__lt=today
-            )
-            .select_related("user")
+            .exclude(shop_assignments__valid_from__gt=today)
+            .exclude(shop_assignments__valid_to__lt=today)
             .distinct()
-            .order_by("employee_id")
+            .order_by("employee_code")
         )
         return success_response(
             data={
@@ -175,10 +174,10 @@ class AttendanceStatusAPI(DeviceAPIView):
         serializer.is_valid(raise_exception=True)
         device = request.attendance_device
         try:
-            employee = EmployeeProfile.objects.get(
+            employee = AttendanceEmployee.objects.get(
                 pk=serializer.validated_data["employee_id"]
             )
-        except EmployeeProfile.DoesNotExist:
+        except AttendanceEmployee.DoesNotExist:
             return error_response(
                 message="Employee not found.",
                 code="EMPLOYEE_NOT_FOUND",

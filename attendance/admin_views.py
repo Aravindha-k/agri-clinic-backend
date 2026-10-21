@@ -15,6 +15,7 @@ from attendance.admin_serializers import (
     AttendanceAuditLogSerializer,
     AttendanceDailySummarySerializer,
     AttendanceDeviceSerializer,
+    AttendanceEmployeeSerializer,
     EmployeeShopAssignmentSerializer,
     ShiftSerializer,
     ShopSerializer,
@@ -24,6 +25,7 @@ from attendance.models import (
     AttendanceAuditLog,
     AttendanceDailySummary,
     AttendanceDevice,
+    AttendanceEmployee,
     AttendanceEvent,
     EmployeeShopAssignment,
     Shift,
@@ -116,12 +118,71 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
         )
 
 
+class AttendanceEmployeeViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
+    """Admin CRUD for attendance-only employees.
+
+    These identities have no Django user and no Field Officer access.
+    Deactivation blocks new attendance events but preserves history.
+    """
+
+    queryset = AttendanceEmployee.objects.select_related(
+        "linked_profile", "created_by", "updated_by"
+    )
+    serializer_class = AttendanceEmployeeSerializer
+    search_fields = ["employee_code", "full_name", "phone"]
+    filterset_fields = ["is_active"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def perform_create(self, serializer):
+        obj = serializer.save(created_by=self.request.user)
+        _audit(action="EMPLOYEE_SAVED", actor=self.request.user, entity=obj,
+               request=self.request)
+
+    def perform_update(self, serializer):
+        obj = serializer.save(updated_by=self.request.user)
+        _audit(action="EMPLOYEE_SAVED", actor=self.request.user, entity=obj,
+               request=self.request)
+
+    def destroy(self, request, *args, **kwargs):
+        return error_response(
+            message="Employees are deactivated, not deleted — attendance history must be preserved.",
+            code="DELETE_NOT_ALLOWED",
+            status_code=405,
+        )
+
+    @action(detail=True, methods=["post"])
+    def deactivate(self, request, pk=None):
+        employee = self.get_object()
+        employee.is_active = False
+        employee.updated_by = request.user
+        employee.save(update_fields=["is_active", "updated_by", "updated_at"])
+        _audit(action="EMPLOYEE_DEACTIVATED", actor=request.user, entity=employee,
+               request=request)
+        return success_response(
+            data=AttendanceEmployeeSerializer(employee).data,
+            message="Employee deactivated.",
+        )
+
+    @action(detail=True, methods=["post"])
+    def activate(self, request, pk=None):
+        employee = self.get_object()
+        employee.is_active = True
+        employee.updated_by = request.user
+        employee.save(update_fields=["is_active", "updated_by", "updated_at"])
+        _audit(action="EMPLOYEE_ACTIVATED", actor=request.user, entity=employee,
+               request=request)
+        return success_response(
+            data=AttendanceEmployeeSerializer(employee).data,
+            message="Employee activated.",
+        )
+
+
 class EmployeeShopAssignmentViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
     queryset = EmployeeShopAssignment.objects.select_related(
-        "employee", "employee__user", "shop"
+        "employee", "shop", "shift"
     )
     serializer_class = EmployeeShopAssignmentSerializer
-    filterset_fields = ["is_active", "shop", "employee"]
+    filterset_fields = ["is_active", "shop", "employee", "shift"]
 
     def perform_create(self, serializer):
         obj = serializer.save(created_by=self.request.user)
@@ -129,9 +190,23 @@ class EmployeeShopAssignmentViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
                request=self.request)
 
     def perform_update(self, serializer):
+        old_shop_id = self.get_object().shop_id
         obj = serializer.save()
-        _audit(action="ASSIGNMENT_SAVED", actor=self.request.user, entity=obj,
-               request=self.request)
+        if obj.shop_id != old_shop_id:
+            _audit(
+                action="EMPLOYEE_TRANSFERRED",
+                actor=self.request.user,
+                entity=obj,
+                metadata={
+                    "employee_code": obj.employee.employee_code,
+                    "from_shop_id": old_shop_id,
+                    "to_shop_id": obj.shop_id,
+                },
+                request=self.request,
+            )
+        else:
+            _audit(action="ASSIGNMENT_SAVED", actor=self.request.user, entity=obj,
+                   request=self.request)
 
 
 class ShiftViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
@@ -191,8 +266,8 @@ class AttendanceDailyReportAPI(_ReportBase):
         if err:
             return err
         qs = AttendanceDailySummary.objects.select_related(
-            "employee", "employee__user", "shop"
-        ).order_by("-date", "employee__employee_id")
+            "employee", "shop"
+        ).order_by("-date", "employee__employee_code")
         if filters["verified_only"] or not filters["include_test"]:
             qs = qs.filter(contains_test_events=False)
         if filters["date_from"]:
@@ -202,7 +277,7 @@ class AttendanceDailyReportAPI(_ReportBase):
         if filters["shop_id"]:
             qs = qs.filter(shop_id=filters["shop_id"])
         if filters["employee_id"]:
-            qs = qs.filter(employee__employee_id=filters["employee_id"])
+            qs = qs.filter(employee__employee_code=filters["employee_id"])
         data = AttendanceDailySummarySerializer(qs[:500], many=True).data
         return success_response(data={"results": data})
 
@@ -225,7 +300,7 @@ class AttendanceEventReportAPI(_ReportBase):
         if filters["shop_id"]:
             qs = qs.filter(shop_id=filters["shop_id"])
         if filters["employee_id"]:
-            qs = qs.filter(employee__employee_id=filters["employee_id"])
+            qs = qs.filter(employee__employee_code=filters["employee_id"])
         data = AdminAttendanceEventSerializer(qs[:1000], many=True).data
         return success_response(data={"results": data})
 

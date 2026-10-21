@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from accounts.models import EmployeeProfile
 from attendance.models import (
     AttendanceAuditLog,
     AttendanceDailySummary,
     AttendanceDevice,
+    AttendanceEmployee,
     AttendanceEvent,
     EmployeeShopAssignment,
     Shift,
@@ -69,11 +69,60 @@ class DeviceRegisterResponseSerializer(serializers.Serializer):
     token = serializers.CharField(help_text="Shown once; store securely.")
 
 
+class AttendanceEmployeeSerializer(serializers.ModelSerializer):
+    """Admin CRUD for attendance-only employees (no login credentials)."""
+
+    linked_employee_id = serializers.CharField(
+        source="linked_profile.employee_id", read_only=True, default=None
+    )
+    created_by_username = serializers.CharField(
+        source="created_by.username", read_only=True, default=None
+    )
+    updated_by_username = serializers.CharField(
+        source="updated_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = AttendanceEmployee
+        fields = [
+            "id",
+            "employee_code",
+            "full_name",
+            "phone",
+            "is_active",
+            "linked_profile",
+            "linked_employee_id",
+            "created_by_username",
+            "updated_by_username",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "is_active",
+            "created_by_username",
+            "updated_by_username",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_employee_code(self, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("employee_code is required.")
+        return value
+
+
 class EmployeeShopAssignmentSerializer(serializers.ModelSerializer):
     employee_ref = serializers.CharField(
-        source="employee.employee_id", read_only=True
+        source="employee.employee_code", read_only=True
+    )
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
     )
     shop_code = serializers.CharField(source="shop.code", read_only=True)
+    shift_name = serializers.CharField(
+        source="shift.name", read_only=True, default=None
+    )
 
     class Meta:
         model = EmployeeShopAssignment
@@ -81,8 +130,11 @@ class EmployeeShopAssignmentSerializer(serializers.ModelSerializer):
             "id",
             "employee",
             "employee_ref",
+            "employee_name",
             "shop",
             "shop_code",
+            "shift",
+            "shift_name",
             "is_active",
             "valid_from",
             "valid_to",
@@ -91,8 +143,8 @@ class EmployeeShopAssignmentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_at", "updated_at"]
 
-    def validate_employee(self, value: EmployeeProfile):
-        if not value.is_active_employee:
+    def validate_employee(self, value: AttendanceEmployee):
+        if not value.is_active:
             raise serializers.ValidationError("Employee is not active.")
         return value
 
@@ -118,9 +170,11 @@ class ShiftSerializer(serializers.ModelSerializer):
 
 class AttendanceDailySummarySerializer(serializers.ModelSerializer):
     employee_ref = serializers.CharField(
-        source="employee.employee_id", read_only=True
+        source="employee.employee_code", read_only=True
     )
-    employee_name = serializers.SerializerMethodField()
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
+    )
     shop_code = serializers.CharField(source="shop.code", read_only=True)
 
     class Meta:
@@ -139,13 +193,10 @@ class AttendanceDailySummarySerializer(serializers.ModelSerializer):
             "contains_test_events",
         ]
 
-    def get_employee_name(self, obj) -> str:
-        return obj.employee.user.get_full_name() or obj.employee.user.username
-
 
 class AdminAttendanceEventSerializer(serializers.ModelSerializer):
     employee_ref = serializers.CharField(
-        source="employee.employee_id", read_only=True
+        source="employee.employee_code", read_only=True
     )
     shop_code = serializers.CharField(source="shop.code", read_only=True)
     device_uid = serializers.CharField(

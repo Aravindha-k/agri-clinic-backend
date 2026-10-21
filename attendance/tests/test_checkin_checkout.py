@@ -89,19 +89,19 @@ class CheckInOutFlowTests(TestCase):
         self.assertEqual(resp.data["code"], "IDEMPOTENCY_CONFLICT")
 
     def test_unassigned_employee_rejected(self):
-        stranger = make_employee(employee_id="KAC-0099")
+        stranger = make_employee(employee_code="KAC-0099")
         resp = self.check_in(employee=stranger)
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.data["code"], "NOT_ASSIGNED")
 
     def test_employee_assigned_elsewhere_rejected(self):
-        stranger = make_employee(employee_id="KAC-0098")
+        stranger = make_employee(employee_code="KAC-0098")
         make_assignment(stranger, self.other_shop)
         resp = self.check_in(employee=stranger)
         self.assertEqual(resp.status_code, 409)
 
     def test_expired_assignment_window_rejected(self):
-        emp = make_employee(employee_id="KAC-0097")
+        emp = make_employee(employee_code="KAC-0097")
         make_assignment(
             emp, self.shop, valid_to=date.today() - timedelta(days=1)
         )
@@ -109,7 +109,7 @@ class CheckInOutFlowTests(TestCase):
         self.assertEqual(resp.status_code, 409)
 
     def test_inactive_assignment_rejected(self):
-        emp = make_employee(employee_id="KAC-0096")
+        emp = make_employee(employee_code="KAC-0096")
         make_assignment(emp, self.shop, is_active=False)
         resp = self.check_in(employee=emp)
         self.assertEqual(resp.status_code, 409)
