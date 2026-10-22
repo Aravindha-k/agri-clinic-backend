@@ -93,6 +93,49 @@ class AttendanceDevice(models.Model):
         return f"{self.device_uid} @ {self.shop.code}"
 
 
+class DevicePairingCode(models.Model):
+    """One-time, short-lived code that activates a pre-registered device.
+
+    Only a keyed HMAC-SHA256 hash of the 6-digit code is stored. The device
+    itself is
+    created inactive at code-generation time and becomes usable only after a
+    successful redemption, which also issues its real credential token.
+    """
+
+    MAX_ATTEMPTS = 5
+    TTL_MINUTES = 5
+    MAX_ACTIVE_PER_SHOP = 1  # issuing a new code expires the previous one
+
+    device = models.ForeignKey(
+        AttendanceDevice,
+        on_delete=models.CASCADE,
+        related_name="pairing_codes",
+    )
+    code_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    code_prefix = models.CharField(
+        max_length=2,
+        editable=False,
+        help_text="First 2 digits, non-secret, for admin correlation.",
+    )
+    expires_at = models.DateTimeField(db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_pairing_codes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Pairing code for {self.device.device_uid} (exp {self.expires_at})"
+
+
 class AttendanceEmployee(models.Model):
     """Attendance-only employee identity.
 
@@ -421,6 +464,9 @@ class AttendanceAuditLog(models.Model):
         ("EMPLOYEE_DEACTIVATED", "Employee deactivated"),
         ("EMPLOYEE_ACTIVATED", "Employee activated"),
         ("EMPLOYEE_TRANSFERRED", "Employee transferred between shops"),
+        ("PAIRING_CODE_ISSUED", "Pairing code issued"),
+        ("DEVICE_PAIRED", "Device paired"),
+        ("PAIRING_FAILED", "Pairing attempt failed"),
         ("CHECK_IN", "Check-in recorded"),
         ("CHECK_OUT", "Check-out recorded"),
         ("SUMMARY_REBUILT", "Summary rebuilt"),

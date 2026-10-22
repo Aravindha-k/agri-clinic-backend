@@ -1,0 +1,84 @@
+name: Ops Attendance Pairing Verify
+
+# Manual/one-shot READ-ONLY verification of the kiosk pairing release on EC2.
+# Prints only booleans / non-secret config names — never secret values.
+# Does not deploy, migrate, mutate data, or restart services.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Pairing release verify (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Read-only pairing checks on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /var/www/agri-backend/agri-clinic-backend
+          echo '=== GIT ==='
+          git rev-parse HEAD
+          echo '=== SERVICE ==='
+          systemctl is-active agri-backend.service || true
+          curl -fsS --max-time 15 http://127.0.0.1:8000/healthz/ || true
+          echo
+          echo '=== SETTINGS (non-secret) ==='
+          source .venv/bin/activate
+          python - <<'PY'
+          import os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          import django; django.setup()
+          from django.conf import settings
+          print('APP_ENV =', settings.APP_ENV)
+          print('IS_PRODUCTION =', settings.IS_PRODUCTION)
+          print('DEBUG =', settings.DEBUG)
+          print('SECRET_KEY_CONFIGURED =', bool(settings.SECRET_KEY) and settings.SECRET_KEY not in {'', 'unsafe-secret'})
+          print('ATTENDANCE_TEST_MODE_ENABLED =', getattr(settings, 'ATTENDANCE_TEST_MODE_ENABLED', None))
+          print('ATTENDANCE_BIOMETRIC_BACKEND =', settings.ATTENDANCE_BIOMETRIC_BACKEND)
+          print('ATTENDANCE_PAIRING_REQUIRE_HTTPS =', getattr(settings, 'ATTENDANCE_PAIRING_REQUIRE_HTTPS', '<unset>'))
+          print('ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE =', getattr(settings, 'ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE', '<unset>'))
+          print('BEHIND_TRUSTED_PROXY =', getattr(settings, 'BEHIND_TRUSTED_PROXY', '<unset>'))
+          print('REDIS_URL_CONFIGURED =', bool(getattr(settings, 'REDIS_URL', '')))
+          print('CACHE_DEFAULT_BACKEND =', settings.CACHES['default']['BACKEND'])
+          print('THROTTLE_PAIRING_RATE =', settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'].get('attendance_pairing'))
+          print('SECURE_PROXY_SSL_HEADER =', settings.SECURE_PROXY_SSL_HEADER)
+          print('SECURE_SSL_REDIRECT =', settings.SECURE_SSL_REDIRECT)
+          PY
+          echo '=== MIGRATIONS (attendance) ==='
+          python manage.py showmigrations attendance || true
+          echo '=== NGINX PROXY HEADERS ==='
+          sudo nginx -T 2>/dev/null | grep -E 'proxy_set_header (X-Forwarded-Proto|X-Forwarded-For|X-Real-IP|Host)' | sort -u || echo 'no proxy_set_header lines found'
+          echo '=== ENDPOINT PROBES (localhost HTTP) ==='
+          echo '--- admin pairing-codes unauthenticated (expect 401/403) ---'
+          curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8000/api/v1/admin/attendance/devices/pairing-codes/ || true
+          echo '--- public pair over plain HTTP (expect 403 HTTPS_REQUIRED or 404 pre-deploy) ---'
+          curl -s -X POST -H 'Content-Type: application/json' -d '{"pairing_code":"000000"}' http://127.0.0.1:8000/api/v1/attendance/devices/pair/ || true
+          echo
+          echo '=== DONE ==='
+          REMOTE

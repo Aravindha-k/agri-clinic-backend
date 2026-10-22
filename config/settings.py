@@ -289,6 +289,20 @@ ATTENDANCE_BIOMETRIC_BACKEND = os.getenv(
     "ATTENDANCE_BIOMETRIC_BACKEND",
     "attendance.biometrics.ManualTestVerifier",
 )
+# Device pairing hardening (6-digit setup codes).
+# Reject pairing over plain HTTP — always on in production.
+ATTENDANCE_PAIRING_REQUIRE_HTTPS = env_bool(
+    "ATTENDANCE_PAIRING_REQUIRE_HTTPS", IS_PRODUCTION
+)
+# Global ceiling on redemption attempts/minute across ALL clients, enforced
+# via the shared cache — bounds brute force against the 1M code space even
+# under distributed per-IP rotation.
+ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE = int(
+    os.getenv("ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE", "30")
+)
+# True when nginx/ELB in front of Django sets X-Forwarded-For; only then may
+# the header be used for client-IP audit/rate limits.
+BEHIND_TRUSTED_PROXY = env_bool("BEHIND_TRUSTED_PROXY", IS_PRODUCTION)
 
 # --------------------------------------------------
 # INTERNATIONALIZATION / TIMEZONE
@@ -430,6 +444,7 @@ REST_FRAMEWORK = {
         "refresh": "30/minute",
         "password_change": "5/hour",
         "attendance_device": "120/minute",
+        "attendance_pairing": "10/minute",
     },
 }
 
@@ -441,6 +456,8 @@ if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["refresh"] = "1000/minute"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["password_change"] = "1000/minute"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["attendance_device"] = "1000/minute"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["attendance_pairing"] = "1000/minute"
+    ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE = 100000
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),

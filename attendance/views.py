@@ -12,14 +12,17 @@ import logging
 
 from django.conf import settings
 from rest_framework import status as drf_status
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
-from attendance import services
+from attendance import devices, services
 from attendance.biometrics import BiometricUnavailable, get_verifier
 from attendance.models import AttendanceEmployee, AttendanceEvent
 from attendance.permissions import HasActiveAttendanceDevice, TestModeEnabled
+from attendance.throttling import (
+    TrustedScopedRateThrottle,
+    global_pairing_attempt_limited,
+)
 from attendance.serializers import (
     AttendanceEventSerializer,
     AttendanceStatusSerializer,
@@ -36,8 +39,92 @@ class DeviceAPIView(APIView):
 
     authentication_classes = []
     permission_classes = [HasActiveAttendanceDevice]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [TrustedScopedRateThrottle]
     throttle_scope = "attendance_device"
+
+
+class DevicePairingAPI(APIView):
+    """Redeem a one-time 6-digit setup code for device credentials.
+
+    Unauthenticated — the code itself is the credential. Short TTL, single
+    use (row-locked), attempt-lockout, a per-IP throttle scope and a global
+    attempts-per-minute ceiling bound brute force. HTTPS is enforced when
+    ATTENDANCE_PAIRING_REQUIRE_HTTPS is set (always in production).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+    throttle_classes = [TrustedScopedRateThrottle]
+    throttle_scope = "attendance_pairing"
+
+    def post(self, request):
+        if getattr(settings, "ATTENDANCE_PAIRING_REQUIRE_HTTPS", False) and not request.is_secure():
+            return error_response(
+                message="Pairing requires HTTPS.",
+                code="PAIRING_HTTPS_REQUIRED",
+                status_code=drf_status.HTTP_403_FORBIDDEN,
+            )
+
+        max_per_minute = int(getattr(
+            settings, "ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE", 30
+        ))
+        if global_pairing_attempt_limited(max_per_minute):
+            return error_response(
+                message="Too many pairing attempts. Try again shortly.",
+                code="PAIRING_RATE_LIMITED",
+                status_code=drf_status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # `pairing_code` is the documented field; `code` kept for older builds.
+        code = str(
+            request.data.get("pairing_code") or request.data.get("code") or ""
+        ).strip()
+        if not (len(code) == 6 and code.isdigit()):
+            self._failed(request, "PAIRING_CODE_INVALID")
+            return error_response(
+                message="Invalid setup code.",
+                code="PAIRING_CODE_INVALID",
+                status_code=drf_status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            issued = devices.redeem_pairing_code(
+                code, device_label=request.data.get("device_label", "")
+            )
+        except devices.PairingError as exc:
+            self._failed(request, exc.code)
+            return error_response(
+                message=str(exc), code=exc.code,
+                status_code=drf_status.HTTP_403_FORBIDDEN,
+            )
+        services._audit(
+            action="DEVICE_PAIRED", device=issued.device, entity=issued.device,
+            metadata={"device_uid": issued.device.device_uid}, request=request,
+        )
+        shop = issued.device.shop
+        return success_response(
+            data={
+                "device_uid": issued.device.device_uid,
+                "device_token": issued.plaintext_token,
+                "shop_id": shop.id,
+                "shop_code": shop.code,
+                "shop_name": shop.name,
+                # legacy aliases for already-deployed kiosk builds
+                "token": issued.plaintext_token,
+                "shop": {"code": shop.code, "name": shop.name},
+            },
+            message="Device paired.",
+            status_code=drf_status.HTTP_200_OK,
+        )
+
+    @staticmethod
+    def _failed(request, reason: str) -> None:
+        """Audit a failed redemption. Never logs the submitted code."""
+        services._audit(
+            action="PAIRING_FAILED",
+            entity=None,
+            metadata={"reason": reason},
+            request=request,
+        )
 
 
 def _verification_or_403(request, employee):

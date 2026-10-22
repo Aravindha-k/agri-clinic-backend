@@ -64,12 +64,47 @@ class AttendanceDeviceSerializer(serializers.ModelSerializer):
             "revoked_at",
         ]
         read_only_fields = [
+            "device_uid",  # auto-generated 6-digit ID — never admin-entered
             "token_prefix",
             "registered_by",
             "last_seen_at",
             "created_at",
             "revoked_at",
         ]
+
+
+class PairingCodeGenerateSerializer(serializers.Serializer):
+    """Input for generate-pairing-code: pick a shop, optional label/type."""
+
+    shop = serializers.PrimaryKeyRelatedField(queryset=Shop.objects.all())
+    name = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    device_type = serializers.ChoiceField(
+        choices=AttendanceDevice.DEVICE_TYPE_CHOICES,
+        default=AttendanceDevice.DEVICE_BIOMETRIC,
+    )
+
+    def validate_shop(self, shop: Shop):
+        if not shop.is_active:
+            raise serializers.ValidationError("Shop is not active.")
+        return shop
+
+
+class PairingCodeCreateSerializer(serializers.Serializer):
+    """Input for POST devices/pairing-codes/: {"shop_id": 1}."""
+
+    shop_id = serializers.PrimaryKeyRelatedField(
+        queryset=Shop.objects.all(), source="shop"
+    )
+    name = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    device_type = serializers.ChoiceField(
+        choices=AttendanceDevice.DEVICE_TYPE_CHOICES,
+        default=AttendanceDevice.DEVICE_KIOSK,
+    )
+
+    def validate_shop_id(self, shop: Shop):
+        if not shop.is_active:
+            raise serializers.ValidationError("Shop is not active.")
+        return shop
 
 
 class DeviceRegisterResponseSerializer(serializers.Serializer):

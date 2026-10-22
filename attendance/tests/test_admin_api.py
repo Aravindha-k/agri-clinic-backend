@@ -57,13 +57,15 @@ class AdminCrudTests(TestCase):
     def test_device_register_returns_token_once(self):
         resp = self.client.post(
             f"{BASE}/devices/",
-            {"shop": self.shop.id, "device_uid": "d-1", "name": "K1"},
+            {"shop": self.shop.id, "name": "K1"},
             format="json",
         )
         self.assertEqual(resp.status_code, 201)
         token = resp.data["data"]["token"]
         self.assertTrue(token)
-        device = AttendanceDevice.objects.get(device_uid="d-1")
+        device = AttendanceDevice.objects.get(
+            device_uid=resp.data["data"]["device"]["device_uid"]
+        )
         self.assertNotEqual(device.token_hash, token)
         # list/detail must never include the token
         listing = self.client.get(f"{BASE}/devices/")
@@ -73,24 +75,25 @@ class AdminCrudTests(TestCase):
     def test_device_revoke_blocks_kiosk(self):
         resp = self.client.post(
             f"{BASE}/devices/",
-            {"shop": self.shop.id, "device_uid": "d-2", "name": "K2"},
+            {"shop": self.shop.id, "name": "K2"},
             format="json",
         )
         token = resp.data["data"]["token"]
         dev_id = resp.data["data"]["device"]["id"]
+        dev_uid = resp.data["data"]["device"]["device_uid"]
         emp = make_employee()
         make_assignment(emp, self.shop)
         ok = APIClient().post(
             CHECKIN_URL,
             {"employee_id": emp.id},
-            **device_headers("d-2", token),
+            **device_headers(dev_uid, token),
         )
         self.assertEqual(ok.status_code, 201)
         self.client.post(f"{BASE}/devices/{dev_id}/revoke/")
         blocked = APIClient().post(
             CHECKOUT_URL,
             {"employee_id": emp.id},
-            **device_headers("d-2", token),
+            **device_headers(dev_uid, token),
         )
         self.assertEqual(blocked.status_code, 403)
         self.assertTrue(

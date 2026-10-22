@@ -17,9 +17,12 @@ from attendance.admin_serializers import (
     AttendanceDeviceSerializer,
     AttendanceEmployeeSerializer,
     EmployeeShopAssignmentSerializer,
+    PairingCodeCreateSerializer,
+    PairingCodeGenerateSerializer,
     ShiftSerializer,
     ShopSerializer,
 )
+from attendance import devices
 from attendance.devices import issue_device, revoke_device, rotate_device_token
 from attendance.models import (
     AttendanceAuditLog,
@@ -27,6 +30,7 @@ from attendance.models import (
     AttendanceDevice,
     AttendanceEmployee,
     AttendanceEvent,
+    DevicePairingCode,
     EmployeeShopAssignment,
     Shift,
     Shop,
@@ -78,7 +82,6 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         issued = issue_device(
             shop=serializer.validated_data["shop"],
-            device_uid=serializer.validated_data["device_uid"],
             name=serializer.validated_data["name"],
             device_type=serializer.validated_data.get(
                 "device_type", AttendanceDevice.DEVICE_KIOSK
@@ -98,6 +101,88 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
                 "token": issued.plaintext_token,  # shown once only
             },
             message="Device registered. Store the token securely — it will not be shown again.",
+        )
+
+    def _issue_pairing_code(self, request, *, shop, name, device_type):
+        try:
+            issued = devices.generate_pairing_code(
+                shop=shop,
+                name=name or "",
+                device_type=device_type,
+                created_by=request.user,
+            )
+        except devices.PairingError as exc:
+            return None, error_response(
+                message=str(exc), code=exc.code, status_code=503
+            )
+        _audit(
+            action="PAIRING_CODE_ISSUED", actor=request.user,
+            device=issued.device, entity=issued.device,
+            metadata={
+                "code_prefix": issued.plaintext_code[:2],
+                "shop_code": shop.code,
+            },
+            request=request,
+        )
+        return issued, None
+
+    @action(detail=False, methods=["post"], url_path="pairing-codes")
+    def pairing_codes(self, request):
+        """Generate a 6-digit setup code for a shop (Android kiosk pairing).
+
+        Returns the plaintext code ONCE, over this authenticated HTTPS call.
+        """
+        serializer = PairingCodeCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        issued, err = self._issue_pairing_code(
+            request,
+            shop=serializer.validated_data["shop"],
+            name=serializer.validated_data.get("name") or "",
+            device_type=serializer.validated_data.get(
+                "device_type", AttendanceDevice.DEVICE_KIOSK
+            ),
+        )
+        if err:
+            return err
+        ttl_seconds = DevicePairingCode.TTL_MINUTES * 60
+        return created_response(
+            data={
+                "pairing_code": issued.plaintext_code,
+                "expires_in_seconds": ttl_seconds,
+                "expires_at": issued.expires_at,
+                "device_uid": issued.device.device_uid,
+                "shop_id": issued.device.shop_id,
+                "shop_code": issued.device.shop.code,
+            },
+            message="Pairing code generated. It expires shortly and works once.",
+        )
+
+    @action(detail=False, methods=["post"], url_path="generate-pairing-code")
+    def generate_pairing_code(self, request):
+        """Create an inactive device + one-time 6-digit setup code.
+
+        Returns the plaintext code ONCE. The device token is issued later,
+        directly to the kiosk at redemption — never via the admin panel.
+        """
+        serializer = PairingCodeGenerateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        issued, err = self._issue_pairing_code(
+            request,
+            shop=serializer.validated_data["shop"],
+            name=serializer.validated_data.get("name") or "",
+            device_type=serializer.validated_data.get(
+                "device_type", AttendanceDevice.DEVICE_BIOMETRIC
+            ),
+        )
+        if err:
+            return err
+        return created_response(
+            data={
+                "device": AttendanceDeviceSerializer(issued.device).data,
+                "code": issued.plaintext_code,
+                "expires_at": issued.expires_at,
+            },
+            message="Pairing code generated. It expires shortly and works once.",
         )
 
     @action(detail=True, methods=["post"])

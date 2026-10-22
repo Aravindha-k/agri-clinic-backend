@@ -134,10 +134,9 @@ def _replay_for_client_id(
 
 
 def _audit(*, action, device=None, actor=None, entity=None, metadata=None, request=None):
-    ip = None
-    if request is not None:
-        fwd = request.META.get("HTTP_X_FORWARDED_FOR")
-        ip = (fwd.split(",")[0].strip() if fwd else request.META.get("REMOTE_ADDR")) or None
+    from attendance.permissions import client_ip
+
+    ip = client_ip(request) if request is not None else None
     AttendanceAuditLog.objects.create(
         actor=actor,
         device=device,
