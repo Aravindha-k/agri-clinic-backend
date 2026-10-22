@@ -22,11 +22,23 @@ DEVICE_UID_HEADER = "HTTP_X_DEVICE_ID"
 DEVICE_TOKEN_HEADER = "HTTP_X_DEVICE_TOKEN"
 
 
-def _client_ip(request) -> str | None:
-    fwd = request.META.get("HTTP_X_FORWARDED_FOR")
-    if fwd:
-        return fwd.split(",")[0].strip() or None
+def client_ip(request) -> str | None:
+    """Client IP for audit/rate limits.
+
+    X-Forwarded-For is trusted only when BEHIND_TRUSTED_PROXY is set (the
+    nginx/ELB in front of the app overwrites it). Otherwise a client could
+    forge the header to rotate IPs and defeat per-IP throttling.
+    """
+    from django.conf import settings
+
+    if getattr(settings, "BEHIND_TRUSTED_PROXY", False):
+        fwd = request.META.get("HTTP_X_FORWARDED_FOR")
+        if fwd:
+            return fwd.split(",")[0].strip() or None
     return request.META.get("REMOTE_ADDR")
+
+
+_client_ip = client_ip  # backwards-compatible alias
 
 
 def log_failed_device_auth(request, reason: str) -> None:

@@ -5,6 +5,7 @@ from attendance.views import (
     AttendanceCheckOutAPI,
     AttendanceEmployeeListAPI,
     AttendanceStatusAPI,
+    DevicePairingAPI,
 )
 
 app_name = "attendance"
@@ -14,4 +15,6 @@ urlpatterns = [
     path("check-in/", AttendanceCheckInAPI.as_view(), name="check-in"),
     path("check-out/", AttendanceCheckOutAPI.as_view(), name="check-out"),
     path("status/", AttendanceStatusAPI.as_view(), name="status"),
+    path("pair/", DevicePairingAPI.as_view(), name="pair"),
+    path("devices/pair/", DevicePairingAPI.as_view(), name="devices-pair"),
 ]
