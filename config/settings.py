@@ -705,6 +705,14 @@ _FILEBASED_IMPORT_TOKENS = {
     "LOCATION": _IMPORT_TOKENS_CACHE_DIR,
     "TIMEOUT": 30 * 60,
 }
+# Production fallback for the default cache when Redis is absent: a shared
+# on-disk cache keeps throttle/rate-limit counters consistent across all
+# Gunicorn workers on the single EC2 host (LocMem is per-worker).
+_FILEBASED_DEFAULT_CACHE = {
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": str(BASE_DIR / ".cache" / "django_default"),
+    "TIMEOUT": 300,
+}
 
 if REDIS_URL:
     try:
@@ -726,16 +734,23 @@ if REDIS_URL:
         }
     except ImportError:
         CACHES = {
-            "default": {
-                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            },
+            "default": (
+                _FILEBASED_DEFAULT_CACHE
+                if IS_PRODUCTION
+                else {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+            ),
             "import_tokens": dict(_FILEBASED_IMPORT_TOKENS),
         }
 else:
     CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        },
+        # Production without Redis: FileBasedCache keeps rate-limit counters
+        # shared across Gunicorn workers on the single EC2 host (LocMem is
+        # per-worker and would multiply throttle ceilings by worker count).
+        "default": (
+            _FILEBASED_DEFAULT_CACHE
+            if IS_PRODUCTION
+            else {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+        ),
         "import_tokens": dict(_FILEBASED_IMPORT_TOKENS),
     }
 
