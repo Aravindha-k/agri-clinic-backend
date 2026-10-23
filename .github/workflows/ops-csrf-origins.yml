@@ -1,0 +1,97 @@
+name: Ops Backend CSRF Origins HTTPS
+
+on:
+  workflow_dispatch:
+
+# Adds https://13.207.17.117 to CSRF_TRUSTED_ORIGINS in prod .env,
+# preserving existing entries. Backs up .env first (values never printed).
+# Restarts gunicorn once (env changes require it). No migrations.
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  csrf-origins:
+    name: Backend CSRF origins update
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Update CSRF_TRUSTED_ORIGINS on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /var/www/agri-backend/agri-clinic-backend
+          ENV=.env
+          ORIGIN='https://13.207.17.117'
+          TS=$(date -u +%Y%m%d_%H%M%S)
+
+          echo '=== Backup .env (values not printed) ==='
+          cp "$ENV" ~/backups/.env-${TS}.bak
+          ls -la ~/backups/.env-${TS}.bak
+
+          echo '=== Update CSRF_TRUSTED_ORIGINS ==='
+          if grep -q '^CSRF_TRUSTED_ORIGINS=' "$ENV"; then
+            # Preserve existing values: append new origin if absent
+            if grep -q "$ORIGIN" "$ENV"; then
+              echo 'origin already present'
+            else
+              sed -i "s|^CSRF_TRUSTED_ORIGINS=\(.*\)|CSRF_TRUSTED_ORIGINS=\1,${ORIGIN}|" "$ENV"
+              sed -i 's|^CSRF_TRUSTED_ORIGINS=,|CSRF_TRUSTED_ORIGINS=|' "$ENV"
+            fi
+          else
+            echo "CSRF_TRUSTED_ORIGINS=${ORIGIN}" >> "$ENV"
+          fi
+          # show ONLY the csrf line (non-secret origin list)
+          grep '^CSRF_TRUSTED_ORIGINS=' "$ENV" || true
+
+          echo '=== Django validation ==='
+          source .venv/bin/activate
+          set -a; source .env; set +a
+          python manage.py check 2>&1 | tail -2
+          python - <<'PY'
+          import os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings')
+          import django; django.setup()
+          from django.conf import settings
+          print('ALLOWED_HOSTS =', settings.ALLOWED_HOSTS)
+          print('CSRF_TRUSTED_ORIGINS =', settings.CSRF_TRUSTED_ORIGINS)
+          print('SECURE_PROXY_SSL_HEADER =', settings.SECURE_PROXY_SSL_HEADER)
+          print('SECURE_SSL_REDIRECT =', settings.SECURE_SSL_REDIRECT)
+          print('PAIRING_HTTPS =', settings.ATTENDANCE_PAIRING_REQUIRE_HTTPS)
+          print('STATIC_PAIRING =', settings.LOCAL_STATIC_PAIRING_ENABLED)
+          print('FACE_VERIFY =', settings.ATTENDANCE_FACE_VERIFICATION_ENABLED)
+          print('TEST_MODE =', settings.ATTENDANCE_TEST_MODE_ENABLED)
+          PY
+
+          echo '=== Restart gunicorn (env change requires it) ==='
+          sudo systemctl restart agri-backend.service
+          sleep 3
+          systemctl is-active agri-backend.service
+          curl -fsS --max-time 10 http://127.0.0.1:8000/healthz/
+          echo
+          curl -fsS --max-time 10 https://13.207.17.117/healthz/
+          echo
+          curl -s -o /dev/null -w 'http :80 still: %{http_code}\n' http://13.207.17.117/healthz/
+          REMOTE
