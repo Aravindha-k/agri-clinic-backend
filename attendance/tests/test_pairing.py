@@ -426,3 +426,85 @@ class PairingHttpsTests(TestCase):
             secure=True,
         )
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ATTENDANCE_TEST_MODE_ENABLED=True)
+class ExistingDevicePairingTests(TestCase):
+    """device_id mode — issue/re-issue a setup code for an existing device."""
+
+    def setUp(self):
+        self.shop = make_shop()
+        self.admin = make_admin()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        self.issued = generate_pairing_code(
+            shop=self.shop, name="", device_type="KIOSK"
+        )
+        self.device = self.issued.device
+
+    def _post(self, **payload):
+        return self.client.post(ADMIN_CODES_URL, payload)
+
+    def test_code_for_awaiting_device_no_duplicate(self):
+        count_before = AttendanceDevice.objects.count()
+        resp = self._post(device_id=self.device.id)
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(AttendanceDevice.objects.count(), count_before)
+        data = resp.data["data"]
+        self.assertEqual(data["device_uid"], self.device.device_uid)
+        self.assertEqual(data["shop_id"], self.device.shop_id)
+        self.assertEqual(len(data["pairing_code"]), 6)
+
+    def test_new_code_supersedes_unused(self):
+        resp = self._post(device_id=self.device.id)
+        self.assertEqual(resp.status_code, 201)
+        # The original code is expired/used; the new one is live.
+        self.device.refresh_from_db()
+        live = DevicePairingCode.objects.filter(
+            device=self.device, used_at__isnull=True
+        ).order_by("-created_at")
+        self.assertEqual(live.count(), 1)
+        old = self.client.post(
+            PAIR_URL, {"pairing_code": self.issued.plaintext_code}
+        )
+        self.assertEqual(old.data["code"], "PAIRING_CODE_USED")
+
+    def test_redeem_keeps_same_device(self):
+        resp = self._post(device_id=self.device.id)
+        code = resp.data["data"]["pairing_code"]
+        ok = self.client.post(PAIR_URL, {"pairing_code": code})
+        self.assertEqual(ok.status_code, 200)
+        self.device.refresh_from_db()
+        self.assertTrue(self.device.is_active)
+        self.assertEqual(
+            AttendanceDevice.objects.filter(
+                device_uid=self.device.device_uid
+            ).count(),
+            1,
+        )
+
+    def test_revoked_device_rejected(self):
+        revoke_device(self.device)
+        resp = self._post(device_id=self.device.id)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_requires_exactly_one_target(self):
+        self.assertEqual(
+            self._post().status_code, 400
+        )
+        self.assertEqual(
+            self._post(shop_id=self.shop.id, device_id=self.device.id).status_code,
+            400,
+        )
+
+    def test_repair_active_device(self):
+        # Paired device → re-pair code still allowed (post-rotation flow).
+        self.device.is_active = True
+        self.device.save(update_fields=["is_active"])
+        resp = self._post(device_id=self.device.id)
+        self.assertEqual(resp.status_code, 201)
+        code = resp.data["data"]["pairing_code"]
+        ok = self.client.post(PAIR_URL, {"pairing_code": code})
+        self.assertEqual(ok.status_code, 200)
+        self.device.refresh_from_db()
+        self.assertTrue(self.device.is_active)

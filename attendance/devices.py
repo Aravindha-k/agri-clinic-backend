@@ -135,30 +135,61 @@ class IssuedPairingCode:
     expires_at: object
 
 
-def generate_pairing_code(*, shop, name: str, device_type: str, created_by=None) -> IssuedPairingCode:
-    """Create an inactive device + a 6-digit single-use pairing code.
+def generate_pairing_code(
+    *, shop, name: str = "", device_type: str | None = None,
+    created_by=None, device: AttendanceDevice | None = None,
+) -> IssuedPairingCode:
+    """Issue a 6-digit single-use pairing code.
 
-    The device carries a placeholder token hash until redemption, so even a
-    leaked pre-pairing record grants nothing. Generating a new code for a
-    shop expires its previous unused codes (active-code cap), and a rare
-    6-digit collision with a live code simply retries.
+    New flow (device=None): creates an inactive device — its placeholder
+    token hash grants nothing if the pre-pairing row ever leaked. Unused
+    codes across the shop are expired (active-code cap per shop).
+
+    Recovery flow (device given): re-issues a code for an existing,
+    non-revoked device — "complete setup" for a device still awaiting
+    pairing or a re-pair after credential rotation. Only that device's
+    unused codes are expired, so an in-flight code for a different device
+    at the same shop is unaffected. Redemption re-issues the credential in
+    place — no duplicate device is ever created.
+
+    A rare 6-digit collision with a live code simply retries.
     """
     from attendance.models import DevicePairingCode
 
     now = timezone.now()
-    DevicePairingCode.objects.filter(
-        device__shop=shop, used_at__isnull=True, expires_at__gt=now
-    ).update(used_at=now)
 
-    device = _create_device(
-        shop=shop,
-        name=name or f"Kiosk @ {shop.code}",
-        device_type=device_type,
-        token_hash=hash_token(secrets.token_urlsafe(32)),
-        token_prefix="",
-        is_active=False,
-        registered_by=created_by,
-    )
+    created = device is None
+    if not created:
+        if device.revoked_at is not None:
+            raise PairingError(
+                "Device is revoked — restore it before generating a setup code.",
+                "PAIRING_DEVICE_REVOKED",
+            )
+        if not device.shop.is_active:
+            raise PairingError(
+                "The device's shop is not active.", "PAIRING_SHOP_INACTIVE"
+            )
+        DevicePairingCode.objects.filter(
+            device=device, used_at__isnull=True, expires_at__gt=now
+        ).update(used_at=now)
+        shop = device.shop
+        if name:
+            device.name = name[:120]
+            device.save(update_fields=["name", "updated_at"])
+    else:
+        DevicePairingCode.objects.filter(
+            device__shop=shop, used_at__isnull=True, expires_at__gt=now
+        ).update(used_at=now)
+        device = _create_device(
+            shop=shop,
+            name=name or f"{shop.name} kiosk",
+            device_type=device_type or AttendanceDevice.DEVICE_KIOSK,
+            token_hash=hash_token(secrets.token_urlsafe(32)),
+            token_prefix="",
+            is_active=False,
+            registered_by=created_by,
+        )
+
     expires_at = now + timezone.timedelta(minutes=DevicePairingCode.TTL_MINUTES)
     for _ in range(5):
         code = f"{secrets.randbelow(1_000_000):06d}"
@@ -175,7 +206,8 @@ def generate_pairing_code(*, shop, name: str, device_type: str, created_by=None)
         except IntegrityError:
             continue
     else:
-        device.delete()
+        if created:
+            device.delete()
         raise PairingError(
             "Could not allocate a setup code — try again.", "PAIRING_CODE_BUSY"
         )

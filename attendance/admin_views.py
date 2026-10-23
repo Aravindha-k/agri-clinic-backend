@@ -234,13 +234,14 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
             message="Device registered. Store the token securely — it will not be shown again.",
         )
 
-    def _issue_pairing_code(self, request, *, shop, name, device_type):
+    def _issue_pairing_code(self, request, *, shop, name, device_type, device=None):
         try:
             issued = devices.generate_pairing_code(
                 shop=shop,
                 name=name or "",
                 device_type=device_type,
                 created_by=request.user,
+                device=device,
             )
         except devices.PairingError as exc:
             return None, error_response(
@@ -259,8 +260,10 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="pairing-codes")
     def pairing_codes(self, request):
-        """Generate a 6-digit setup code for a shop (Android kiosk pairing).
+        """Generate a 6-digit setup code (Android kiosk pairing).
 
+        `shop_id` creates a fresh device; `device_id` re-issues a code for
+        an existing one (complete setup / re-pair — never a duplicate).
         Returns the plaintext code ONCE, over this authenticated HTTPS call.
         """
         serializer = PairingCodeCreateSerializer(data=request.data)
@@ -272,6 +275,7 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
             device_type=serializer.validated_data.get(
                 "device_type", AttendanceDevice.DEVICE_KIOSK
             ),
+            device=serializer.validated_data.get("device"),
         )
         if err:
             return err

@@ -50,6 +50,7 @@ class AttendanceDeviceSerializer(serializers.ModelSerializer):
     """Device representation — never exposes token material."""
 
     shop_code = serializers.CharField(source="shop.code", read_only=True)
+    shop_name = serializers.CharField(source="shop.name", read_only=True)
 
     class Meta:
         model = AttendanceDevice
@@ -57,6 +58,7 @@ class AttendanceDeviceSerializer(serializers.ModelSerializer):
             "id",
             "shop",
             "shop_code",
+            "shop_name",
             "device_uid",
             "name",
             "device_type",
@@ -94,10 +96,21 @@ class PairingCodeGenerateSerializer(serializers.Serializer):
 
 
 class PairingCodeCreateSerializer(serializers.Serializer):
-    """Input for POST devices/pairing-codes/: {"shop_id": 1}."""
+    """Input for POST devices/pairing-codes/.
+
+    Two modes — exactly one target must be supplied:
+      {"shop_id": 1}    → create a new inactive device + code (Add Device)
+      {"device_id": 1}  → issue a code for an existing device (complete
+                          setup / re-pair after rotation — no duplicate)
+    """
 
     shop_id = serializers.PrimaryKeyRelatedField(
-        queryset=Shop.objects.all(), source="shop"
+        queryset=Shop.objects.all(), source="shop", required=False
+    )
+    device_id = serializers.PrimaryKeyRelatedField(
+        queryset=AttendanceDevice.objects.select_related("shop"),
+        source="device",
+        required=False,
     )
     name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     device_type = serializers.ChoiceField(
@@ -109,6 +122,30 @@ class PairingCodeCreateSerializer(serializers.Serializer):
         if not shop.is_active:
             raise serializers.ValidationError("Shop is not active.")
         return shop
+
+    def validate_device_id(self, device: AttendanceDevice):
+        if device.revoked_at is not None:
+            raise serializers.ValidationError(
+                "Device is revoked — restore it before generating a setup code."
+            )
+        return device
+
+    def validate(self, attrs):
+        has_shop = attrs.get("shop") is not None
+        has_device = attrs.get("device") is not None
+        if has_shop == has_device:
+            raise serializers.ValidationError(
+                "Provide exactly one of shop_id (new device) or device_id "
+                "(existing device)."
+            )
+        if has_device:
+            device = attrs["device"]
+            if not device.shop.is_active:
+                raise serializers.ValidationError(
+                    "The device's shop is not active."
+                )
+            attrs["shop"] = device.shop
+        return attrs
 
 
 class DeviceRegisterResponseSerializer(serializers.Serializer):
