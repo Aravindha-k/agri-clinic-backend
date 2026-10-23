@@ -303,6 +303,11 @@ ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE = int(
 # True when nginx/ELB in front of Django sets X-Forwarded-For; only then may
 # the header be used for client-IP audit/rate limits.
 BEHIND_TRUSTED_PROXY = env_bool("BEHIND_TRUSTED_PROXY", IS_PRODUCTION)
+# Development-only: accept the fixed local code 246810 for shop TEST-0001.
+# Additionally gated at runtime to non-production + SQLite only.
+LOCAL_STATIC_PAIRING_ENABLED = env_bool("LOCAL_STATIC_PAIRING_ENABLED", False)
+if IS_PRODUCTION:
+    LOCAL_STATIC_PAIRING_ENABLED = False  # hard-disable outside development
 
 # --------------------------------------------------
 # INTERNATIONALIZATION / TIMEZONE

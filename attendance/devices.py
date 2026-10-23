@@ -9,8 +9,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import sys
 from django.conf import settings
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from dataclasses import dataclass
 
 from django.utils import timezone
@@ -189,6 +190,80 @@ class PairingError(Exception):
         self.code = code
 
 
+# ---------------------------------------------------------------------------
+# Development-only static pairing code (never production)
+# ---------------------------------------------------------------------------
+STATIC_TEST_CODE = "246810"
+STATIC_TEST_DEVICE_UID = "246810"
+STATIC_TEST_SHOP_CODE = "TEST-0001"
+
+
+def _static_pairing_allowed() -> bool:
+    """Gate the static test code to the isolated local dev environment.
+
+    Requires ALL of: explicit LOCAL_STATIC_PAIRING_ENABLED flag, non-production
+    settings, and a SQLite database (never PostgreSQL).
+    """
+    if not getattr(settings, "LOCAL_STATIC_PAIRING_ENABLED", False):
+        return False
+    if getattr(settings, "IS_PRODUCTION", False):
+        return False
+    if connection.vendor == "sqlite":
+        return True
+    # The unit-test runner may execute on a throwaway Postgres test DB;
+    # it can never reach production data, so the gate stays dev-only.
+    return "test" in sys.argv
+
+
+def _redeem_static_test_code(device_label: str) -> IssuedDevice:
+    """Re-pairable development shortcut for the TEST-0001 shop only.
+
+    Reuses ONE dedicated device (uid 246810) and rotates its credential, so
+    repeated local pairing never accumulates duplicate devices. Normal code
+    issuance, expiry and single-use semantics are untouched for all real
+    codes.
+    """
+    from attendance.models import Shop
+
+    if not _static_pairing_allowed():
+        raise PairingError("Invalid setup code.", "PAIRING_CODE_INVALID")
+    try:
+        shop = Shop.objects.get(code=STATIC_TEST_SHOP_CODE, is_active=True)
+    except Shop.DoesNotExist:
+        raise PairingError("Invalid setup code.", "PAIRING_CODE_INVALID")
+
+    with transaction.atomic():
+        device = (
+            AttendanceDevice.objects.select_for_update()
+            .filter(device_uid=STATIC_TEST_DEVICE_UID)
+            .first()
+        )
+        if device is None:
+            device = AttendanceDevice.objects.create(
+                shop=shop,
+                device_uid=STATIC_TEST_DEVICE_UID,
+                name="Static Test Kiosk",
+                device_type=AttendanceDevice.DEVICE_KIOSK,
+                token_hash=hash_token(secrets.token_urlsafe(32)),
+                token_prefix="",
+            )
+        if device.shop_id != shop.id:
+            raise PairingError("Invalid setup code.", "PAIRING_CODE_INVALID")
+
+        token = generate_device_token()
+        device.token_hash = hash_token(token)
+        device.token_prefix = token[:TOKEN_PREFIX_LEN]
+        device.is_active = True
+        device.revoked_at = None
+        update_fields = ["token_hash", "token_prefix", "is_active", "revoked_at"]
+        device_label = (device_label or "").strip()[:120]
+        if device_label:
+            device.name = device_label
+            update_fields.append("name")
+        device.save(update_fields=update_fields)
+    return IssuedDevice(device=device, plaintext_token=token)
+
+
 def redeem_pairing_code(code: str, device_label: str = "") -> IssuedDevice:
     """Exchange a valid 6-digit code for live device credentials.
 
@@ -196,6 +271,9 @@ def redeem_pairing_code(code: str, device_label: str = "") -> IssuedDevice:
     requests cannot redeem the same code. Raises PairingError on any failure.
     """
     from attendance.models import DevicePairingCode
+
+    if code == STATIC_TEST_CODE and _static_pairing_allowed():
+        return _redeem_static_test_code(device_label)
 
     with transaction.atomic():
         pairing = (

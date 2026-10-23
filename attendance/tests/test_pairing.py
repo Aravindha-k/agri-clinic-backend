@@ -312,6 +312,96 @@ class DeviceIdTests(TestCase):
 
 
 @override_settings(ATTENDANCE_TEST_MODE_ENABLED=True)
+class StaticPairingCodeTests(TestCase):
+    """Development-only static code 246810 — gated to local SQLite env."""
+
+    STATIC_CODE = "246810"
+
+    def setUp(self):
+        cache.clear()
+        self.shop = make_shop(code="TEST-0001", name="Test Shop")
+        self.client = APIClient()
+
+    @override_settings(LOCAL_STATIC_PAIRING_ENABLED=True)
+    def test_static_code_pairs_in_local_env(self):
+        resp = self.client.post(
+            PAIR_URL,
+            {"pairing_code": self.STATIC_CODE,
+             "device_label": "Dev Kiosk"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.data["data"]
+        self.assertEqual(data["device_uid"], "246810")
+        self.assertEqual(data["shop_code"], "TEST-0001")
+        self.assertTrue(data["device_token"])
+        device = AttendanceDevice.objects.get(device_uid="246810")
+        self.assertTrue(device.is_active)
+        self.assertEqual(device.shop_id, self.shop.id)
+        found = authenticate_device("246810", data["device_token"])
+        self.assertIsNotNone(found)
+
+    @override_settings(LOCAL_STATIC_PAIRING_ENABLED=True)
+    def test_repeated_pairing_reuses_single_device_and_rotates(self):
+        r1 = self.client.post(PAIR_URL, {"pairing_code": self.STATIC_CODE})
+        r2 = self.client.post(PAIR_URL, {"pairing_code": self.STATIC_CODE})
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(
+            AttendanceDevice.objects.filter(device_uid="246810").count(), 1
+        )
+        old_token = r1.data["data"]["device_token"]
+        new_token = r2.data["data"]["device_token"]
+        self.assertNotEqual(old_token, new_token)
+        self.assertIsNone(authenticate_device("246810", old_token))
+        self.assertIsNotNone(authenticate_device("246810", new_token))
+
+    @override_settings(LOCAL_STATIC_PAIRING_ENABLED=False)
+    def test_static_code_rejected_when_flag_off(self):
+        resp = self.client.post(PAIR_URL, {"pairing_code": self.STATIC_CODE})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data["code"], "PAIRING_CODE_INVALID")
+
+    @override_settings(
+        LOCAL_STATIC_PAIRING_ENABLED=True, IS_PRODUCTION=True
+    )
+    def test_static_code_rejected_in_production(self):
+        resp = self.client.post(PAIR_URL, {"pairing_code": self.STATIC_CODE})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data["code"], "PAIRING_CODE_INVALID")
+        self.assertFalse(
+            AttendanceDevice.objects.filter(device_uid="246810").exists()
+        )
+
+    @override_settings(LOCAL_STATIC_PAIRING_ENABLED=True)
+    def test_static_code_rejected_without_test_shop(self):
+        self.shop.delete()
+        resp = self.client.post(PAIR_URL, {"pairing_code": self.STATIC_CODE})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data["code"], "PAIRING_CODE_INVALID")
+
+    @override_settings(LOCAL_STATIC_PAIRING_ENABLED=True)
+    def test_other_codes_use_normal_flow(self):
+        resp = self.client.post(PAIR_URL, {"pairing_code": "999999"})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data["code"], "PAIRING_CODE_INVALID")
+
+    @override_settings(LOCAL_STATIC_PAIRING_ENABLED=True)
+    def test_normal_codes_still_single_use(self):
+        issued = generate_pairing_code(
+            shop=self.shop, name="", device_type="KIOSK",
+            created_by=make_admin(),
+        )
+        ok = self.client.post(
+            PAIR_URL, {"pairing_code": issued.plaintext_code}
+        )
+        self.assertEqual(ok.status_code, 200)
+        again = self.client.post(
+            PAIR_URL, {"pairing_code": issued.plaintext_code}
+        )
+        self.assertEqual(again.data["code"], "PAIRING_CODE_USED")
+
+
+@override_settings(ATTENDANCE_TEST_MODE_ENABLED=True)
 class PairingHttpsTests(TestCase):
     def setUp(self):
         self.shop = make_shop()
