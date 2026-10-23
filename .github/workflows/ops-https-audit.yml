@@ -1,65 +1,97 @@
 name: Ops HTTPS Audit
+
 on:
   workflow_dispatch:
 
 # READ-ONLY HTTPS readiness audit on production EC2.
 # Prints nothing secret: no env values, keys, cert private material.
 
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
 jobs:
   audit:
+    name: HTTPS readiness audit (read-only)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
       - name: Read-only HTTPS audit on EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            echo '=== IDENTITY ==='
-            hostname
-            curl -s --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'no metadata'
-            echo
-            curl -s --max-time 5 http://169.254.169.254/latest/meta-data/instance-id || true
-            echo
-            curl -s --max-time 5 http://169.254.169.254/latest/meta-data/placement/availability-zone || true
-            echo
-            echo '=== ELASTIC IP (needs aws cli/role) ==='
-            aws ec2 describe-addresses --public-ips 13.207.17.117 --query 'Addresses[].{IP:PublicIp,Alloc:AllocationId,Assoc:AssociationId,Instance:InstanceId}' --output table 2>/dev/null || echo 'aws cli/role unavailable — verify EIP in console'
-            echo '=== LISTENERS ==='
-            sudo ss -tlnp | grep -E ':(80|443|8000)\b' || true
-            echo '=== NGINX -T ==='
-            sudo nginx -T 2>/dev/null | sed -E 's/(ssl_certificate(_key)?[[:space:]]+)[^;]+/\1<REDACTED>/g; s/(password|secret|token)=[^;&"'\'' ]+/\1=<REDACTED>/gi' | grep -vE '^\s*#' | grep -v '^\s*$' | head -160
-            echo '=== GUNICORN SERVICE ==='
-            systemctl is-active agri-backend.service
-            systemctl cat agri-backend.service 2>/dev/null | grep -vE 'Environment|SECRET|KEY|PASS' | head -25
-            echo '=== CERTBOT ==='
-            certbot --version 2>/dev/null || echo 'certbot NOT INSTALLED'
-            certbot certificates 2>/dev/null | grep -vE 'Private Key|PrivateKey|key_path' || true
-            certbot --help all 2>/dev/null | grep -iE 'profile|shortlived' | head -5 || echo 'no profile support'
-            echo '=== RENEWAL ==='
-            sudo systemctl list-timers --all 2>/dev/null | grep -iE 'certbot|cert' || echo 'no certbot timer'
-            crontab -l 2>/dev/null | grep -i cert || echo 'no certbot cron'
-            ls /etc/letsencrypt/renewal-hooks/deploy/ 2>/dev/null || echo 'no deploy hooks'
-            echo '=== ACME WEBROOT TEST ==='
-            ls -la /var/www/ 2>/dev/null | head -10
-            echo '=== FIREWALL ==='
-            sudo ufw status 2>/dev/null || echo 'ufw not used'
-            echo '=== DJANGO SECURITY SETTINGS ==='
-            cd ~/agri_clinic 2>/dev/null || cd /home/*/agri_clinic
-            source .venv/bin/activate 2>/dev/null || true
-            set -a; source .env 2>/dev/null; set +a
-            python manage.py shell <<'PYEOF' 2>/dev/null || echo 'django shell failed'
-            from django.conf import settings
-            print('APP_ENV =', settings.APP_ENV)
-            print('ALLOWED_HOSTS =', settings.ALLOWED_HOSTS)
-            print('CSRF_TRUSTED_ORIGINS =', getattr(settings, 'CSRF_TRUSTED_ORIGINS', None))
-            print('SECURE_PROXY_SSL_HEADER =', settings.SECURE_PROXY_SSL_HEADER)
-            print('SECURE_SSL_REDIRECT =', settings.SECURE_SSL_REDIRECT)
-            print('SESSION_COOKIE_SECURE =', settings.SESSION_COOKIE_SECURE)
-            print('CSRF_COOKIE_SECURE =', settings.CSRF_COOKIE_SECURE)
-            print('SECURE_HSTS_SECONDS =', settings.SECURE_HSTS_SECONDS)
-            print('CORS_ALLOWED_ORIGINS =', getattr(settings, 'CORS_ALLOWED_ORIGINS', None))
-            print('CORS_ALLOW_ALL =', getattr(settings, 'CORS_ALLOW_ALL_ORIGINS', None))
-            PYEOF
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -uo pipefail
+          echo '=== IDENTITY ==='
+          hostname
+          echo -n 'public-ipv4: '
+          curl -s --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'no metadata'
+          echo
+          echo -n 'instance: '
+          curl -s --max-time 5 http://169.254.169.254/latest/meta-data/instance-id || true
+          echo
+          echo -n 'az: '
+          curl -s --max-time 5 http://169.254.169.254/latest/meta-data/placement/availability-zone || true
+          echo
+          echo '=== ELASTIC IP ==='
+          aws ec2 describe-addresses --public-ips 13.207.17.117 --query 'Addresses[].{IP:PublicIp,Alloc:AllocationId,Assoc:AssociationId,Instance:InstanceId}' --output table 2>/dev/null || echo 'aws cli/role unavailable - verify EIP in console'
+          echo '=== LISTENERS ==='
+          sudo ss -tlnp | grep -E ':(80|443|8000)\b' || true
+          echo '=== NGINX -T ==='
+          sudo nginx -T 2>/dev/null | sed -E 's#(ssl_certificate(_key)?[[:space:]]+)[^;]+#\1<REDACTED>#g' | grep -vE '^\s*#' | grep -v '^\s*$' | head -160
+          echo '=== GUNICORN SERVICE ==='
+          systemctl is-active agri-backend.service || true
+          systemctl cat agri-backend.service 2>/dev/null | grep -vE 'Environment|SECRET|KEY|PASS' | head -25
+          echo '=== CERTBOT ==='
+          certbot --version 2>/dev/null || echo 'certbot NOT INSTALLED'
+          certbot certificates 2>/dev/null | grep -vE 'Private|key' || true
+          certbot --help all 2>/dev/null | grep -iE 'profile|shortlived' | head -5 || echo 'no profile flag found'
+          echo '=== RENEWAL ==='
+          sudo systemctl list-timers --all 2>/dev/null | grep -iE 'certbot' || echo 'no certbot timer'
+          sudo crontab -l 2>/dev/null | grep -i cert || echo 'no root certbot cron'
+          ls /etc/letsencrypt/renewal-hooks/deploy/ 2>/dev/null || echo 'no deploy hooks'
+          echo '=== ACME WEBROOT ==='
+          ls -la /var/www/ 2>/dev/null | head -10
+          echo '=== FIREWALL ==='
+          sudo ufw status 2>/dev/null || echo 'ufw not used'
+          echo '=== DJANGO SECURITY SETTINGS ==='
+          cd /var/www/agri-backend/agri-clinic-backend
+          source .venv/bin/activate
+          set -a; source .env 2>/dev/null; set +a
+          python - <<'PY'
+          import os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          import django
+          django.setup()
+          from django.conf import settings
+          print('APP_ENV =', settings.APP_ENV)
+          print('ALLOWED_HOSTS =', settings.ALLOWED_HOSTS)
+          print('CSRF_TRUSTED_ORIGINS =', getattr(settings, 'CSRF_TRUSTED_ORIGINS', None))
+          print('SECURE_PROXY_SSL_HEADER =', settings.SECURE_PROXY_SSL_HEADER)
+          print('SECURE_SSL_REDIRECT =', settings.SECURE_SSL_REDIRECT)
+          print('SESSION_COOKIE_SECURE =', settings.SESSION_COOKIE_SECURE)
+          print('CSRF_COOKIE_SECURE =', settings.CSRF_COOKIE_SECURE)
+          print('SECURE_HSTS_SECONDS =', settings.SECURE_HSTS_SECONDS)
+          print('CORS_ALLOWED_ORIGINS =', getattr(settings, 'CORS_ALLOWED_ORIGINS', None))
+          print('CORS_ALLOW_ALL =', getattr(settings, 'CORS_ALLOW_ALL_ORIGINS', None))
+          PY
+          REMOTE
