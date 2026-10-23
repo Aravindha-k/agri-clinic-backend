@@ -46,7 +46,7 @@ jobs:
             -o BatchMode=yes \
             -o StrictHostKeyChecking=accept-new \
             "${EC2_USER}@${EC2_HOST}" \
-            'bash -s' <<'REMOTE'
+            "SIMULATE=${SIMULATE:-false} bash -s" <<'REMOTE'
           set -uo pipefail
           RC=0
           echo '=== Cert expiry ==='
