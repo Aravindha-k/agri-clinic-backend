@@ -1,0 +1,69 @@
+name: Ops FO Transport Check
+
+on:
+  workflow_dispatch:
+
+# READ-ONLY: determine whether live Field Officer traffic reaches EC2
+# over HTTP :80 or HTTPS :443. No config changes; bounded packet sample.
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: FO transport check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Inspect logs + sample traffic on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -uo pipefail
+          echo '=== NGINX LOG CONFIG ==='
+          sudo nginx -T 2>/dev/null | grep -nE 'log_format|access_log' | head -15
+          echo '=== LOG FILES ==='
+          sudo ls -la /var/log/nginx/ 2>/dev/null | head -10
+          echo '=== RECENT API-LIKE HITS (last 400 lines) ==='
+          sudo tail -400 /var/log/nginx/access.log 2>/dev/null | grep -iE 'api/v1|mobile|duty|visit|tracking|attendance' | tail -40
+          echo '=== CONNECTION SNAPSHOT (3 samples, 20s apart) ==='
+          for i in 1 2 3; do
+            P80=$(sudo ss -tn | grep -c ' :80 ' || true)
+            P443=$(sudo ss -tn | grep -c ' :443 ' || true)
+            echo "sample $i: established->:80=$P80  established->:443=$P443"
+            [ $i -lt 3 ] && sleep 20
+          done
+          echo '=== HTTP PLAINTEXT REQUESTS ON :80 (bounded sample, 90s) ==='
+          sudo timeout 90 tcpdump -i any -nn -A -c 120 \
+            'tcp dst port 80 and tcp[((tcp[12:1] >> 2) << 2):4] > 0' 2>/dev/null \
+            | grep -aE '^(GET|POST|PUT|PATCH|DELETE|HEAD)|Host:|User-Agent:' | head -60
+          echo '=== TLS HANDSHAKES ON :443 (bounded sample, 60s) ==='
+          sudo timeout 60 tcpdump -i any -nn -c 60 \
+            'tcp dst port 443' 2>/dev/null | head -40
+          echo '=== SYN COUNT PER PORT (60s) ==='
+          sudo timeout 60 tcpdump -i any -nn 'tcp[tcpflags] & tcp-syn != 0 and (dst port 80 or dst port 443)' 2>/dev/null \
+            | awk '{for(i=1;i<=NF;i++){if($i~/:80$|:443$/){print $i}}}' \
+            | sed 's/.*\.//' | sort | uniq -c
+          echo '=== DONE ==='
+          REMOTE
