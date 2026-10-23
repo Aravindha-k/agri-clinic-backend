@@ -175,7 +175,7 @@ def generate_pairing_code(
         shop = device.shop
         if name:
             device.name = name[:120]
-            device.save(update_fields=["name", "updated_at"])
+            device.save(update_fields=["name"])
     else:
         DevicePairingCode.objects.filter(
             device__shop=shop, used_at__isnull=True, expires_at__gt=now
