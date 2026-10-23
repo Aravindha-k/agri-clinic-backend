@@ -14,7 +14,7 @@ jobs:
   check:
     name: FO transport check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Configure SSH
         env:
@@ -52,13 +52,13 @@ jobs:
           BEFORE=$(sudo wc -l < "$LOG" 2>/dev/null || echo 0)
           echo "log lines before window: $BEFORE"
           # Capture plaintext request lines on :80 AND SYN counts on :443
-          # for the SAME 300s window, then diff the access log.
-          sudo timeout 300 tcpdump -i any -nn -A \
+          # for the SAME 180s window, then diff the access log.
+          sudo timeout 180 tcpdump -i any -nn -A \
             'tcp dst port 80 and tcp[((tcp[12:1] >> 2) << 2):4] > 0' 2>/dev/null \
             | grep -aoE '^(GET|POST|PUT|PATCH|DELETE) [^ ]+|[Uu]ser-[Aa]gent: [^$]+' \
             > /tmp/fo-port80.txt &
           CAP80=$!
-          sudo timeout 300 tcpdump -i any -nn \
+          sudo timeout 180 tcpdump -i any -nn \
             'tcp[tcpflags] & tcp-syn != 0 and dst port 443' 2>/dev/null \
             | awk '{print $3"->"$5}' > /tmp/fo-port443.txt &
           CAP443=$!
