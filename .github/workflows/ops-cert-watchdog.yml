@@ -1,0 +1,71 @@
+name: Ops Cert Watchdog
+
+on:
+  schedule:
+    # Every 6 hours — short-lived IP certs leave no slack.
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      simulate_expiry:
+        description: "Force the check to fail (notification delivery test)"
+        type: boolean
+        default: false
+
+# Unattended cert-expiry + renewal-failure alerting.
+# A FAILED run = administrator notification via GitHub (watchers/email).
+# Read-only on the server: runs cert-expiry-check.sh, inspects the last
+# acme-renew.service result and the renewal timer schedule. Prints no secrets.
+
+jobs:
+  watchdog:
+    name: Cert renewal watchdog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Check cert expiry + renewal health on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+          SIMULATE: ${{ inputs.simulate_expiry }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -uo pipefail
+          RC=0
+          echo '=== Cert expiry ==='
+          /usr/local/bin/cert-expiry-check.sh || RC=1
+          echo '=== Last renewal result ==='
+          sudo systemctl show acme-renew.service -p Result -p ExecMainStatus 2>/dev/null || true
+          RESULT=$(sudo systemctl show acme-renew.service -p Result --value 2>/dev/null || echo unknown)
+          if [ "$RESULT" != "success" ] && [ "$RESULT" != "unknown" ]; then
+            echo "ALERT: last acme-renew.service result = $RESULT"
+            RC=1
+          fi
+          echo '=== Renewal timer schedule ==='
+          sudo systemctl list-timers acme-renew.timer cert-expiry-check.timer --no-pager 2>/dev/null | head -5
+          echo '=== acme.sh next renewal (ARI) ==='
+          grep -h 'Le_NextRenewTime\|Le_API' ~/.acme.sh/13.207.17.117_ecc/13.207.17.117.conf 2>/dev/null || true
+          if [ "${SIMULATE:-false}" = "true" ]; then
+            echo 'SIMULATED FAILURE: forcing watchdog alert for delivery test'
+            RC=1
+          fi
+          echo "=== WATCHDOG RESULT: $([ $RC -eq 0 ] && echo OK || echo ALERT) ==="
+          exit $RC
+          REMOTE
