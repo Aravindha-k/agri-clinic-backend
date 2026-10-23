@@ -72,6 +72,50 @@ jobs:
           PY
           echo '=== MIGRATIONS (attendance) ==='
           python manage.py showmigrations attendance || true
+          echo '=== PAIRING EVIDENCE (sanitized; no codes/tokens) ==='
+          python - <<'PY'
+          import os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+          import django; django.setup()
+          from attendance.models import AttendanceAuditLog, DevicePairingCode
+          print('--- latest pairing audit rows ---')
+          for row in AttendanceAuditLog.objects.filter(
+              action__in=['PAIRING_FAILED','DEVICE_PAIRED','PAIRING_CODE_ISSUED']
+          ).order_by('-created_at')[:20]:
+              md = row.metadata or {}
+              safe = {
+                  'reason': md.get('reason'),
+                  'code_prefix': md.get('code_prefix'),
+                  'shop_code': md.get('shop_code'),
+                  'device_uid': md.get('device_uid'),
+              }
+              ip = str(row.ip_address or '')
+              if '.' in ip:
+                  parts = ip.split('.')
+                  ip = '.'.join(parts[:3] + ['x'])
+              print(row.created_at.isoformat(), row.action, safe, 'ip=' + ip)
+          print('--- latest pairing-code records ---')
+          for row in DevicePairingCode.objects.select_related(
+              'device__shop'
+          ).order_by('-created_at')[:10]:
+              d = row.device
+              s = d.shop
+              print(
+                  'id=%s prefix=%s attempts=%s used=%s expires=%s created=%s '
+                  'device_uid=%s device_active=%s revoked=%s shop=%s '
+                  'shop_active=%s shop_archived=%s' % (
+                      row.id, row.code_prefix, row.attempts,
+                      bool(row.used_at), row.expires_at.isoformat(),
+                      row.created_at.isoformat(), d.device_uid, d.is_active,
+                      bool(d.revoked_at), s.code, s.is_active,
+                      bool(s.archived_at),
+                  )
+              )
+          PY
+          echo '=== NGINX PAIRING ACCESS LOG (sanitized IPs) ==='
+          sudo grep -a '/api/v1/attendance/devices/pair/' /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -30 | sed -E 's/^[^ ]+ ([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+ /\1.x /' || echo 'no pair requests in access logs'
+          echo '=== BACKEND LOG PAIRING ERRORS (last 3h, sanitized) ==='
+          sudo journalctl -u agri-backend.service --since '3 hours ago' --no-pager 2>/dev/null | grep -aiE 'pair|attendance|traceback|error|400' | sed -E 's/[0-9]{6}/<CODE>/g' | tail -60 || echo 'no matching journal entries'
           echo '=== NGINX PROXY HEADERS ==='
           sudo nginx -T 2>/dev/null | grep -E 'proxy_set_header (X-Forwarded-Proto|X-Forwarded-For|X-Real-IP|Host)' | sort -u || echo 'no proxy_set_header lines found'
           echo '=== ENDPOINT PROBES (localhost HTTP) ==='
