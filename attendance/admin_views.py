@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from django.utils.dateparse import parse_date
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -17,6 +18,8 @@ from attendance.admin_serializers import (
     AttendanceDeviceSerializer,
     AttendanceEmployeeSerializer,
     EmployeeShopAssignmentSerializer,
+    FaceEnrollmentAuthorizeSerializer,
+    FaceEnrollmentSerializer,
     PairingCodeCreateSerializer,
     PairingCodeGenerateSerializer,
     ShiftSerializer,
@@ -32,6 +35,7 @@ from attendance.models import (
     AttendanceEvent,
     DevicePairingCode,
     EmployeeShopAssignment,
+    FaceEnrollment,
     Shift,
     Shop,
 )
@@ -46,11 +50,50 @@ class AdminAttendanceBase:
     permission_classes = [IsStaffAdmin]
 
 
+def _shop_dependency_summary(shop: Shop) -> dict:
+    """Counts of everything that protects a shop from hard deletion."""
+    return {
+        "devices_total": shop.attendance_devices.count(),
+        "devices_active": shop.attendance_devices.filter(
+            is_active=True
+        ).count(),
+        "employee_assignments_total": shop.employee_assignments.count(),
+        "employee_assignments_active": shop.employee_assignments.filter(
+            is_active=True
+        ).count(),
+        "shifts": shop.shifts.count(),
+        "attendance_events": shop.attendance_events.count(),
+        "daily_summaries": shop.attendance_daily_summaries.count(),
+        "audit_records": AttendanceAuditLog.objects.filter(
+            entity_type="Shop", entity_id=str(shop.pk)
+        ).count(),
+    }
+
+
+def _shop_has_protected_history(summary: dict) -> bool:
+    return bool(
+        summary["devices_total"]
+        or summary["employee_assignments_total"]
+        or summary["shifts"]
+        or summary["attendance_events"]
+        or summary["daily_summaries"]
+    )
+
+
 class ShopViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
-    queryset = Shop.objects.all()
+    """Shop CRUD. Deletion is dependency-aware: archive, never cascade."""
+
     serializer_class = ShopSerializer
     search_fields = ["code", "name"]
     filterset_fields = ["is_active"]
+
+    def get_queryset(self):
+        qs = Shop.objects.all()
+        if str(self.request.query_params.get("include_archived", "")).lower() not in {
+            "1", "true", "yes",
+        }:
+            qs = qs.filter(archived_at__isnull=True)
+        return qs
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -61,6 +104,94 @@ class ShopViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
         obj = serializer.save()
         _audit(action="SHOP_SAVED", actor=self.request.user, entity=obj,
                request=self.request)
+
+    @action(detail=True, methods=["get"], url_path="dependency-summary")
+    def dependency_summary(self, request, pk=None):
+        shop = self.get_object()
+        summary = _shop_dependency_summary(shop)
+        return success_response(
+            data={
+                "shop": ShopSerializer(shop).data,
+                "dependencies": summary,
+                "archived": shop.archived_at is not None,
+                "can_archive": shop.archived_at is None,
+                "can_permanently_delete": not _shop_has_protected_history(summary),
+            }
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        """Archive shops with history; hard-delete only empty disposable shops.
+
+        `?permanent=true` is required for a hard delete and is refused when
+        any protected dependency exists — attendance history is never lost.
+        """
+        from django.utils import timezone
+
+        shop = self.get_object()
+        summary = _shop_dependency_summary(shop)
+        wants_permanent = str(
+            request.query_params.get("permanent", "")
+        ).lower() in {"1", "true", "yes"}
+        reason = str(request.data.get("reason") or "")[:160]
+
+        if wants_permanent:
+            if _shop_has_protected_history(summary):
+                return error_response(
+                    message=(
+                        "Shop has devices, assignments, shifts or attendance "
+                        "history — it can only be archived."
+                    ),
+                    code="SHOP_DELETE_BLOCKED",
+                    status_code=409,
+                )
+            shop_pk, shop_code = shop.pk, shop.code
+            shop.delete()
+            _audit(
+                action="SHOP_DELETED",
+                actor=request.user,
+                metadata={
+                    "shop_id": shop_pk,
+                    "shop_code": shop_code,
+                    "reason": reason,
+                },
+                request=request,
+            )
+            return success_response(
+                data={"dependencies": summary, "permanently_deleted": True},
+                message="Shop permanently deleted (no protected history).",
+            )
+
+        if shop.archived_at is not None:
+            return error_response(
+                message="Shop is already archived.",
+                code="SHOP_ALREADY_ARCHIVED",
+                status_code=409,
+            )
+        shop.archived_at = timezone.now()
+        shop.archived_by = request.user
+        shop.archive_reason = reason
+        shop.is_active = False
+        shop.save(
+            update_fields=[
+                "archived_at", "archived_by", "archive_reason",
+                "is_active", "updated_at",
+            ]
+        )
+        _audit(
+            action="SHOP_ARCHIVED",
+            actor=request.user,
+            entity=shop,
+            metadata={"reason": reason, "dependencies": summary},
+            request=request,
+        )
+        return success_response(
+            data={
+                "shop": ShopSerializer(shop).data,
+                "dependencies": summary,
+                "archived": True,
+            },
+            message="Shop archived. Attendance history is preserved.",
+        )
 
 
 class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
@@ -180,6 +311,60 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
             message="Pairing code generated. It expires shortly and works once.",
         )
 
+    def destroy(self, request, *args, **kwargs):
+        """Revoke devices with history; hard-delete only disposable ones.
+
+        Attendance events keep a FK reference to the device (PROTECT), so a
+        device that ever submitted events can only be revoked — its identity
+        and history are preserved. A device with zero events and no live
+        enrollments is a disposable test device and may be hard-deleted.
+        """
+        device = self.get_object()
+        events = device.attendance_events.count()
+        live_enrollments = device.face_enrollments.filter(
+            status__in=[FaceEnrollment.STATUS_PENDING, FaceEnrollment.STATUS_ACTIVE]
+        ).count()
+        if events or live_enrollments:
+            if device.revoked_at is None:
+                revoke_device(device)
+                _audit(
+                    action="DEVICE_REVOKED", actor=request.user, device=device,
+                    entity=device,
+                    metadata={
+                        "reason": "admin delete (has history — revoked instead)"
+                    },
+                    request=request,
+                )
+            return success_response(
+                data={
+                    "device_uid": device.device_uid,
+                    "attendance_events": events,
+                    "live_enrollments": live_enrollments,
+                    "revoked": True,
+                    "permanently_deleted": False,
+                },
+                message=(
+                    "Device has attendance history or enrollments — "
+                    "it was revoked instead of deleted."
+                ),
+            )
+        uid, shop_id = device.device_uid, device.shop_id
+        device.delete()
+        _audit(
+            action="DEVICE_DELETED",
+            actor=request.user,
+            metadata={
+                "device_uid": uid,
+                "shop_id": shop_id,
+                "reason": str(request.data.get("reason") or "")[:160],
+            },
+            request=request,
+        )
+        return success_response(
+            data={"device_uid": uid, "permanently_deleted": True},
+            message="Device permanently deleted (no protected history).",
+        )
+
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
         device = self.get_object()
@@ -189,6 +374,27 @@ class AttendanceDeviceViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
         return success_response(
             data={"device": AttendanceDeviceSerializer(device).data},
             message="Device revoked.",
+        )
+
+    @action(detail=True, methods=["post"])
+    def restore(self, request, pk=None):
+        """Explicit admin re-activation of a revoked device."""
+        device = self.get_object()
+        if device.revoked_at is None:
+            return error_response(
+                message="Device is not revoked.",
+                code="DEVICE_NOT_REVOKED",
+                status_code=409,
+            )
+        device.revoked_at = None
+        device.is_active = True
+        device.save(update_fields=["revoked_at", "is_active"])
+        _audit(action="DEVICE_UPDATED", actor=request.user, device=device,
+               entity=device, metadata={"restored": True},
+               request=request)
+        return success_response(
+            data={"device": AttendanceDeviceSerializer(device).data},
+            message="Device restored.",
         )
 
     @action(detail=True, methods=["post"])
@@ -259,6 +465,126 @@ class AttendanceEmployeeViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
         return success_response(
             data=AttendanceEmployeeSerializer(employee).data,
             message="Employee activated.",
+        )
+
+
+class FaceEnrollmentViewSet(AdminAttendanceBase, viewsets.ModelViewSet):
+    """Admin face-enrollment authorization lifecycle.
+
+    Only metadata is managed here — no images, embeddings or templates
+    ever pass through this API.
+    """
+
+    serializer_class = FaceEnrollmentSerializer
+    http_method_names = ["get", "post", "head", "options"]
+    filterset_fields = ["employee", "shop", "device", "status"]
+    search_fields = ["employee__employee_code", "employee__full_name"]
+
+    def get_queryset(self):
+        return FaceEnrollment.objects.select_related(
+            "employee", "shop", "device", "created_by"
+        )
+
+    def create(self, request, *args, **kwargs):
+        from django.utils import timezone
+
+        ser = FaceEnrollmentAuthorizeSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        with transaction.atomic():
+            # Replace any live enrollment for this employee+device.
+            previous = list(
+                FaceEnrollment.objects.select_for_update().filter(
+                    employee=data["employee"],
+                    device=data["device"],
+                    status__in=[
+                        FaceEnrollment.STATUS_PENDING,
+                        FaceEnrollment.STATUS_ACTIVE,
+                    ],
+                )
+            )
+            for old in previous:
+                old.status = FaceEnrollment.STATUS_REPLACED
+                old.revoked_by = request.user
+                old.revoked_at = timezone.now()
+                old.revoke_reason = "replaced by re-authorization"
+                old.save(
+                    update_fields=[
+                        "status", "revoked_by", "revoked_at",
+                        "revoke_reason", "updated_at",
+                    ]
+                )
+            enrollment = FaceEnrollment.objects.create(
+                employee=data["employee"],
+                shop=data["shop"],
+                device=data["device"],
+                status=FaceEnrollment.STATUS_PENDING,
+                consent_recorded=True,
+                consent_at=timezone.now(),
+                created_by=request.user,
+            )
+            for old in previous:
+                old.revoke_reason = f"replaced by enrollment #{enrollment.pk}"
+                old.save(update_fields=["revoke_reason", "updated_at"])
+                _audit(
+                    action="ENROLLMENT_REPLACED",
+                    actor=request.user,
+                    entity=old,
+                    metadata={"replaced_by": enrollment.pk},
+                    request=request,
+                )
+            _audit(
+                action="ENROLLMENT_AUTHORIZED",
+                actor=request.user,
+                entity=enrollment,
+                metadata={
+                    "employee_code": data["employee"].employee_code,
+                    "shop": data["shop"].code,
+                    "device_uid": data["device"].device_uid,
+                },
+                request=request,
+            )
+        return success_response(
+            data=FaceEnrollmentSerializer(enrollment).data,
+            message="Enrollment authorized.",
+            status_code=201,
+        )
+
+    @action(detail=True, methods=["post"])
+    def revoke(self, request, pk=None):
+        from django.utils import timezone
+
+        enrollment = self.get_object()
+        if enrollment.status not in (
+            FaceEnrollment.STATUS_PENDING,
+            FaceEnrollment.STATUS_ACTIVE,
+        ):
+            return error_response(
+                message="Enrollment is already closed.",
+                code="ENROLLMENT_ALREADY_CLOSED",
+                status_code=409,
+            )
+        enrollment.status = FaceEnrollment.STATUS_REVOKED
+        enrollment.revoked_by = request.user
+        enrollment.revoked_at = timezone.now()
+        enrollment.revoke_reason = str(request.data.get("reason") or "")[:160]
+        enrollment.save(
+            update_fields=[
+                "status", "revoked_by", "revoked_at",
+                "revoke_reason", "updated_at",
+            ]
+        )
+        _audit(
+            action="ENROLLMENT_REVOKED",
+            actor=request.user,
+            entity=enrollment,
+            metadata={"reason": enrollment.revoke_reason},
+            request=request,
+        )
+        return success_response(
+            data=FaceEnrollmentSerializer(enrollment).data,
+            message="Enrollment revoked — device must no longer authorize "
+                    "this employee's face.",
         )
 
 

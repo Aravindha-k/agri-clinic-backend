@@ -8,6 +8,7 @@ from attendance.admin_views import (
     AttendanceEmployeeViewSet,
     AttendanceEventReportAPI,
     EmployeeShopAssignmentViewSet,
+    FaceEnrollmentViewSet,
     ShiftViewSet,
     ShopViewSet,
 )
@@ -26,6 +27,11 @@ router.register(
     basename="attendance-assignment",
 )
 router.register(r"shifts", ShiftViewSet, basename="attendance-shift")
+router.register(
+    r"face-enrollments",
+    FaceEnrollmentViewSet,
+    basename="attendance-face-enrollment",
+)
 
 urlpatterns = [
     path("reports/daily/", AttendanceDailyReportAPI.as_view(), name="report-daily"),

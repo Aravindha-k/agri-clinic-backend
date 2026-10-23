@@ -219,9 +219,10 @@ def _redeem_static_test_code(device_label: str) -> IssuedDevice:
     """Re-pairable development shortcut for the TEST-0001 shop only.
 
     Reuses ONE dedicated device (uid 246810) and rotates its credential, so
-    repeated local pairing never accumulates duplicate devices. Normal code
-    issuance, expiry and single-use semantics are untouched for all real
-    codes.
+    repeated local pairing never accumulates duplicate devices. A revoked
+    static device is NOT silently reactivated — an administrator must
+    explicitly restore or delete it first. Normal code issuance, expiry and
+    single-use semantics are untouched for all real codes.
     """
     from attendance.models import Shop
 
@@ -249,13 +250,22 @@ def _redeem_static_test_code(device_label: str) -> IssuedDevice:
             )
         if device.shop_id != shop.id:
             raise PairingError("Invalid setup code.", "PAIRING_CODE_INVALID")
+        if device.revoked_at is not None:
+            # Never silently reactivate a revoked device. Safe reset path:
+            # admin un-revokes explicitly, or hard-deletes the disposable
+            # device row (allowed only when it has no attendance history),
+            # after which this static code creates a fresh one.
+            raise PairingError(
+                "Static test device was revoked — an administrator must "
+                "restore or remove it before re-pairing.",
+                "PAIRING_DEVICE_REVOKED",
+            )
 
         token = generate_device_token()
         device.token_hash = hash_token(token)
         device.token_prefix = token[:TOKEN_PREFIX_LEN]
         device.is_active = True
-        device.revoked_at = None
-        update_fields = ["token_hash", "token_prefix", "is_active", "revoked_at"]
+        update_fields = ["token_hash", "token_prefix", "is_active"]
         device_label = (device_label or "").strip()[:120]
         if device_label:
             device.name = device_label

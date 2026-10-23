@@ -29,6 +29,19 @@ class Shop(models.Model):
         help_text="Optional soft geofence for kiosk check-ins (advisory only).",
     )
     is_active = models.BooleanField(default=True, db_index=True)
+    archived_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set when the shop is archived (soft-delete). History kept.",
+    )
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_attendance_shops",
+    )
+    archive_reason = models.CharField(max_length=160, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -134,6 +147,99 @@ class DevicePairingCode(models.Model):
 
     def __str__(self):
         return f"Pairing code for {self.device.device_uid} (exp {self.expires_at})"
+
+
+class FaceEnrollment(models.Model):
+    """Authorization + status record for employee face enrollment on a kiosk.
+
+    Stores METADATA ONLY — face images and embeddings never leave the kiosk;
+    they stay encrypted on-device (MobileFaceNet 1:N). A row means an
+    administrator authorized enrollment for (employee, device); completion is
+    reported back by the device itself. Revoked/replaced rows authorize
+    nothing.
+    """
+
+    STATUS_PENDING = "PENDING"      # admin authorized; awaiting samples
+    STATUS_ACTIVE = "ACTIVE"        # device confirmed enrollment complete
+    STATUS_REVOKED = "REVOKED"
+    STATUS_REPLACED = "REPLACED"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending (authorized, not enrolled)"),
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_REVOKED, "Revoked"),
+        (STATUS_REPLACED, "Replaced"),
+    )
+
+    employee = models.ForeignKey(
+        "AttendanceEmployee",
+        on_delete=models.PROTECT,
+        related_name="face_enrollments",
+    )
+    shop = models.ForeignKey(
+        Shop,
+        on_delete=models.PROTECT,
+        related_name="face_enrollments",
+    )
+    device = models.ForeignKey(
+        AttendanceDevice,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="face_enrollments",
+        help_text="Kiosk this enrollment is bound to. Null = invalid.",
+    )
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True
+    )
+    consent_recorded = models.BooleanField(
+        default=False,
+        help_text="Employee consent to face enrollment was captured.",
+    )
+    consent_at = models.DateTimeField(null=True, blank=True)
+    sample_count = models.PositiveIntegerField(
+        default=0, help_text="Face samples captured on the kiosk."
+    )
+    enrolled_at = models.DateTimeField(
+        null=True, blank=True, help_text="Set when the device reports completion."
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_face_enrollments",
+    )
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revoked_face_enrollments",
+    )
+    revoke_reason = models.CharField(max_length=160, blank=True, default="")
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "device"],
+                condition=Q(status__in=["PENDING", "ACTIVE"]),
+                name="uniq_face_enrollment_live_per_device",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["employee", "status"]),
+            models.Index(fields=["device", "status"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.employee.employee_code} face @ "
+            f"{self.device_id and 'dev-' + str(self.device_id)} [{self.status}]"
+        )
 
 
 class AttendanceEmployee(models.Model):
@@ -467,6 +573,14 @@ class AttendanceAuditLog(models.Model):
         ("PAIRING_CODE_ISSUED", "Pairing code issued"),
         ("DEVICE_PAIRED", "Device paired"),
         ("PAIRING_FAILED", "Pairing attempt failed"),
+        ("DEVICE_DELETED", "Device deleted"),
+        ("SHOP_ARCHIVED", "Shop archived"),
+        ("SHOP_DELETED", "Shop deleted"),
+        ("ENROLLMENT_AUTHORIZED", "Face enrollment authorized"),
+        ("ENROLLMENT_COMPLETED", "Face enrollment completed on device"),
+        ("ENROLLMENT_REVOKED", "Face enrollment revoked"),
+        ("ENROLLMENT_REPLACED", "Face enrollment replaced"),
+        ("FACE_VERIFY_REJECTED", "Face verification rejected"),
         ("CHECK_IN", "Check-in recorded"),
         ("CHECK_OUT", "Check-out recorded"),
         ("SUMMARY_REBUILT", "Summary rebuilt"),

@@ -11,6 +11,7 @@ from attendance.models import (
     AttendanceEmployee,
     AttendanceEvent,
     EmployeeShopAssignment,
+    FaceEnrollment,
     Shift,
     Shop,
 )
@@ -24,14 +25,17 @@ class ShopSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "address",
+            "area",
             "latitude",
             "longitude",
             "geofence_radius_m",
             "is_active",
+            "archived_at",
+            "archive_reason",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["archived_at", "archive_reason", "created_at", "updated_at"]
 
 
 class AttendanceDeviceSerializer(serializers.ModelSerializer):
@@ -116,6 +120,18 @@ class AttendanceEmployeeSerializer(serializers.ModelSerializer):
     updated_by_username = serializers.CharField(
         source="updated_by.username", read_only=True, default=None
     )
+    enrollment_status = serializers.SerializerMethodField()
+
+    def get_enrollment_status(self, obj):
+        latest = getattr(obj, "_latest_enrollment_status", None)
+        if latest is not None:
+            return latest
+        row = (
+            obj.face_enrollments.order_by("-created_at")
+            .values_list("status", flat=True)
+            .first()
+        )
+        return row or "NONE"
 
     class Meta:
         model = AttendanceEmployee
@@ -127,6 +143,7 @@ class AttendanceEmployeeSerializer(serializers.ModelSerializer):
             "is_active",
             "linked_profile",
             "linked_employee_id",
+            "enrollment_status",
             "created_by_username",
             "updated_by_username",
             "created_at",
@@ -134,6 +151,7 @@ class AttendanceEmployeeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "is_active",
+            "enrollment_status",
             "created_by_username",
             "updated_by_username",
             "created_at",
@@ -145,6 +163,98 @@ class AttendanceEmployeeSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("employee_code is required.")
         return value
+
+
+class FaceEnrollmentSerializer(serializers.ModelSerializer):
+    """Enrollment metadata — never exposes images, embeddings or templates."""
+
+    employee_ref = serializers.CharField(
+        source="employee.employee_code", read_only=True
+    )
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
+    )
+    shop_code = serializers.CharField(source="shop.code", read_only=True)
+    device_uid = serializers.CharField(
+        source="device.device_uid", read_only=True, default=None
+    )
+    created_by_username = serializers.CharField(
+        source="created_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = FaceEnrollment
+        fields = [
+            "id",
+            "employee",
+            "employee_ref",
+            "employee_name",
+            "shop",
+            "shop_code",
+            "device",
+            "device_uid",
+            "status",
+            "consent_recorded",
+            "consent_at",
+            "sample_count",
+            "enrolled_at",
+            "created_by_username",
+            "revoked_at",
+            "revoke_reason",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "status",
+            "consent_at",
+            "sample_count",
+            "enrolled_at",
+            "created_by_username",
+            "revoked_at",
+            "revoke_reason",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class FaceEnrollmentAuthorizeSerializer(serializers.Serializer):
+    """Input for POST face-enrollments/ (admin authorizes an enrollment)."""
+
+    employee = serializers.PrimaryKeyRelatedField(
+        queryset=AttendanceEmployee.objects.filter(is_active=True)
+    )
+    shop = serializers.PrimaryKeyRelatedField(queryset=Shop.objects.all())
+    device = serializers.PrimaryKeyRelatedField(
+        queryset=AttendanceDevice.objects.filter(is_active=True)
+    )
+    consent_recorded = serializers.BooleanField(default=False)
+
+    def validate_shop(self, shop: Shop):
+        if not shop.is_active or shop.archived_at is not None:
+            raise serializers.ValidationError("Shop is not active.")
+        return shop
+
+    def validate_device(self, device: AttendanceDevice):
+        if device.revoked_at is not None:
+            raise serializers.ValidationError("Device is revoked.")
+        return device
+
+    def validate(self, attrs):
+        if attrs["device"].shop_id != attrs["shop"].id:
+            raise serializers.ValidationError(
+                "Device does not belong to the selected shop."
+            )
+        if not attrs["consent_recorded"]:
+            raise serializers.ValidationError(
+                "Employee consent must be recorded before authorizing enrollment."
+            )
+        if not EmployeeShopAssignment.objects.filter(
+            employee=attrs["employee"], shop=attrs["shop"], is_active=True
+        ).exists():
+            raise serializers.ValidationError(
+                "Employee is not assigned to the selected shop."
+            )
+        return attrs
 
 
 class EmployeeShopAssignmentSerializer(serializers.ModelSerializer):
