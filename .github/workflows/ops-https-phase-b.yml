@@ -1,0 +1,261 @@
+name: Ops HTTPS Phase B Install
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging:
+        description: "Use Let's Encrypt STAGING (test issuance, no real cert)"
+        type: boolean
+        default: false
+
+# HTTPS Phase B+C: acme.sh IP cert issuance, nginx 443 listener,
+# systemd renewal timer + expiry monitor. Non-disruptive to HTTP.
+# Never prints private keys or secrets.
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  https-install:
+    name: HTTPS install + renewal automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Install HTTPS on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+          ACME_STAGING: ${{ inputs.staging }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          IP=13.207.17.117
+          SITE=/etc/nginx/sites-available/agri-clinic
+          TS=$(date -u +%Y%m%d_%H%M%S)
+          ACME_HOME=$HOME/.acme.sh
+          ACME=$ACME_HOME/acme.sh
+
+          echo "=== [1/9] Backup site file ==="
+          mkdir -p ~/backups
+          sudo cp "$SITE" ~/backups/agri-clinic-site-${TS}.bak
+          sudo chown "$USER":"$USER" ~/backups/agri-clinic-site-${TS}.bak
+          ls -la ~/backups/agri-clinic-site-${TS}.bak
+
+          echo "=== [2/9] ACME webroot + challenge location (HTTP unaffected) ==="
+          sudo mkdir -p /var/www/letsencrypt/.well-known/acme-challenge
+          sudo chown -R www-data:www-data /var/www/letsencrypt
+          if ! sudo grep -q 'acme-challenge' "$SITE"; then
+            sudo cp "$SITE" /tmp/site-${TS}
+            sudo sed -i '/^[[:space:]]*location \/ {/i\    location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; allow all; }' /tmp/site-${TS}
+            sudo nginx -t -c /etc/nginx/nginx.conf 2>/dev/null || { echo 'NGINX -T FAILED after edit'; exit 1; }
+            sudo cp /tmp/site-${TS} "$SITE"
+          fi
+          echo "acme-verify-test-file" | sudo tee /var/www/letsencrypt/.well-known/acme-challenge/healthcheck >/dev/null
+          sudo nginx -t
+          sudo systemctl reload nginx
+          curl -fsS --max-time 8 "http://${IP}/.well-known/acme-challenge/healthcheck"
+          echo
+          curl -s -o /dev/null -w 'http SPA still: %{http_code}\n' "http://${IP}/"
+
+          echo "=== [3/9] Install acme.sh ==="
+          if [ ! -x "$ACME" ]; then
+            rm -rf ~/acme.sh-src
+            git clone --depth 1 https://github.com/acmesh-official/acme.sh ~/acme.sh-src
+            cd ~/acme.sh-src && ./acme.sh --install --nocron --home "$ACME_HOME" >/dev/null
+          fi
+          "$ACME" --version | tail -1
+
+          echo "=== [4/9] Issue IP certificate (Let's Encrypt) ==="
+          SERVER=letsencrypt
+          [ "${ACME_STAGING:-false}" = "true" ] && SERVER=letsencrypt_test
+          cd ~
+          set +e
+          "$ACME" --issue -d "$IP" -w /var/www/letsencrypt \
+            --server "$SERVER" --certificate-profile shortlived 2>&1 | tail -15
+          RC=${PIPESTATUS[0]}
+          if [ $RC -ne 0 ]; then
+            echo '--- retry without explicit profile flag ---'
+            "$ACME" --issue -d "$IP" -w /var/www/letsencrypt \
+              --server "$SERVER" --profile shortlived 2>&1 | tail -15
+            RC=${PIPESTATUS[0]}
+          fi
+          if [ $RC -ne 0 ]; then
+            echo '--- retry default profile ---'
+            "$ACME" --issue -d "$IP" -w /var/www/letsencrypt \
+              --server "$SERVER" 2>&1 | tail -15
+            RC=${PIPESTATUS[0]}
+          fi
+          set -e
+          [ $RC -eq 0 ] || { echo "CERT ISSUANCE FAILED rc=$RC — aborting (HTTP intact, 443 not configured)"; exit 2; }
+          CERT_DIR="$ACME_HOME/${IP}_ecc"
+          [ -d "$CERT_DIR" ] || CERT_DIR="$ACME_HOME/${IP}"
+          ls -la "$CERT_DIR"
+
+          echo "=== [5/9] Install cert + nginx-reload reloadcmd ==="
+          "$ACME" --install-cert -d "$IP" \
+            --reloadcmd "sudo nginx -t && sudo systemctl reload nginx" >/dev/null
+          KEY_FILE=$(ls "$CERT_DIR"/*.key | head -1)
+          CRT_FILE=$(ls "$CERT_DIR"/fullchain.cer 2>/dev/null | head -1)
+          [ -n "$CRT_FILE" ] || CRT_FILE=$(ls "$CERT_DIR"/*.cer | grep -v '\.key\|ca.cer' | head -1)
+          echo "key=$KEY_FILE cert=$CRT_FILE"
+          sudo test -r "$KEY_FILE" && echo 'nginx(root) can read key: yes'
+
+          echo "=== [6/9] HTTPS server block (HTTP :80 untouched) ==="
+          sudo tee /etc/nginx/sites-available/agri-clinic-https >/dev/null <<NGX
+          server {
+              listen 443 ssl;
+              server_name ${IP};
+
+              client_max_body_size 20M;
+              ssl_certificate     ${CRT_FILE};
+              ssl_certificate_key ${KEY_FILE};
+              ssl_protocols TLSv1.2 TLSv1.3;
+              ssl_session_cache shared:SSL:10m;
+              ssl_session_timeout 10m;
+
+              root /var/www/agri-admin/agri-clinic-frontend/dist;
+              index index.html;
+
+              location ^~ /.well-known/acme-challenge/ {
+                  root /var/www/letsencrypt;
+                  allow all;
+              }
+              location /assets/ {
+                  alias /var/www/agri-admin/agri-clinic-frontend/dist/assets/;
+                  try_files \$uri =404;
+              }
+              location /api/ {
+                  proxy_pass http://127.0.0.1:8000/api/;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+              location /admin/ {
+                  proxy_pass http://127.0.0.1:8000/admin/;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+              location /healthz/ {
+                  proxy_pass http://127.0.0.1:8000/healthz/;
+              }
+              location /static/ { alias /opt/agri-clinic/staticfiles/; }
+              location /media/ { alias /opt/agri-clinic/media/; }
+              location / {
+                  try_files \$uri \$uri/ /index.html;
+              }
+          }
+          NGX
+          sudo ln -sfn /etc/nginx/sites-available/agri-clinic-https /etc/nginx/sites-enabled/agri-clinic-https
+          sudo nginx -t
+          sudo systemctl reload nginx
+          sleep 1
+          sudo ss -tln | grep ':443' && echo '443 LISTENING'
+
+          echo "=== [7/9] HTTPS verification ==="
+          curl -fsS --max-time 10 "https://${IP}/healthz/" && echo
+          curl -s -o /dev/null -w 'https SPA: %{http_code}\n' "https://${IP}/"
+          curl -s -o /dev/null -w 'https api unauth: %{http_code}\n' "https://${IP}/api/v1/admin/attendance/devices/pairing-codes/"
+          curl -s -o /dev/null -w 'http still: %{http_code}\n' "http://${IP}/healthz/"
+          echo '--- cert identity ---'
+          echo | openssl s_client -connect "${IP}:443" -servername "$IP" 2>/dev/null \
+            | openssl x509 -noout -issuer -subject -dates -ext subjectAltName 2>/dev/null | grep -v emailAddress
+
+          echo "=== [8/9] Renewal: systemd timer (4x daily) + expiry monitor ==="
+          RENEW_SVC=/etc/systemd/system/acme-renew.service
+          RENEW_TMR=/etc/systemd/system/acme-renew.timer
+          sudo tee "$RENEW_SVC" >/dev/null <<UNIT
+          [Unit]
+          Description=acme.sh certificate renewal for ${IP}
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          User=${USER}
+          ExecStart=${ACME} --cron --home ${ACME_HOME}
+          UNIT
+          sudo tee "$RENEW_TMR" >/dev/null <<UNIT
+          [Unit]
+          Description=acme.sh renewal check (4x daily for short-lived certs)
+
+          [Timer]
+          OnCalendar=*-*-* 00,06,12,18:15:00
+          OnBootSec=5min
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+          UNIT
+          MON_SVC=/etc/systemd/system/cert-expiry-check.service
+          MON_TMR=/etc/systemd/system/cert-expiry-check.timer
+          sudo tee /usr/local/bin/cert-expiry-check.sh >/dev/null <<'SH'
+          #!/bin/bash
+          IP=13.207.17.117
+          END=$(echo | openssl s_client -connect "${IP}:443" -servername "$IP" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+          [ -n "$END" ] || { logger -t cert-expiry "ERROR: could not read cert expiry"; echo 'CERT-EXPIRY: UNREADABLE'; exit 1; }
+          DAYS=$(( ( $(date -d "$END" +%s) - $(date +%s) ) / 86400 ))
+          echo "CERT-EXPIRY: $END (${DAYS}d remaining)" | tee /var/log/cert-expiry-status.log
+          logger -t cert-expiry "expires=$END days=$DAYS"
+          [ "$DAYS" -lt 2 ] && { logger -t cert-expiry "ALERT: cert expires in ${DAYS}d"; exit 1; }
+          exit 0
+          SH
+          sudo chmod +x /usr/local/bin/cert-expiry-check.sh
+          sudo tee "$MON_SVC" >/dev/null <<UNIT
+          [Unit]
+          Description=TLS certificate expiry monitor
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/cert-expiry-check.sh
+          UNIT
+          sudo tee "$MON_TMR" >/dev/null <<UNIT
+          [Unit]
+          Description=Daily cert expiry check + journal alert
+
+          [Timer]
+          OnCalendar=*-*-* 07,19:00:00
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+          UNIT
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now acme-renew.timer cert-expiry-check.timer
+          sudo systemctl list-timers acme-renew.timer cert-expiry-check.timer --no-pager | head -6
+
+          echo "=== [9/9] Renewal path verification (no forced re-issue) ==="
+          # --cron on a fresh cert = no-op that still exercises the whole
+          # renewal pipeline (account, domain state, reloadcmd wiring).
+          sudo systemctl start acme-renew.service
+          sudo systemctl status acme-renew.service --no-pager | head -6 || true
+          "$ACME" --cron --home "$ACME_HOME" 2>&1 | tail -6
+          /usr/local/bin/cert-expiry-check.sh || true
+          # Staging issuance PROOF happens with staging=true input —
+          # never against the live domain (would replace the real cert).
+
+          echo '=== DONE ==='
+          systemctl is-active agri-backend.service
+          systemctl is-active nginx
+          REMOTE
