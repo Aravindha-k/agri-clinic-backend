@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status as drf_status
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
@@ -134,13 +135,29 @@ def _verification_or_403(request, employee):
         result = verifier.verify(
             employee=employee,
             device=request.attendance_device,
-            payload=dict(request.data),
+            payload=request.data,
         )
     except BiometricUnavailable:
         return None, error_response(
             message="Biometric verification is not available.",
             code="BIOMETRIC_UNAVAILABLE",
             status_code=drf_status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if not result.ok:
+        services._audit(
+            action="FACE_VERIFY_REJECTED",
+            device=request.attendance_device,
+            entity=employee,
+            metadata={
+                "employee_code": employee.employee_code,
+                "reason": result.detail[:160],
+            },
+            request=request,
+        )
+        return None, error_response(
+            message="Face verification failed.",
+            code="FACE_VERIFICATION_FAILED",
+            status_code=drf_status.HTTP_403_FORBIDDEN,
         )
     if result.is_test_mode and not getattr(
         settings, "ATTENDANCE_TEST_MODE_ENABLED", False
@@ -251,6 +268,124 @@ class AttendanceEmployeeListAPI(DeviceAPIView):
                 "employees": SelectableEmployeeSerializer(qs, many=True).data,
                 "mode": "TEST_MANUAL",
             }
+        )
+
+
+@extend_schema(
+    tags=["Attendance"],
+    summary="Face enrollments authorized for this device",
+)
+class FaceEnrollmentListAPI(DeviceAPIView):
+    """Kiosk pulls authorized enrollments for ITSELF only.
+
+    Returns employee display fields + enrollment status — never images,
+    embeddings or templates (those live encrypted on-device).
+    """
+
+    def get(self, request):
+        from attendance.models import FaceEnrollment
+
+        device = request.attendance_device
+        qs = (
+            FaceEnrollment.objects.filter(
+                device=device,
+                status__in=[
+                    FaceEnrollment.STATUS_PENDING,
+                    FaceEnrollment.STATUS_ACTIVE,
+                ],
+                employee__is_active=True,
+            )
+            .select_related("employee")
+            .order_by("employee__employee_code")
+        )
+        return success_response(
+            data={
+                "enrollments": [
+                    {
+                        "enrollment_id": e.id,
+                        "employee_id": e.employee_id,
+                        "employee_code": e.employee.employee_code,
+                        "employee_name": e.employee.full_name,
+                        "status": e.status,
+                    }
+                    for e in qs
+                ]
+            }
+        )
+
+
+@extend_schema(
+    tags=["Attendance"],
+    summary="Report face enrollment completed on this device",
+)
+class FaceEnrollmentCompleteAPI(DeviceAPIView):
+    """Device confirms samples captured; flips PENDING → ACTIVE.
+
+    Only metadata (sample_count) is accepted — embeddings never transit.
+    """
+
+    def post(self, request, enrollment_id):
+        from attendance.models import FaceEnrollment
+
+        device = request.attendance_device
+        try:
+            enrollment = FaceEnrollment.objects.get(
+                pk=enrollment_id,
+                status__in=[
+                    FaceEnrollment.STATUS_PENDING,
+                    FaceEnrollment.STATUS_ACTIVE,
+                ],
+            )
+        except FaceEnrollment.DoesNotExist:
+            return error_response(
+                message="Enrollment not found.",
+                code="ENROLLMENT_NOT_FOUND",
+                status_code=drf_status.HTTP_404_NOT_FOUND,
+            )
+        if enrollment.device_id != device.id:
+            return error_response(
+                message="Enrollment is bound to a different device.",
+                code="ENROLLMENT_WRONG_DEVICE",
+                status_code=drf_status.HTTP_403_FORBIDDEN,
+            )
+        if not enrollment.employee.is_active:
+            return error_response(
+                message="Employee is not active.",
+                code="EMPLOYEE_INACTIVE",
+                status_code=drf_status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            sample_count = max(
+                0, min(50, int(request.data.get("sample_count", 0)))
+            )
+        except (TypeError, ValueError):
+            sample_count = 0
+        if sample_count < 1:
+            return error_response(
+                message="sample_count must be >= 1.",
+                code="ENROLLMENT_NO_SAMPLES",
+                status_code=drf_status.HTTP_400_BAD_REQUEST,
+            )
+        now = timezone.now()
+        enrollment.status = FaceEnrollment.STATUS_ACTIVE
+        enrollment.sample_count = sample_count
+        enrollment.enrolled_at = enrollment.enrolled_at or now
+        enrollment.save(
+            update_fields=["status", "sample_count", "enrolled_at", "updated_at"]
+        )
+        services._audit(
+            action="ENROLLMENT_COMPLETED",
+            device=device,
+            entity=enrollment,
+            metadata={
+                "employee_code": enrollment.employee.employee_code,
+                "sample_count": sample_count,
+            },
+            request=request,
+        )
+        return success_response(
+            data={"enrollment_id": enrollment.id, "status": enrollment.status},
+            message="Enrollment completed.",
         )
 
 

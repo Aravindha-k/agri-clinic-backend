@@ -303,6 +303,28 @@ ATTENDANCE_PAIRING_GLOBAL_MAX_PER_MINUTE = int(
 # True when nginx/ELB in front of Django sets X-Forwarded-For; only then may
 # the header be used for client-IP audit/rate limits.
 BEHIND_TRUSTED_PROXY = env_bool("BEHIND_TRUSTED_PROXY", IS_PRODUCTION)
+# Development-only: accept the fixed local code 246810 for shop TEST-0001.
+# Additionally gated at runtime to non-production + SQLite only.
+LOCAL_STATIC_PAIRING_ENABLED = env_bool("LOCAL_STATIC_PAIRING_ENABLED", False)
+if IS_PRODUCTION:
+    LOCAL_STATIC_PAIRING_ENABLED = False  # hard-disable outside development
+
+# Face-attendance verification (FaceEnrollmentVerifier). Real biometric
+# attendance stays DISABLED until transport security + device SDK validation
+# are signed off — keep this off in every deployed environment for now.
+ATTENDANCE_FACE_VERIFICATION_ENABLED = env_bool(
+    "ATTENDANCE_FACE_VERIFICATION_ENABLED", False
+)
+if IS_PRODUCTION:
+    ATTENDANCE_FACE_VERIFICATION_ENABLED = False  # hard-disable in production
+# Minimum 1:N recognition score (0..1) the kiosk assertion must report.
+ATTENDANCE_FACE_MIN_SCORE = float(
+    os.getenv("ATTENDANCE_FACE_MIN_SCORE", "0.80")
+)
+# Max clock skew allowed on the device capture timestamp (replay window).
+ATTENDANCE_FACE_MAX_SKEW_SECONDS = int(
+    os.getenv("ATTENDANCE_FACE_MAX_SKEW_SECONDS", "120")
+)
 
 # --------------------------------------------------
 # INTERNATIONALIZATION / TIMEZONE
