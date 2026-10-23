@@ -62,7 +62,10 @@ jobs:
 
           echo "=== [2/9] ACME webroot + challenge location (HTTP unaffected) ==="
           sudo mkdir -p /var/www/letsencrypt/.well-known/acme-challenge
-          sudo chown -R www-data:www-data /var/www/letsencrypt
+          # acme.sh runs as the SSH user and writes challenge tokens; nginx
+          # workers run as www-data and only need READ access.
+          sudo chown -R "$USER":www-data /var/www/letsencrypt
+          sudo chmod 2775 /var/www/letsencrypt /var/www/letsencrypt/.well-known /var/www/letsencrypt/.well-known/acme-challenge
           if ! sudo grep -q 'acme-challenge' "$SITE"; then
             sudo cp "$SITE" /tmp/site-${TS}
             sudo sed -i '/^[[:space:]]*location \/ {/i\    location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; allow all; }' /tmp/site-${TS}
@@ -92,18 +95,8 @@ jobs:
           "$ACME" --issue -d "$IP" -w /var/www/letsencrypt \
             --server "$SERVER" --certificate-profile shortlived 2>&1 | tail -15
           RC=${PIPESTATUS[0]}
-          if [ $RC -ne 0 ]; then
-            echo '--- retry without explicit profile flag ---'
-            "$ACME" --issue -d "$IP" -w /var/www/letsencrypt \
-              --server "$SERVER" --profile shortlived 2>&1 | tail -15
-            RC=${PIPESTATUS[0]}
-          fi
-          if [ $RC -ne 0 ]; then
-            echo '--- retry default profile ---'
-            "$ACME" --issue -d "$IP" -w /var/www/letsencrypt \
-              --server "$SERVER" 2>&1 | tail -15
-            RC=${PIPESTATUS[0]}
-          fi
+          # NOTE: LE requires the "shortlived" certificate profile for IP
+          # identifiers — the default profile rejects them (verified).
           set -e
           [ $RC -eq 0 ] || { echo "CERT ISSUANCE FAILED rc=$RC — aborting (HTTP intact, 443 not configured)"; exit 2; }
           CERT_DIR="$ACME_HOME/${IP}_ecc"
