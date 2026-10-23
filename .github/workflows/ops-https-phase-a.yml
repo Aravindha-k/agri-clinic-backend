@@ -1,0 +1,83 @@
+name: Ops HTTPS Phase A Preflight
+
+on:
+  workflow_dispatch:
+
+# READ-ONLY Phase A preflight for the HTTPS migration.
+# Backs up nginx config, verifies health/backups, assesses ACME tooling.
+# Makes NO changes to nginx, Django, or the database.
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: HTTPS Phase A preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Phase A preflight on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${EC2_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            'bash -s' <<'REMOTE'
+          set -uo pipefail
+          echo '=== IMDS / EIP (v2 token) ==='
+          TOKEN=$(curl -s -X PUT --max-time 5 -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token || true)
+          echo "imds_token_len=${#TOKEN}"
+          echo -n 'public-ipv4: '
+          curl -s --max-time 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'unavailable'
+          echo
+          echo -n 'instance-id: '
+          curl -s --max-time 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id || true
+          echo
+          echo '=== NGINX CONFIG FILES ==='
+          sudo nginx -T 2>/dev/null | grep 'configuration file' || true
+          echo '=== NGINX BACKUP ==='
+          TS=$(date -u +%Y%m%d_%H%M%S)
+          BK=~/backups/nginx-conf-${TS}.tgz
+          mkdir -p ~/backups
+          sudo tar -czf /tmp/nginx-conf-${TS}.tgz /etc/nginx 2>/dev/null || true
+          sudo mv /tmp/nginx-conf-${TS}.tgz "$BK" 2>/dev/null || tar -czf "$BK" /etc/nginx
+          sudo chown "$USER":"$USER" "$BK" 2>/dev/null || true
+          ls -la ~/backups/ | tail -6
+          echo '=== DB BACKUPS PRESENT ==='
+          find ~ /var/www -maxdepth 3 -name '*.dump' -o -name '*.sql*' 2>/dev/null | head -8
+          ls -la ~/backups/deploy/ 2>/dev/null | tail -5 || true
+          echo '=== HTTP HEALTH (baseline) ==='
+          curl -s -o /dev/null -w 'http healthz: %{http_code} (%{time_total}s)\n' http://127.0.0.1:8000/healthz/
+          curl -s -o /dev/null -w 'http healthz via :80: %{http_code}\n' http://13.207.17.117/healthz/
+          curl -s -o /dev/null -w 'admin SPA :80: %{http_code}\n' http://13.207.17.117/
+          curl -s -o /dev/null -w 'https probe (expect fail): %{http_code} %{errormsg}\n' --max-time 5 https://13.207.17.117/healthz/ || echo 'https: connection refused (expected)'
+          echo '=== ACME TOOLING ==='
+          . /etc/os-release; echo "OS: $PRETTY_NAME"
+          which certbot acme.sh lego 2>/dev/null || true
+          apt-cache policy certbot 2>/dev/null | head -4 || true
+          apt-cache policy lego 2>/dev/null | head -4 || true
+          snap version 2>/dev/null | head -2 || echo 'no snap'
+          python3 --version
+          echo '=== NGINX SITE FILES ==='
+          ls -la /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null
+          echo '=== WRITE PERMS TEST ==='
+          sudo test -w /etc/nginx && echo 'nginx dir writable via sudo'
+          REMOTE
