@@ -6,6 +6,7 @@ from attendance.views import (
     AttendanceEmployeeListAPI,
     AttendanceStatusAPI,
     DevicePairingAPI,
+    DeviceRosterAPI,
     FaceEnrollmentCompleteAPI,
     FaceEnrollmentListAPI,
 )
@@ -17,6 +18,7 @@ urlpatterns = [
     path("check-in/", AttendanceCheckInAPI.as_view(), name="check-in"),
     path("check-out/", AttendanceCheckOutAPI.as_view(), name="check-out"),
     path("status/", AttendanceStatusAPI.as_view(), name="status"),
+    path("roster/", DeviceRosterAPI.as_view(), name="roster"),
     path(
         "enrollments/",
         FaceEnrollmentListAPI.as_view(),

@@ -271,6 +271,76 @@ class AttendanceEmployeeListAPI(DeviceAPIView):
         )
 
 
+ROSTER_NOT_AUTHORIZED = "NOT_AUTHORIZED"
+
+
+@extend_schema(
+    tags=["Attendance"],
+    summary="Employees assigned to this device's shop, with enrollment status",
+)
+class DeviceRosterAPI(DeviceAPIView):
+    """Read-only shop roster for the authenticated kiosk.
+
+    Lets the kiosk administrator tell "assigned to this shop" apart from
+    "authorized for face enrollment on this device" and "enrolled". The shop
+    is derived from the device credentials; only display fields are
+    returned — no phone numbers, images, embeddings or templates. Not gated
+    on test mode and cannot record attendance.
+    """
+
+    def get(self, request):
+        from attendance.models import FaceEnrollment
+
+        device = request.attendance_device
+        today = timezone.localdate()
+        employees = list(
+            AttendanceEmployee.objects.filter(
+                shop_assignments__shop=device.shop,
+                shop_assignments__is_active=True,
+                is_active=True,
+            )
+            .exclude(shop_assignments__valid_from__gt=today)
+            .exclude(shop_assignments__valid_to__lt=today)
+            .distinct()
+            .order_by("employee_code")
+        )
+        live = {
+            e.employee_id: e
+            for e in FaceEnrollment.objects.filter(
+                device=device,
+                employee__in=employees,
+                status__in=[
+                    FaceEnrollment.STATUS_PENDING,
+                    FaceEnrollment.STATUS_ACTIVE,
+                ],
+            )
+        }
+        rows = []
+        for emp in employees:
+            enrollment = live.get(emp.id)
+            rows.append({
+                "employee_id": emp.id,
+                "employee_code": emp.employee_code,
+                "employee_name": emp.full_name,
+                "enrollment_status": (
+                    enrollment.status if enrollment else ROSTER_NOT_AUTHORIZED
+                ),
+                "enrollment_id": enrollment.id if enrollment else None,
+            })
+        statuses = [r["enrollment_status"] for r in rows]
+        return success_response(
+            data={
+                "shop": {"code": device.shop.code, "name": device.shop.name},
+                "employees": rows,
+                "summary": {
+                    "assigned": len(rows),
+                    "authorized": sum(s != ROSTER_NOT_AUTHORIZED for s in statuses),
+                    "enrolled": statuses.count(FaceEnrollment.STATUS_ACTIVE),
+                },
+            }
+        )
+
+
 @extend_schema(
     tags=["Attendance"],
     summary="Face enrollments authorized for this device",
