@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework import status as drf_status
 from rest_framework.views import APIView
@@ -289,19 +290,21 @@ class DeviceRosterAPI(DeviceAPIView):
     """
 
     def get(self, request):
-        from attendance.models import FaceEnrollment
+        from attendance.models import EmployeeShopAssignment, FaceEnrollment
 
         device = request.attendance_device
         today = timezone.localdate()
         employees = list(
-            AttendanceEmployee.objects.filter(
-                shop_assignments__shop=device.shop,
-                shop_assignments__is_active=True,
-                is_active=True,
-            )
-            .exclude(shop_assignments__valid_from__gt=today)
-            .exclude(shop_assignments__valid_to__lt=today)
-            .distinct()
+            AttendanceEmployee.objects.filter(is_active=True)
+            .filter(Exists(
+                EmployeeShopAssignment.objects.filter(
+                    employee=OuterRef("pk"),
+                    shop=device.shop,
+                    is_active=True,
+                )
+                .filter(Q(valid_from__isnull=True) | Q(valid_from__lte=today))
+                .filter(Q(valid_to__isnull=True) | Q(valid_to__gte=today))
+            ))
             .order_by("employee_code")
         )
         live = {

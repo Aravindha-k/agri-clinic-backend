@@ -109,6 +109,17 @@ class DeviceRosterTests(TestCase):
         )
         self.assertEqual([r["employee_code"] for r in self._rows()], ["EMP-0001"])
 
+    def test_transferred_employee_with_expired_assignment_elsewhere_is_listed(self):
+        old_shop = make_shop(code="SHOP-OLD", name="Old Shop")
+        ravi = make_employee("EMP-0003", "Ravi")
+        make_assignment(
+            ravi, old_shop, is_active=False,
+            valid_to=timezone.localdate() - datetime.timedelta(days=1),
+        )
+        make_assignment(ravi, self.shop, valid_from=timezone.localdate())
+        codes = [r["employee_code"] for r in self._rows()]
+        self.assertEqual(codes, ["EMP-0001", "EMP-0003"])
+
     def test_no_phone_or_biometric_fields(self):
         resp = self._get()
         body = resp.content.decode().lower()
