@@ -310,12 +310,19 @@ class CanonicalServiceTests(VisitConsolidationBase):
             format="json",
         )
         visit_id = r.data["data"]["visit_id"]
+        meta = {
+            "capture_source": "camera",
+            "capture_latitude": 12.97,
+            "capture_longitude": 77.59,
+            "capture_accuracy_m": 20,
+            "captured_at": timezone.now().isoformat(),
+        }
         upload = SimpleUploadedFile(
             "a.png", _png_bytes(), content_type="image/png"
         )
         r1 = self.client.post(
             f"/api/v1/mobile/visits/{visit_id}/media/",
-            {"file": upload, "media_type": "image", "client_upload_id": "up-1"},
+            {"file": upload, "media_type": "image", "client_upload_id": "up-1", **meta},
             format="multipart",
         )
         self.assertIn(r1.status_code, (200, 201), r1.data)
@@ -324,7 +331,7 @@ class CanonicalServiceTests(VisitConsolidationBase):
         )
         r2 = self.client.post(
             f"/api/v1/mobile/visits/{visit_id}/media/",
-            {"file": upload2, "media_type": "image", "client_upload_id": "up-1"},
+            {"file": upload2, "media_type": "image", "client_upload_id": "up-1", **meta},
             format="multipart",
         )
         self.assertEqual(r2.status_code, 200)

@@ -38,6 +38,11 @@ class VisitMediaSerializer(serializers.ModelSerializer):
             "duration_seconds",
             "client_upload_id",
             "processing_status",
+            "capture_source",
+            "capture_latitude",
+            "capture_longitude",
+            "capture_accuracy_m",
+            "captured_at_client",
         ]
         extra_kwargs = {"file": {"write_only": True}}
         read_only_fields = (

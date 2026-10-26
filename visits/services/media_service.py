@@ -83,11 +83,17 @@ def upload_visit_media(
     client_upload_id: str | None = None,
     uploaded_by: User | None = None,
     duration_seconds: float | None = None,
+    capture_meta: dict | None = None,
+    enforce_live_evidence: bool = False,
 ) -> MediaUploadResult:
     """
     Canonical VisitMedia writer.
 
     Replay of the same (visit, client_upload_id) returns the existing row.
+
+    When ``enforce_live_evidence`` is set, image uploads must carry valid
+    live-camera capture metadata (fresh GPS, plausible capture time, no
+    cross-visit file reuse, registered-field proximity when available).
     """
     media_type = (media_type or "").strip().lower()
     valid_types = {c[0] for c in VisitMedia.MEDIA_TYPE_CHOICES}
@@ -127,6 +133,23 @@ def upload_visit_media(
 
     owner = uploaded_by or getattr(visit, "employee", None)
 
+    # Server-side live-evidence enforcement for employee image uploads.
+    evidence_fields: dict = {}
+    if enforce_live_evidence and media_type == VisitMedia.MEDIA_TYPE_IMAGE:
+        from visits.evidence_validation import validate_live_capture
+
+        evidence_fields = validate_live_capture(
+            visit=visit,
+            file=file,
+            meta=capture_meta or {},
+            employee=owner,
+            error_cls=VisitMediaServiceError,
+        )
+    else:
+        from visits.evidence_validation import sha256_file
+
+        evidence_fields = {"file_hash": sha256_file(file)}
+
     try:
         with transaction.atomic():
             media = VisitMedia.objects.create(
@@ -141,7 +164,15 @@ def upload_visit_media(
                 file_size=meta.get("file_size"),
                 duration_seconds=meta.get("duration_seconds"),
                 processing_status=VisitMedia.STATUS_READY,
+                **evidence_fields,
             )
+            if (
+                enforce_live_evidence
+                and media_type == VisitMedia.MEDIA_TYPE_IMAGE
+                and visit.evidence_status == "pending"
+            ):
+                visit.evidence_status = "verified"
+                visit.save(update_fields=["evidence_status", "updated_at"])
         logger.info(
             "event=visit_media_uploaded visit_id=%s media_id=%s type=%s "
             "client_upload_id=%s size=%s",
@@ -179,7 +210,12 @@ def collect_request_media_files(request) -> list:
     return files
 
 
-def attach_request_media_files(request, visit: Visit) -> None:
+def attach_request_media_files(
+    request,
+    visit: Visit,
+    *,
+    enforce_live_evidence: bool = False,
+) -> None:
     """
     Process multipart media on a create/replay request.
 
@@ -224,6 +260,11 @@ def attach_request_media_files(request, visit: Visit) -> None:
             c[0] for c in VisitMedia.MEDIA_TYPE_CHOICES
         } else _infer_media_type_from_file(file)
         client_upload_id = upload_ids[index] if index < len(upload_ids) else ""
+        capture_meta = None
+        if enforce_live_evidence and hasattr(request, "data"):
+            from visits.evidence_validation import parse_capture_meta
+
+            capture_meta = parse_capture_meta(request.data)
         upload_visit_media(
             visit=visit,
             file=file,
@@ -232,4 +273,6 @@ def attach_request_media_files(request, visit: Visit) -> None:
             client_upload_id=client_upload_id or None,
             uploaded_by=uploaded_by if getattr(uploaded_by, "is_authenticated", False) else None,
             duration_seconds=duration_seconds,
+            capture_meta=capture_meta,
+            enforce_live_evidence=enforce_live_evidence,
         )
